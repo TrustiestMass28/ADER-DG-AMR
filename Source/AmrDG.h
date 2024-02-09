@@ -100,13 +100,22 @@ class AmrDG : public amrex::AmrCore
         void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
                         Array4<Real const> const& fine,int ccomp, 
                         int fcomp, IntVect const& ratio) noexcept;
-                        
+          /*             
         void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
                                           Array4<Real const> const& fine,int ccomp, 
-                                          int fcomp, IntVect const& ratio) noexcept;                                 
+                                          int fcomp, IntVect const& ratio) noexcept;     */                            
         void getouterref(AmrDG* _amrdg);  
         
         void interp_proj_mat();
+        
+        void average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
+                                      int scomp, int ncomp, const IntVect& ratio, 
+                                      const int lev_fine, const int lev_coarse, 
+                                      int d, bool flag_flux);
+                                      
+         void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
+                                          Array4<Real> const& fine,int ccomp, 
+                                          int fcomp, IntVect const& ratio) noexcept;
         
       private:     
         AmrDG* amrdg;     
@@ -220,6 +229,7 @@ class AmrDG : public amrex::AmrCore
     amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_L2proj;
     
   private: 
+  
     /*------------------------------------------------------------------------*/
     
     //SImulation (used to access pointers to other classes stored in simulation)
@@ -269,9 +279,7 @@ class AmrDG : public amrex::AmrCore
 
     /*------------------------------------------------------------------------*/
     
-    //ADER-DG
-    void Time_Integration();
-    
+    //ADER-DG    
     void ADER();
     
     void ComputeDt();
@@ -361,6 +369,10 @@ class AmrDG : public amrex::AmrCore
     void GetData (int lev, int q, Real time, Vector<MultiFab*>& data, Vector<Real>& datatime);
     
     void AverageFineToCoarse();    
+    
+    void AverageFineToCoarseFlux(int lev);
+    
+    void FillPatchGhostFC(int lev,amrex::Real time,int q);
 
     /*------------------------------------------------------------------------*/
     

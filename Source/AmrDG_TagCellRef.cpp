@@ -19,7 +19,7 @@
 //NB: uw needs to be a const MFab in this function
 void AmrDG::ErrorEst (int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow)
 {
-  Print() <<"AmrDG::ErrorEst"<<"\n";
+  Print(sim->ofs) <<"AmrDG::ErrorEst"<<"\n";
   //check and flag cells where regridding criteria is met
   const int   tagval = TagBox::SET;
    

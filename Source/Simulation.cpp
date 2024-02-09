@@ -22,13 +22,23 @@
 #include <Eigen/Core>
 #include <Eigen/SVD>
 
+#include <string>
+#include <fstream>
+#include <iostream>
+
 using namespace amrex;
 
-Simulation::Simulation() : model_pde(nullptr), dg_sim(nullptr){}
+Simulation::Simulation() : model_pde(nullptr), dg_sim(nullptr)
+{
+  //std::ofstream tmp_ofs("simulation_output.txt", std::ofstream::out);
+  ofs.open("simulation_output.txt", std::ofstream::out);// = tmp_ofs;
+}
 
 Simulation::~Simulation() {
   delete dg_sim;
   delete model_pde;
+  
+  ofs.close();
 }
 
 void Simulation::settings_case(std::string _equation_type, bool _source_term, 

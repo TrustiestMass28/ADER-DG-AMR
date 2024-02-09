@@ -26,9 +26,9 @@ void AmrDG::number_modes()
 void AmrDG::number_quadintpts()
 {
   qMp_1d = (p+1);
-  qMp = (int)std::pow(qMp_1d,AMREX_SPACEDIM+1);
-  qMpbd = (int)std::pow(qMp_1d,AMREX_SPACEDIM);
-  qMp_L2proj = (int)std::pow(qMp_1d,AMREX_SPACEDIM);
+  qMp = (int)std::pow(qMp_1d,AMREX_SPACEDIM+1);//space+time
+  qMpbd = (int)std::pow(qMp_1d,AMREX_SPACEDIM);//(space-1)+time
+  qMp_L2proj = (int)std::pow(qMp_1d,AMREX_SPACEDIM);//space
 }
 
 //Generate 1D quadrature points (depending on how close we are to the boundary, 
@@ -225,9 +225,7 @@ void AmrDG::PhiIdxGenerator_s()
     for(int jj=0; jj<=p-ii;++jj){
       mat_idx_s[ctr][0] = ii;
       mat_idx_s[ctr][1] = jj;
-      Print() <<"("<<ii<<","<<jj<<")"<<"\n";
-      if((ii==1 && jj==0) || (ii==0 && jj==1)){
-      lin_mode_idx.push_back(ctr); Print() << ctr<<"\n";} 
+      if((ii==1 && jj==0) || (ii==0 && jj==1)){lin_mode_idx.push_back(ctr);} 
       ctr+=1;      
     }
   }

@@ -76,10 +76,9 @@ void AmrDG::DGprojInterp::interp_proj_mat()
     }
   }  
   #endif
- 
+  
   for(int idx=0; idx<std::pow(2,AMREX_SPACEDIM); ++idx)
   { 
-    ///*
     //Define coordinate mapping between coarse cell and fine cell. 
     //depending on intervalls of fine cell in each dimension we need to shift differently
     //xi_f = 0.5*xi_c +-0.5 ==> "-":[-1,1]->[-1,0]  ,  "+":[-1,1]->[0,1]
@@ -132,7 +131,6 @@ void AmrDG::DGprojInterp::interp_proj_mat()
           }           
           
           sum+=(phi_shift*phi*w); 
-          //sum+=phi_shift*(amrdg->L2proj_quadmat[i][q]);
         }
         S(i,j)=sum;
       }
@@ -153,66 +151,8 @@ void AmrDG::DGprojInterp::interp_proj_mat()
         P_gather[idx][i][j] = (amrex::Real)Pg(i,j); 
       }
     }
-    //*/
-    
-    
-    /*
-    amrex::Real shift[AMREX_SPACEDIM]={AMREX_D_DECL(0.5*amr_projmat_int[idx][0],
-                                        0.5*amr_projmat_int[idx][1],
-                                        0.5*amr_projmat_int[idx][2])};
-
-    amrex::Vector<amrex::Vector<amrex::Real>> P;
-    P.resize(amrdg->Np,amrex::Vector<amrex::Real>(amrdg->Np,0.0));
-
-    for (int j = 0; j < amrdg->Np; ++j){       
-      for (int l = 0; l < amrdg->Np; ++l){              
-        //compute quadrature
-        int N = amrdg->qMp_1d; 
-        amrex::Real quad = 0.0;
-        for(int q=0; q<amrdg->qMp_L2proj; ++q){
-          //compute quadrature weight
-          amrex::Real w=1.0;
-          for(int d=0; d<AMREX_SPACEDIM; ++d){
-            w*=2.0/std::pow(std::assoc_legendre(N,1,amrdg->xi_ref_GLquad_L2proj[q][d]),2.0);
-          }
-          
-          //shift the qadrature point (temporary copy)
-          amrex::Real xi_ref_GLquad_L2proj_mod[AMREX_SPACEDIM];
-          for(int d=0; d<AMREX_SPACEDIM; ++d){
-            xi_ref_GLquad_L2proj_mod[d]=0.5*(amrdg->xi_ref_GLquad_L2proj[q][d])+shift[d];
-          }  
-          
-          //compute basis function at shifted quadrature point
-          amrex::Real phi_shift = 1.0;
-          for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-            phi_shift*=std::legendre(amrdg->mat_idx_s[l][d], xi_ref_GLquad_L2proj_mod[d]);
-          }
-          
-          //compute basis function at quadrature point
-          amrex::Real phi = 1.0;
-          for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-            phi*=std::legendre(amrdg->mat_idx_s[j][d], amrdg->xi_ref_GLquad_L2proj[q][d]);
-          }           
-          quad+=(phi_shift*phi*w);         
-        }      
-        P[j][l] =quad;
-      }
-    }  
-
-    for (int i = 0; i < amrdg->Np; ++i){
-      //compute the norm
-      amrex::Real norm = 1.0;
-      for(int d=0; d<AMREX_SPACEDIM; ++d){
-        norm*=(2.0/(2.0*(amrex::Real)amrdg->mat_idx_s[i][d]+1.0));
-      }
-      for (int j = 0; j < amrdg->Np; ++j){ 
-        P_scatter[idx][i][j] = (1.0/norm)*P[i][j];//;
-        P_gather[idx][i][j]  = (1.0/norm)*P[j][i]*(1.0/std::pow(2.0,AMREX_SPACEDIM));//;
-      }
-    }
-    */
-
   }
+
 }
 
 amrex::Box AmrDG::DGprojInterp::CoarseBox (const Box& fine, int ratio)
@@ -240,8 +180,8 @@ void AmrDG::DGprojInterp::interp (const FArrayBox& crse, int  crse_comp, FArrayB
   Array4<Real> const& finearr = fine.array();
   Box bx_c = crse.box();
   Box bx_c_ref = bx_c.refine(ratio);
-  
-  Box fb = fine.box() & fine_region;
+
+  Box fb = fine.box()& fine_region;
 
   AMREX_HOST_DEVICE_PARALLEL_FOR_4D_FLAG(runon,fb, ncomp, i, j, k, n,
   {  
@@ -357,14 +297,14 @@ void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
           {
             amr_gather(i,j,k,n,crsearr,finearr,scomp,scomp,ratio);
           });    
-        }
+        }/*
         else
         { 
           AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
           { 
             amr_gather_flux(i,j,k,n,d,crsearr,finearr,scomp,scomp,ratio);
           });         
-        }
+        }*/
       }
     }
   }    
@@ -391,7 +331,7 @@ void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
           {
             amr_gather(i,j,k,n,crsearr,finearr,0,scomp,ratio);      
           });  
-        }
+        }/*
         else
         {
 
@@ -399,7 +339,7 @@ void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
           { 
             amr_gather_flux(i,j,k,n,d,crsearr,finearr,0,scomp,ratio);      
           });         
-        }
+        }*/
       }
     }
 
@@ -523,33 +463,105 @@ void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
 #endif  
 }
 
+void AmrDG::DGprojInterp::average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
+                                      int scomp, int ncomp, const IntVect& ratio, 
+                                      const int lev_fine, const int lev_coarse, 
+                                      int d, bool flag_flux)
+{
+  //average down not! applied to ghost cells. Only to valid cells
+  // Coarsen() the fine stuff on processors owning the fine data.
+  const BoxArray& fine_BA = S_fine.boxArray();
+  const DistributionMapping& fine_dm = S_fine.DistributionMap();
+  BoxArray crse_S_fine_BA = fine_BA;
+  crse_S_fine_BA.coarsen(ratio);
+  
+  
+  if (crse_S_fine_BA == S_crse.boxArray() && S_fine.DistributionMap() == S_crse.DistributionMap())
+  {     
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+    {
+      for (MFIter mfi(S_crse,TilingIfNotGPU()); mfi.isValid(); ++mfi)
+      {
+        //  NOTE: The tilebox is defined at the coarse level.
+        const Box& bx = mfi.tilebox();
+        Array4<amrex::Real> const& crsearr = S_crse.array(mfi);
+        Array4<amrex::Real > const& finearr = S_fine.array(mfi);
+        
+
+          AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
+          { 
+            amr_gather_flux(i,j,k,n,d,crsearr,finearr,scomp,scomp,ratio);
+          });         
+        
+      }
+    }
+  }    
+  else
+  {
+    MultiFab crse_S_fine(crse_S_fine_BA,fine_dm,ncomp,0,MFInfo(),FArrayBoxFactory());
+      
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+    {
+      for (MFIter mfi(crse_S_fine,TilingIfNotGPU()); mfi.isValid(); ++mfi)
+      {
+        //  NOTE: The tilebox is defined at the coarse level.
+        const Box& bx = mfi.tilebox();
+        Array4<amrex::Real> const& crsearr = crse_S_fine.array(mfi);
+        Array4<amrex::Real> const& finearr = S_fine.array(mfi);
+
+        //  NOTE: We copy from component scomp of the fine fab into component 0 of the crse fab
+        //        because the crse fab is a temporary which was made starting at comp 0, it is
+        //        not part of the actual crse multifab which came in.
+
+
+          AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
+          { 
+            amr_gather_flux(i,j,k,n,d,crsearr,finearr,0,scomp,ratio);      
+          });         
+        
+      }
+    }
+
+    S_crse.ParallelCopy(crse_S_fine,0,scomp,ncomp);
+  }
+}
+
+/*
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
                                           Array4<Real const> const& fine,int ccomp, 
+                                          int fcomp, IntVect const& ratio) noexcept
+*/
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
+                                          Array4<Real> const& fine,int ccomp, 
                                           int fcomp, IntVect const& ratio) noexcept
 {
   //TODO: should skip coarse indices that are not at fine coarse interface
   //  get boxArray max and min indices and compare i,j,k
   //should be dimension dependent, i.e if d==0 then take all j and msut be min(i) or max(i)
   //can be done before function call
-  
-  crse(i,j,k,n+ccomp) = 0.0;
 
-#if (AMREX_SPACEDIM == 1)   
-  const int faci = ratio[0];
-
+#if (AMREX_SPACEDIM == 1)  
+  const int faci = ratio[0]; 
   const int ii = i*faci;
-  
+
   int i_f,j_f,k_f; 
+  
+  if(d==0)
+  {
+    crse(i,j,k,n+ccomp) = 0.0;
+      i_f=ii;
+      j_f= 0;
+      k_f = 0;
+      crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
+  }
 
-  i_f=ii;
-  j_f=0;
-  k_f = 0;
-
-  crse(i,j,k,n+ccomp)+=fine(i_f,j_f,k_f,n+fcomp); 
-        
-  crse(i,j,k,n+ccomp)/=std::pow(2.0,AMREX_SPACEDIM-1);
-#elif (AMREX_SPACEDIM == 2) 
+#elif (AMREX_SPACEDIM == 2)   
   const int faci = ratio[0];
   const int facj = ratio[1];
   
@@ -560,30 +572,25 @@ void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Arra
   
   if(d==0)
   {
+    crse(i,j,k,n+ccomp) = 0.0;
     for (int jref = 0; jref < facj; ++jref){
       i_f=ii;
       j_f=jj+jref;
-
       k_f = 0;
-
-      crse(i,j,k,n+ccomp)+=fine(i_f,j_f,k_f,n+fcomp); 
-      
+      crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
     }
   }
   else if(d==1)
   {
+    crse(i,j,k,n+ccomp) = 0.0;
     for (int iref = 0; iref < faci; ++iref){
       i_f = ii+iref;
       j_f = jj;
-
       k_f =0;
       
-      crse(i,j,k,n+ccomp)+=fine(i_f,j_f,k_f,n+fcomp); 
-    } 
-  } 
-  
-  crse(i,j,k,n+ccomp)/=std::pow(2.0,AMREX_SPACEDIM-1);
-  
+      crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
+    }    
+  }  
 #elif (AMREX_SPACEDIM == 3) 
   const int faci = ratio[0];
   const int facj = ratio[1];
@@ -597,41 +604,42 @@ void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Arra
   
   if(d==0)
   {
-    for (int jref = 0; jref < facj; ++jref){
-      for (int kref = 0; kref < fack; ++jrek){
-      i_f=ii;
-      j_f=jj+jref;
-      k_f = kk+kref;
-
-      crse(i,j,k,n+ccomp)+=fine(i_f,j_f,k_f,n+fcomp); 
+    crse(i,j,k,n+ccomp) = 0.0;
+    for (int kref = 0; kref < fack; ++kref){
+      for (int jref = 0; jref < facj; ++jref){
+        i_f=ii;
+        j_f=jj+jref;
+        k_f = kk+kref;
+        crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
       }
     }
   }
   else if(d==1)
   {
-    for (int iref = 0; iref < faci; ++iref){
-      for (int kref = 0; kref < fack; ++jrek){
-      i_f = ii+iref;
-      j_f = jj;
-      k_f = kk+kref;
-      
-      crse(i,j,k,n+ccomp)+=fine(i_f,j_f,k_f,n+fcomp); 
-      }
-    } 
-  } 
+    crse(i,j,k,n+ccomp) = 0.0;
+    for (int kref = 0; kref < fack; ++kref){
+      for (int iref = 0; iref < faci; ++iref){
+        i_f = ii+iref;
+        j_f = jj;
+        k_f =kk+kref;
+        
+        crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
+      }  
+    }
+  }
   else if(d==2)
   {
-    for (int iref = 0; iref < faci; ++iref){
-      for (int jref = 0; jref < facj; ++jref){
-      i_f = ii+iref;
-      j_f= jj+jref;
-      k_f = kk;
-      
-      crse(i,j,k,n+ccomp)+=fine(i_f,j_f,k_f,n+fcomp); 
-      }
-    } 
-  }  
-  crse(i,j,k,n+ccomp)/=std::pow(2.0,AMREX_SPACEDIM-1);
+    crse(i,j,k,n+ccomp) = 0.0;
+    for (int jref = 0; jref < facj; ++jref){
+      for (int iref = 0; iref < faci; ++iref){
+        i_f = ii+iref;
+        j_f = jj+jref;
+        k_f =kk;
+        
+        crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
+      }  
+    }
+  } 
 #endif  
 
 }

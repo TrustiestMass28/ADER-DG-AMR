@@ -22,7 +22,7 @@
  
 void AmrDG::InitialCondition(int lev)
 {
-  Print() <<"AmrDG::InitialCondition() "<<lev<<"\n";
+  Print(sim->ofs) <<"AmrDG::InitialCondition() "<<lev<<"\n";
   //applies the initial condition to all the solution components modes
   amrex::Vector<amrex::MultiFab *> state_uw(Q);
  
