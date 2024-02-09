@@ -82,10 +82,10 @@ void AmrDG::get_U_from_U_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr,
 
   amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
   amrex::Vector<amrex::MultiFab *> state_u(Q); 
-  
+ 
   for(int q=0; q<Q; ++q){
-    state_u_w[q]=&((*U_w_ptr)[q]);
-    state_u[q]=&((*U_ptr)[q]);   
+    state_u_w[q]=&((*U_w_ptr)[q]);    
+    state_u[q]=&((*U_ptr)[q]);  
   } 
   
 #ifdef AMREX_USE_OMP
@@ -104,6 +104,8 @@ void AmrDG::get_U_from_U_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr,
     #endif
     {
       const amrex::Box& bx = mfi.growntilebox();
+
+        
       for(int q=0 ; q<Q; ++q){
         fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
         uw[q] = fab_u_w[q]->const_array();
@@ -113,25 +115,24 @@ void AmrDG::get_U_from_U_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr,
       } 
       for(int q=0 ; q<Q; ++q){
         amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
-        {          
-          amrex::Real sum = 0.0;
-          if(is_predictor == true){
-            for (int n = 0; n < mNp; ++n){  
-              sum+=((uw[q])(i,j,k,n)*modPhi(n, xi));
-            }           
-          }
-          else if(is_predictor==false){            
-            for (int n = 0; n < Np; ++n){  
-              sum+=((uw[q])(i,j,k,n)*Phi(n, xi));
-            }    
-          }
-          (u[q])(i,j,k,c) = sum;    
-        });
-      }
+        {(u[q])(i,j,k,c)=0.0;}); 
+        if(is_predictor == true){
+          amrex::ParallelFor(bx,mNp,[&] (int i, int j, int k,int n) noexcept
+          { 
+            (u[q])(i,j,k,c)+=((uw[q])(i,j,k,n)*modPhi(n, xi));
+          });            
+        }
+        else if(is_predictor==false){ 
+          amrex::ParallelFor(bx,Np,[&] (int i, int j, int k,int n) noexcept
+          { 
+            (u[q])(i,j,k,c)+=((uw[q])(i,j,k,n)*modPhi(n, xi));
+          });  
+        }        
+      }      
     }  
   }
 }
-    
+
 void AmrDG::Source(int lev,int M,
                   amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                   amrex::Vector<amrex::MultiFab>* U_ptr,
@@ -256,6 +257,12 @@ void AmrDG::InterfaceNumFlux(int lev,int d,int M,
   //U_ptr_m, U_ptr_p passed as arguments because if use ADERwe pass predictor
   //if use RK methods pass the solution.
   
+  auto const dx = geom[lev].CellSizeArray(); 
+  amrex::Real dvol = 1.0;
+  for(int _d = 0; _d < AMREX_SPACEDIM; ++_d){
+    if(_d!=d){dvol*=dx[_d];}
+  }
+
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
   amrex::Vector<amrex::MultiFab *> state_fnumm_int(Q);
@@ -341,20 +348,19 @@ void AmrDG::InterfaceNumFlux(int lev,int d,int M,
         {
           //check which indices it iterate across, i.e if last one is reachd
           fnum[q](i,j,k,m) = NumericalFlux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
-        });  
-        
+        });          
         amrex::ParallelFor(bx, Np,[&] (int i, int j, int k, int n) noexcept
         {
-          //TODO
-          //fnumm at boundary plus and fnump ad boundary minus (grid extremes)
-          //could be skipped
-          (fnumm_int[q])(i,j,k,n) = 0.0;
-          (fnump_int[q])(i,j,k,n) = 0.0;
-          for  (int m = 0; m < M; ++m){  
-            (fnumm_int[q])(i,j,k,n)+=(fnum[q](i,j,k,m)*Mkbd[2*d][n][m]);
-            (fnump_int[q])(i,j,k,n)+=(fnum[q](i,j,k,m)*Mkbd[2*d+1][n][m]);          
-          } 
-        });           
+            (fnumm_int[q])(i,j,k,n) = 0.0;
+            (fnump_int[q])(i,j,k,n) = 0.0;        
+        }); 
+        for(int m = 0; m < M; ++m){ 
+          amrex::ParallelFor(bx, Np,[&] (int i, int j, int k, int n) noexcept
+          {
+            (fnumm_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d][n][m])*dvol*dt);
+            (fnump_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d+1][n][m])*dvol*dt);     
+          });
+        }
       }
     }
   }

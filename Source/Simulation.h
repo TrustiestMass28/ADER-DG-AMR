@@ -55,6 +55,8 @@ class Simulation
   
     AmrDG* dg_sim;  
     
+    std::ofstream ofs;
+    
   private:
     int _coord = 0;//cartesian, don't touch
 

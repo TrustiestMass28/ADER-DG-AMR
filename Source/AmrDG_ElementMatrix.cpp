@@ -34,7 +34,6 @@ void AmrDG::MatrixGenerator()
         
     for(int i=0; i<Np;++i){
       Mk_pred[j][i] = tphi(j,-1.0)*RefMat_phiphi(i,j,true,true);
-      //Mk_pred[j][i] = tphi(j,0.0)*RefMat_phiphi(i,j,true,true);
     }
     
   }

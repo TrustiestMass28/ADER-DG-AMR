@@ -344,103 +344,6 @@ void AmrDG::LpNorm_DG_AMR(int _p, amrex::Vector<amrex::Vector<amrex::Real>> quad
   }      
 }
 
-void AmrDG::NormDG()
-{
-  int _p = 1;
-  int N = qMp_1d;
-  amrex::Vector<const amrex::MultiFab *> state_u_h(Q); 
-  for(int q=0; q<Q;++q){state_u_h[q] = &(U_w[0][q]);}
-  
-  amrex::BoxArray c_ba = U_w[0][0].boxArray();
-  
-  //number of valid cells and respective volume
-  int N_full =(int)(c_ba.numPts());           
-  auto dx= geom[0].CellSizeArray();  
-  amrex::Real vol = 0.0;
-  #if (AMREX_SPACEDIM == 1)
-    vol = dx[0];
-  #elif (AMREX_SPACEDIM == 2)
-    vol = dx[0]*dx[1];
-  #elif (AMREX_SPACEDIM == 3)
-    vol = dx[0]*dx[1]*dx[2];
-  #endif
-  amrex::Real V_level=(amrex::Real)(vol*(amrex::Real)(N_full));
-  
-  
-  amrex::Vector<amrex::Vector<amrex::Real>> Lpnorm_full_tmp;
-  Lpnorm_full_tmp.resize(Q);    
-
-#ifdef AMREX_USE_OMP
-#pragma omp parallel 
-#endif
-  {
-    amrex::Vector<const amrex::FArrayBox *> fab_u_h(Q);
-    amrex::Vector< amrex::Array4<const amrex::Real>> uh(Q);  
-    
-    #ifdef AMREX_USE_OMP  
-    for (MFIter mfi(*(state_u_h[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-    #else
-    for (MFIter mfi(*(state_u_h[0]),true); mfi.isValid(); ++mfi)
-    #endif    
-    {
-      const amrex::Box& bx_tmp = mfi.tilebox();
-
-      for(int q=0 ; q<Q; ++q){
-        fab_u_h[q] = state_u_h[q]->fabPtr(mfi);
-        uh[q] = fab_u_h[q]->const_array();
-      }       
-    
-      for(int q=0 ; q<Q; ++q){
-        amrex::ParallelFor(bx_tmp,[&] (int i, int j, int k) noexcept
-        {           
-          amrex::Real cell_Lpnorm =0.0;
-          amrex::Real w;
-          amrex::Real f;
-          
-          //quadrature
-          for (int m = 0; m < std::pow(N,AMREX_SPACEDIM); ++m){ 
-            //quad weights for each quadrature point
-            w = 1.0;
-            for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
-              w*=2.0/std::pow(std::assoc_legendre(N,1,xi_ref_GLquad_L2proj[m][d_]),2);
-            }
-            
-            amrex::Real u_h = 0.0;  
-            for (int n = 0; n < Np; ++n){  
-              u_h+=uh[q](i,j,k,n)*Phi(n, xi_ref_GLquad_L2proj[m]);
-            }
-
-            amrex::Real u = 0.0; 
-            u =  Initial_Condition_U(0,q,i,j,k,xi_ref_GLquad_L2proj[m]);
-            f = std::pow(std::abs(u-u_h),(amrex::Real)_p);
-            cell_Lpnorm += (f*w);
-          }
-            
-          amrex::Real coeff = vol/std::pow(2.0,AMREX_SPACEDIM);
-          #pragma omp critical
-          {
-            Lpnorm_full_tmp[q].push_back(cell_Lpnorm*coeff);    
-          }      
-        });  
-      }          
-    }
-    for(int q=0 ; q<Q; ++q){
-      amrex::Real global_Lpnorm = 0.0;
-      global_Lpnorm = std::accumulate(Lpnorm_full_tmp[q].begin(), 
-                                       Lpnorm_full_tmp[q].end(), 0.0);
-                                                    
-      ParallelDescriptor::ReduceRealSum(global_Lpnorm);//sum up all the ranks level norms
-   
-      amrex::Real Lpnorm=std::pow(global_Lpnorm/V_level, 1.0/(amrex::Real)_p);
-      
-      Print().SetPrecision(17)<<"--level "<<0<<"--"<<"\n";
-      Print().SetPrecision(17)<< "L"<<_p<<" error norm:  "<<Lpnorm<<" | "<<
-                          "DG Order:  "<<p+1<<" | solution component: "<<q<<"\n"; 
-    }
-  }
-}  
-
-
 void AmrDG::L1Norm_DG_AMR()
 {
   LpNorm_DG_AMR(1, xi_ref_GLquad_s,qMp_1d);
@@ -512,6 +415,107 @@ void AmrDG::L2Norm_DG_AMR()
   
   LpNorm_DG_AMR(2, GLquadptsL2norm,2*qMp_1d);  
 }
+
+
+void AmrDG::NormDG()
+{
+  int _p = 1;
+  int N = qMp_1d;
+  int lev = 0;
+  amrex::Vector<const amrex::MultiFab *> state_u_h(Q); 
+  for(int q=0; q<Q;++q){state_u_h[q] = &(U_w[lev][q]);}
+  
+  amrex::BoxArray c_ba = U_w[lev][0].boxArray();
+  
+  //number of valid cells and respective volume
+  int N_full =(int)(c_ba.numPts());           
+  auto dx= geom[0].CellSizeArray();  
+  amrex::Real vol = 0.0;
+  #if (AMREX_SPACEDIM == 1)
+    vol = dx[0];
+  #elif (AMREX_SPACEDIM == 2)
+    vol = dx[0]*dx[1];
+  #elif (AMREX_SPACEDIM == 3)
+    vol = dx[0]*dx[1]*dx[2];
+  #endif
+  amrex::Real V_level=(amrex::Real)(vol*(amrex::Real)(N_full));
+  
+  
+  amrex::Vector<amrex::Vector<amrex::Real>> Lpnorm_full_tmp;
+  Lpnorm_full_tmp.resize(Q);    
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel 
+#endif
+  {
+    amrex::Vector<const amrex::FArrayBox *> fab_u_h(Q);
+    amrex::Vector< amrex::Array4<const amrex::Real>> uh(Q);  
+    
+    #ifdef AMREX_USE_OMP  
+    for (MFIter mfi(*(state_u_h[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+    #else
+    for (MFIter mfi(*(state_u_h[0]),true); mfi.isValid(); ++mfi)
+    #endif    
+    {
+      const amrex::Box& bx_tmp = mfi.tilebox();
+      //const amrex::Box& bx_tmp = mfi.growntilebox();
+
+      for(int q=0 ; q<Q; ++q){
+        fab_u_h[q] = state_u_h[q]->fabPtr(mfi);
+        uh[q] = fab_u_h[q]->const_array();
+      }       
+    
+      for(int q=0 ; q<Q; ++q){
+        amrex::ParallelFor(bx_tmp,[&] (int i, int j, int k) noexcept
+        {           
+          amrex::Real cell_Lpnorm =0.0;
+          amrex::Real w;
+          amrex::Real f;
+          
+          //quadrature
+          for (int m = 0; m < std::pow(N,AMREX_SPACEDIM); ++m){ 
+            //quad weights for each quadrature point
+            w = 1.0;
+            for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
+              w*=2.0/std::pow(std::assoc_legendre(N,1,xi_ref_GLquad_L2proj[m][d_]),2);
+            }
+            
+            amrex::Real u_h = 0.0;  
+
+            for (int n = 0; n < Np; ++n){  
+              u_h+=uh[q](i,j,k,n)*Phi(n, xi_ref_GLquad_L2proj[m]);
+            }
+        
+            amrex::Real u = 0.0; 
+            u =  Initial_Condition_U(lev,q,i,j,k,xi_ref_GLquad_L2proj[m]);
+            f = std::pow(std::abs(u-u_h),(amrex::Real)_p);
+            cell_Lpnorm += (f*w);
+          }
+            
+          amrex::Real coeff = vol/std::pow(2.0,AMREX_SPACEDIM);
+          #pragma omp critical
+          {
+            Lpnorm_full_tmp[q].push_back(cell_Lpnorm*coeff);    
+          }      
+        });  
+      }          
+    }
+    for(int q=0 ; q<Q; ++q){
+      amrex::Real global_Lpnorm = 0.0;
+      global_Lpnorm = std::accumulate(Lpnorm_full_tmp[q].begin(), 
+                                       Lpnorm_full_tmp[q].end(), 0.0);
+                                                    
+      ParallelDescriptor::ReduceRealSum(global_Lpnorm);//sum up all the ranks level norms
+   
+      amrex::Real Lpnorm=std::pow(global_Lpnorm/V_level, 1.0/(amrex::Real)_p);
+      
+      Print().SetPrecision(17)<<"--level "<<lev<<"--"<<"\n";
+      Print().SetPrecision(17)<< "L"<<_p<<" error norm:  "<<Lpnorm<<" | "<<
+                          "DG Order:  "<<p+1<<" | solution component: "<<q<<"\n"; 
+    }
+  }
+}  
+
 
 void AmrDG::PlotFile(int tstep, amrex::Real time) const
 {
@@ -636,19 +640,18 @@ void AmrDG::DEBUG_print_MFab()
   //and if wanted also multilevel data. Is jsut a cleaner option
   //than copy paste the loop in the already dense code
   //user should implement wathever they want
-  int q = 0;
-  int lev = 1;
+  int q = 2;
+  int lev = 0;
   int dim = 0;
 
-  amrex::MultiFab& state_c = U_w[lev][q];
+  //amrex::MultiFab& state_c = U_w[lev][q];
   //amrex::MultiFab& state_c = H_w[lev][q];
   //amrex::MultiFab& state_c = Fnum[lev][dim][q];
-  //amrex::MultiFab& state_c = Fnumm_int[lev][dim][q];
+  amrex::MultiFab& state_c = Fnumm_int[lev][dim][q];
   //amrex::MultiFab& state_c = Fp[lev][dim][q];
   //amrex::MultiFab& state_c = H_m[lev][dim][q];
   //auto ba_tmp = Fnumm_int[lev][dim][q].boxArray();
-  
-  Print() <<"BoxArray:  "<<state_c.boxArray()<<"\n";
+
   for (MFIter mfi(state_c); mfi.isValid(); ++mfi){
 
     //const amrex::Box& bx = mfi.tilebox();
@@ -665,11 +668,13 @@ void AmrDG::DEBUG_print_MFab()
         for(int j = lo.y; j <= hi.y; ++j){
           //for(int n = 0; n<qMpbd; ++n) {
           for(int n = 0; n<Np; ++n) {
-            AllPrint() <<i<<","<<j<<"  | w="<<n<<"| "<<uc(i,j,k,n)<<"\n";
+            Print(3) <<i<<","<<j<<"  | w="<<n<<"| "<<uc(i,j,k,n)<<"\n";
           }       
         } 
       }       
     }
   }
+  
+  Print() <<"        "<<"\n";
 }
 

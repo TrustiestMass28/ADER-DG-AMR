@@ -25,7 +25,7 @@ void AmrDG::FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev)
     
     //if we had all periodic then we pretty much already applied BC and can thus exit
     //if domain isnt all periodic, now apply non-periodic BCs
-    if (!(geom[lev].isAllPeriodic())){    
+    if (!(geom[lev].isAllPeriodic())){  
       //apply our own boundary conditions
       BoundaryCondition custom_bc(this, q, lev);
           
