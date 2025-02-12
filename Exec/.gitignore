@@ -1,0 +1,12 @@
+# Ignore any .ex file in the root directory or subdirectories
+*.ex
+
+# Ignore any subfolder (and its contents)
+*/
+
+/tmp_build_dir
+
+#Dont ignore gitignore
+
+!.gitignore
+
