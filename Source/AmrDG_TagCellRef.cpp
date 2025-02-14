@@ -14,12 +14,13 @@
 #endif
 
 #include "AmrDG.h"
+#include "ModelEquation.h"
 #include <AMReX_Array4.H>
 
 //NB: uw needs to be a const MFab in this function
 void AmrDG::ErrorEst (int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow)
 {
-  Print(sim->ofs) <<"AmrDG::ErrorEst"<<"\n";
+  //Print(sim->ofs) <<"AmrDG::ErrorEst"<<"\n";
   //check and flag cells where regridding criteria is met
   const int   tagval = TagBox::SET;
    
@@ -168,7 +169,7 @@ void AmrDG::AMRIndicator_tvb(int i, int j, int k,
       for(int q=0; q<Q_unique; ++q)
       {
         for(int m = 0; m<qMpbd ; ++m){ 
-          L_EV = sim->model_pde->pde_EV_Lmatrix(d,0,i,j,k,uw);
+          L_EV = model_pde->pde_EV_Lmatrix(d,0,i,j,k,uw);
 
           Dm_u_avg = 0.0;
           Dp_u_avg = 0.0;
@@ -247,13 +248,13 @@ void AmrDG::AMRIndicator_second_derivative(int i, int j, int k,
     for(int d2=0; d2<AMREX_SPACEDIM; ++d2)
     {
       shift[d2] = 1;
-      amrex::Real tmp_sec_der = sim->model_pde->get_D2U_from_U_w(d1,d2,q,i, j, k,uw,xi_ref_center);
+      amrex::Real tmp_sec_der = model_pde->get_D2U_from_U_w(d1,d2,q,i, j, k,uw,xi_ref_center);
       
       nominator+=std::pow(tmp_sec_der,2.0);
 
-      denominator+=std::pow((((std::abs(sim->model_pde->get_DU_from_U_w(d1, q, 
+      denominator+=std::pow((((std::abs(model_pde->get_DU_from_U_w(d1, q, 
                             i+shift[0], j+shift[1],  k+shift[2],uw,xi_ref_center))+std::abs(
-                            sim->model_pde->get_DU_from_U_w(d1, q,  i, 
+                            model_pde->get_DU_from_U_w(d1, q,  i, 
                             j,  k,uw,xi_ref_center))) /(dx[d2]))+epsilon*std::abs(tmp_sec_der)),2.0);
       shift[d2] = 0; 
     }  
@@ -286,12 +287,12 @@ void AmrDG::AMRIndicator_curl(int i, int j, int k,
       xi_ref_center[d]=0.0;
     }
     
-    amrex::Real ddxu2 = sim->model_pde->get_DU_from_U_w(0,2,i,j,k,uw,xi_ref_center);
-    amrex::Real ddxu3 = sim->model_pde->get_DU_from_U_w(0,3,i,j,k,uw,xi_ref_center);
-    amrex::Real ddyu1 = sim->model_pde->get_DU_from_U_w(1,1,i,j,k,uw,xi_ref_center);
-    amrex::Real ddyu3 = sim->model_pde->get_DU_from_U_w(1,3,i,j,k,uw,xi_ref_center);
-    amrex::Real ddzu1 = sim->model_pde->get_DU_from_U_w(2,1,i,j,k,uw,xi_ref_center);
-    amrex::Real ddzu2 = sim->model_pde->get_DU_from_U_w(2,2,i,j,k,uw,xi_ref_center);
+    amrex::Real ddxu2 = model_pde->get_DU_from_U_w(0,2,i,j,k,uw,xi_ref_center);
+    amrex::Real ddxu3 = model_pde->get_DU_from_U_w(0,3,i,j,k,uw,xi_ref_center);
+    amrex::Real ddyu1 = model_pde->get_DU_from_U_w(1,1,i,j,k,uw,xi_ref_center);
+    amrex::Real ddyu3 = model_pde->get_DU_from_U_w(1,3,i,j,k,uw,xi_ref_center);
+    amrex::Real ddzu1 = model_pde->get_DU_from_U_w(2,1,i,j,k,uw,xi_ref_center);
+    amrex::Real ddzu2 = model_pde->get_DU_from_U_w(2,2,i,j,k,uw,xi_ref_center);
     
     amrex::Real curl = std::sqrt(std::pow(ddyu3-ddzu2,2.0)+std::pow(ddzu1-ddxu3,2.0)+std::pow(ddxu2-ddyu1,2.0)); 
     curl_indicator(i,j,k,0)= curl*std::pow(di,3.0/2.0);
@@ -331,16 +332,16 @@ void AmrDG::AMRIndicator_div(int i, int j, int k,
       xi_ref_center[d]=0.0;
     }
     #if (AMREX_SPACEDIM == 2)
-      amrex::Real ddxu1 = sim->model_pde->get_DU_from_U_w(0,1,i,j,k,uw,xi_ref_center);
-      amrex::Real ddyu2 = sim->model_pde->get_DU_from_U_w(1,2,i,j,k,uw,xi_ref_center);
+      amrex::Real ddxu1 = model_pde->get_DU_from_U_w(0,1,i,j,k,uw,xi_ref_center);
+      amrex::Real ddyu2 = model_pde->get_DU_from_U_w(1,2,i,j,k,uw,xi_ref_center);
       amrex::Real div = std::abs(ddxu1+ddyu2);    
       
       div_indicator(i,j,k,0)= div*std::pow(di,3.0/2.0);
       AMR_div_indicator+=(std::pow(div_indicator(i,j,k,0),2.0));
     #elif (AMREX_SPACEDIM == 3)
-      amrex::Real ddxu1 = sim->model_pde->get_DU_from_U_w(0,1,i,j,k,uw,xi_ref_center);
-      amrex::Real ddyu2 = sim->model_pde->get_DU_from_U_w(1,2,i,j,k,uw,xi_ref_center);
-      amrex::Real ddzu3 = sim->model_pde->get_DU_from_U_w(2,3,i,j,k,uw,xi_ref_center);      
+      amrex::Real ddxu1 = model_pde->get_DU_from_U_w(0,1,i,j,k,uw,xi_ref_center);
+      amrex::Real ddyu2 = model_pde->get_DU_from_U_w(1,2,i,j,k,uw,xi_ref_center);
+      amrex::Real ddzu3 = model_pde->get_DU_from_U_w(2,3,i,j,k,uw,xi_ref_center);      
       amrex::Real div = std::abs(ddxu1+ddyu2+ddzu3);
       
       div_indicator(i,j,k,0)= div*std::pow(di,3.0/2.0);
@@ -377,17 +378,17 @@ void AmrDG::AMRIndicator_grad(int i, int j, int k,
     }
   
     #if (AMREX_SPACEDIM == 2)    
-    amrex::Real ddx_rho = sim->model_pde->get_DU_from_U_w(0,0,i,j,k,uw,xi_ref_center);
-    amrex::Real ddy_rho = sim->model_pde->get_DU_from_U_w(1,0,i,j,k,uw,xi_ref_center);
+    amrex::Real ddx_rho = model_pde->get_DU_from_U_w(0,0,i,j,k,uw,xi_ref_center);
+    amrex::Real ddy_rho = model_pde->get_DU_from_U_w(1,0,i,j,k,uw,xi_ref_center);
     
     amrex::Real grad = std::sqrt(std::pow(ddx_rho,2)+std::pow(ddy_rho,2));
     
     grad_indicator(i,j,k,0)= grad*std::pow(di,3.0/2.0);
     AMR_grad_indicator+=(std::pow(grad_indicator(i,j,k,0),2));
     #elif (AMREX_SPACEDIM == 3)
-    amrex::Real ddx_rho = sim->model_pde->get_DU_from_U_w(0,0,i,j,k,uw,xi_ref_center);
-    amrex::Real ddy_rho = sim->model_pde->get_DU_from_U_w(1,0,i,j,k,uw,xi_ref_center);
-    amrex::Real ddz_rho = sim->model_pde->get_DU_from_U_w(2,0,i,j,k,uw,xi_ref_center);
+    amrex::Real ddx_rho = model_pde->get_DU_from_U_w(0,0,i,j,k,uw,xi_ref_center);
+    amrex::Real ddy_rho = model_pde->get_DU_from_U_w(1,0,i,j,k,uw,xi_ref_center);
+    amrex::Real ddz_rho = model_pde->get_DU_from_U_w(2,0,i,j,k,uw,xi_ref_center);
     
     amrex::Real grad = std::sqrt(std::pow(ddx_rho,2.0)+std::pow(ddy_rho,2.0)
                                 +std::pow(ddz_rho,2.0));    

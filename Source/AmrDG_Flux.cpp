@@ -14,6 +14,7 @@
 #endif
 
 #include "AmrDG.h"
+#include "ModelEquation.h"
 
 #include <Eigen/Dense>
 #include <Eigen/Core>
@@ -372,7 +373,7 @@ amrex::Real AmrDG::PhysicalFlux(int lev, int d,int q, int m, int i, int j, int k
 {
   //implementation of the physical flux present in the hyperbolic PDE
   amrex::Real f;
-  f = sim->model_pde->pde_flux(lev,d,q,m,i,j,k,u,xi);
+  //f = model_pde->pde_flux(lev,d,q,m,i,j,k,u,xi);
   return f; 
 }
 
@@ -383,7 +384,7 @@ amrex::Real AmrDG::DPhysicalFlux(int lev, int d,int q, int m, int i, int j, int 
   //derivative of the physical flux of the hyperbolic PDE
   //if we are solving a system, then we have to specify here the unique eigenvalues of Jacobian of the flux
   amrex::Real df;
-  df = sim->model_pde->pde_dflux(lev,d,q,m,i,j,k,u,xi);
+  //df = model_pde->pde_dflux(lev,d,q,m,i,j,k,u,xi);
   return df;
 }
 
@@ -392,7 +393,7 @@ amrex::Real AmrDG::PhysicalSource(int lev,int q, int m, int i, int j, int k,
                                 amrex::Vector<amrex::Real> xi)
 {
   amrex::Real s;
-  s =  sim->model_pde->pde_source(lev,q,m,i,j,k,u,xi);
+  //s =  model_pde->pde_source(lev,q,m,i,j,k,u,xi);
   return s;
 }
 

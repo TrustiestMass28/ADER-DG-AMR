@@ -19,10 +19,11 @@
 #include <Eigen/Eigenvalues>
 
 #include "AmrDG.h"
+#include "ModelEquation.h"
  
 void AmrDG::InitialCondition(int lev)
 {
-  Print(sim->ofs) <<"AmrDG::InitialCondition() "<<lev<<"\n";
+  //Print(*ofs) <<"AmrDG::InitialCondition() "<<lev<<"\n";
   //applies the initial condition to all the solution components modes
   amrex::Vector<amrex::MultiFab *> state_uw(Q);
  
@@ -78,7 +79,7 @@ amrex::Real AmrDG::Initial_Condition_U(int lev,int q,int i,int j,int k,
                                         amrex::Vector<amrex::Real> xi) const
 { 
   amrex::Real u_ic;
-  u_ic = sim->model_pde->pde_IC(lev,q,i,j,k,xi);
+  u_ic = model_pde->pde_IC(lev,q,i,j,k,xi);
 
   return u_ic;
 }

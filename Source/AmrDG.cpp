@@ -14,18 +14,18 @@
 #include <AMReX_MemProfiler.H>
 #endif
 
-#include "AmrDG.h"
-//#include "Compressible_Euler.h"
-//#include "Advection.h"
-
 #include <Eigen/Dense>
 #include <Eigen/Core>
 #include <Eigen/SVD>
 
+#include "AmrDG.h"
+#include "ModelEquation.h"
+
+
 using namespace amrex;
 
 //AmrDG class constructor, also initializes the AmrCore class (used for AMR)
-AmrDG::AmrDG(Simulation* _sim,const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
+AmrDG::AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
               int _coord, Vector<IntVect> const& _ref_ratios,  
               Array<int,AMREX_SPACEDIM> const& _is_per, 
               amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo, 
@@ -33,20 +33,20 @@ AmrDG::AmrDG(Simulation* _sim,const RealBox& _rb, int _max_level,const Vector<in
               amrex::Vector<amrex::Vector<int>> _bc_lo_type, 
               amrex::Vector<amrex::Vector<int>> _bc_hi_type,amrex::Real _T,
               amrex::Real _CFL, int _p,
-              int _t_regrid, int _t_outplt, std::string _limiter_type, 
-              amrex::Real _TVB_M,
-              amrex::Vector<amrex::Real> _AMR_TVB_C ,
-              amrex::Vector<amrex::Real> _AMR_curl_C, 
-              amrex::Vector<amrex::Real> _AMR_div_C,  
-              amrex::Vector<amrex::Real> _AMR_grad_C, 
-              amrex::Vector<amrex::Real> _AMR_sec_der_C,
-              amrex::Real _AMR_sec_der_indicator, 
-              amrex::Vector<amrex::Real> _AMR_C, int _t_limit) 
+              int _t_regrid, int _t_outplt, //std::string _limiter_type, 
+              //amrex::Real _TVB_M,
+              //amrex::Vector<amrex::Real> _AMR_TVB_C ,
+              //amrex::Vector<amrex::Real> _AMR_curl_C, 
+              //amrex::Vector<amrex::Real> _AMR_div_C,  
+              //amrex::Vector<amrex::Real> _AMR_grad_C, 
+              //amrex::Vector<amrex::Real> _AMR_sec_der_C,
+              //amrex::Real _AMR_sec_der_indicator, 
+              //amrex::Vector<amrex::Real> _AMR_C, 
+              int _t_limit) 
               
               :  AmrCore (_rb, _max_level, _n_cell, _coord, _ref_ratios, _is_per)
 { 
-  sim =_sim;
-  
+  /*
   //I/O settings
   t_outplt = _t_outplt;
   
@@ -69,36 +69,35 @@ AmrDG::AmrDG(Simulation* _sim,const RealBox& _rb, int _max_level,const Vector<in
   limiter_type = _limiter_type;
   TVB_M = _TVB_M;
   
-  Q = sim->model_pde->Q_model;  
-  Q_unique = sim->model_pde->Q_model_unique;
+  Q = model_pde->Q_model;  
+  Q_unique = model_pde->Q_model_unique;
   
-  Print(sim->ofs) <<"Solving system with:"<<"\n";
-  Print(sim->ofs) <<"   total equations   "<<Q<<"\n";
-  Print(sim->ofs) <<"   unique equations  "<<Q_unique<<"\n";
+  //Print(*ofs) <<"Solving system with:"<<"\n";
+  //Print(*ofs) <<"   total equations   "<<Q<<"\n";
+  //Print(*ofs) <<"   unique equations  "<<Q_unique<<"\n";
   
   //number of modes and nodes
   number_modes();
   number_quadintpts();
 
-  Print(sim->ofs) <<"Np         : "<<Np<<"\n";
-  Print(sim->ofs) <<"mNp        : "<<mNp<<"\n";
-  Print(sim->ofs) <<"qMp        : "<<qMp<<"\n";
-  Print(sim->ofs) <<"qMpbd      : "<<qMpbd<<"\n";
-  Print(sim->ofs) <<"qMp_L2proj : "<<qMp_L2proj<<"\n";
-  /*
-  Np    : number of modes
-  mNp   : number of modes for modified basis function
-  mMp   : number of interpolation nodes (equidistant) related to mNp
-  qMp   : number of quadrature  points (Gauss-Lobatto distribution) 
-  mMpbd  : number of interpolation nodes on a boundary (equidistant) related to mNp
-  qMpbd : number of quadrature points on a boundary (Gauss-Lobatto distribution)
-  */
+  //Print(*ofs) <<"Np         : "<<Np<<"\n";
+  //Print(*ofs) <<"mNp        : "<<mNp<<"\n";
+  //Print(*ofs) <<"qMp        : "<<qMp<<"\n";
+  //Print(*ofs) <<"qMpbd      : "<<qMpbd<<"\n";
+  //Print(*ofs) <<"qMp_L2proj : "<<qMp_L2proj<<"\n";
+  
+  //Np    : number of modes
+  //mNp   : number of modes for modified basis function
+  //mMp   : number of interpolation nodes (equidistant) related to mNp
+  //qMp   : number of quadrature  points (Gauss-Lobatto distribution) 
+  //mMpbd  : number of interpolation nodes on a boundary (equidistant) related to mNp
+  //qMpbd : number of quadrature points on a boundary (Gauss-Lobatto distribution)
 
   U_w.resize(L); 
   H_w.resize(L); 
   H.resize(L); 
   U.resize(L); 
-  if(sim->model_pde->flag_source_term){S.resize(L);}
+  if(model_pde->flag_source_term){S.resize(L);}
   U_center.resize(L); 
   F.resize(L);
   Fm.resize(L);
@@ -215,51 +214,102 @@ AmrDG::AmrDG(Simulation* _sim,const RealBox& _rb, int _max_level,const Vector<in
   
   //Refinement parameters fine tuning
   AMR_settings_tune();
+
+  */
 }
 
 AmrDG::~AmrDG() {}
 
-void AmrDG::AMR_settings_tune()
-{
-  /////////////////////////
-  //AMR MESH PARAMETERS (tune only if needed)
-  //please refer to AMReX_AmrMesh.H for all functions for setting the parameters
-  //Set the same blocking factor for all levels
-  SetBlockingFactor(2); 
-  SetGridEff(0.9);
-  //Different blocking factor for each refinemetn level
-  /*
-  amrex::Vector<int> block_fct;// (max_level+1);
-  for (int l = 0; l <= max_level; ++l) {
-    if(l==0){block_fct.push_back(8);}
-    else if(l==1){block_fct.push_back(4);}
-  }
-  //NB: can also specify different block factor per dimension and different
-  //block factor per dimension per level
-  SetBlockingFactor(block_fct);
-  */
-  
-  //SetMaxGridSize(16);
-  //iterate_on_new_grids = false;//will genrete only one new level per refinement step
-  /////////////////////////
-}
+//initialize multilevel mesh, geometry, Box array and DistributionMap
 void AmrDG::Init()
 {
-  //initialize multilevel mesh, geometry, Box array and DistributionMap
-  Print(Print(sim->ofs)) <<"AmrDG::Init()"<<"\n";  
+  
+  //Print(*ofs) <<"AmrDG::Init()"<<"\n";  
   const Real time = 0.0;
   InitFromScratch(time);
 }
 
+// Make a new level from scratch using provided BoxArray and DistributionMapping.
+// Only used during initialization
+void AmrDG::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba, 
+                                    const DistributionMapping& dm)
+{ 
+  //Print(*ofs) <<"AmrDG::MakeNewLevelFromScratch() "<< lev<<"\n";
+  //create a new level from scratch, e.g when regrid criteria for finer level 
+  //reached for the first time
+  //called when initializing the simulation
+  InitData_system(lev,ba,dm);  
+  
+  if(lev ==0)
+  {
+    //init both valid and ghost data
+    InitialCondition(lev);
+  }
+  else
+  {
+    //init valid and ghost data by scattering from coarse
+
+    for(int q=0 ; q<Q; ++q){
+      FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
+      //for ghost at fine-coarseinterface just copy from coarse
+      FillPatchGhostFC(lev,time,q);
+    }        
+  }  
+}
+
+
+//Remake an existing level using provided BoxArray and DistributionMapping and 
+//fill with existing fine and coarse data.
+void AmrDG::RemakeLevel (int lev, amrex::Real time, const amrex::BoxArray& ba,
+                        const amrex::DistributionMapping& dm)
+{
+  //Print(*ofs) << "RemakeLevel   "<< lev<<"\n";
+  
+  amrex::Vector<amrex::MultiFab> new_mf;
+  new_mf.resize(Q);
+  for(int q=0 ; q<Q; ++q){
+    new_mf[q].define(ba, dm, Np, nghost);
+    new_mf[q].setVal(0.0);    
+    FillPatch(lev, time, new_mf[q], 0, Np,q);  
+  } 
+     
+  //clear existing level MFabs defined on old ba,dm
+  ClearLevel(lev);
+  //create new level MFabs defined on new ba,dm
+  InitData_system(lev,ba,dm); 
+    
+  for(int q=0 ; q<Q; ++q){
+    std::swap(U_w[lev][q],new_mf[q]);  
+  }
+  
+  for(int q=0 ; q<Q; ++q){
+    FillPatchGhostFC(lev,time, q);
+ }
+}
+
+//Make a new level using provided BoxArray and DistributionMapping and fill with 
+//interpolated coarse level data.
+void AmrDG::MakeNewLevelFromCoarse (int lev, amrex::Real time, const amrex::BoxArray& ba, 
+  const amrex::DistributionMapping& dm)
+{
+//Print(*ofs) << "make new level from coarse :   "<< lev<< "\n";
+InitData_system(lev,ba,dm); 
+for(int q=0 ; q<Q; ++q){
+FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
+FillPatchGhostFC(lev,time,q);
+}
+}
+
+//Init data structures for level for all solution components of the system
 void AmrDG::InitData_system(int lev,const BoxArray& ba, const DistributionMapping& dm)
 {
-  Print(sim->ofs) <<"AmrDG::InitData_system() "<< lev<<"\n";
-  //init data structures for level for all solution components of the system
+  //Print(*ofs) <<"AmrDG::InitData_system() "<< lev<<"\n";
+  
   U_w[lev].resize(Q); 
   H_w[lev].resize(Q); 
   U[lev].resize(Q);
   H[lev].resize(Q);   
-  if(sim->model_pde->flag_source_term){S[lev].resize(Q);}
+  if(model_pde->flag_source_term){S[lev].resize(Q);}
   U_center[lev].resize(Q); 
   
   F[lev].resize(AMREX_SPACEDIM);
@@ -293,11 +343,12 @@ void AmrDG::InitData_system(int lev,const BoxArray& ba, const DistributionMappin
   } 
 }
 
+//Init data for given level for specific solution component
 void AmrDG::InitData_component(int lev,const BoxArray& ba,
                               const DistributionMapping& dm, int q)
 {
-  //Init data for given level for specific solution component
-  Print(sim->ofs) <<"AmrDG::InitData_component() "<< q<<"\n";
+  
+  //Print(*ofs) <<"AmrDG::InitData_component() "<< q<<"\n";
    
   U_w[lev][q].define(ba, dm, Np, nghost);
   U_w[lev][q].setVal(0.0);
@@ -314,7 +365,7 @@ void AmrDG::InitData_component(int lev,const BoxArray& ba,
   U_center[lev][q].define(ba, dm, 1, nghost);
   U_center[lev][q].setVal(0.0);
        
-  if(sim->model_pde->flag_source_term){S[lev][q].define(ba, dm, qMp, nghost);
+  if(model_pde->flag_source_term){S[lev][q].define(ba, dm, qMp, nghost);
   S[lev][q].setVal(0.0);}
     
   idc_curl_K[lev].define(ba, dm,1,0);
@@ -363,12 +414,12 @@ void AmrDG::InitData_component(int lev,const BoxArray& ba,
 //Delete level data
 void AmrDG::ClearLevel(int lev) 
 {
-  Print(sim->ofs) << "ClearLevel   "<< lev<<"\n";
+  //Print(*ofs) << "ClearLevel   "<< lev<<"\n";
   U_w[lev].clear();  
   U[lev].clear();  
   H_w[lev].clear();  
   H[lev].clear();  
-  if(sim->model_pde->flag_source_term){S[lev].clear();}
+  if(model_pde->flag_source_term){S[lev].clear();}
   U_center[lev].clear();  
   
   idc_curl_K[lev].clear();
@@ -390,102 +441,14 @@ void AmrDG::ClearLevel(int lev)
   }
 }
 
-// Make a new level from scratch using provided BoxArray and DistributionMapping.
-// Only used during initialization
-void AmrDG::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba, 
-                                    const DistributionMapping& dm)
-{ 
-  Print(sim->ofs) <<"AmrDG::MakeNewLevelFromScratch() "<< lev<<"\n";
-  //create a new level from scratch, e.g when regrid criteria for finer level 
-  //reached for the first time
-  //called when initializing the simulation
-  InitData_system(lev,ba,dm);  
-  
-  if(lev ==0)
-  {
-    //init both valid and ghost data
-    InitialCondition(lev);
-  }
-  else
-  {
-    //init valid and ghost data by scattering from coarse
-
-    for(int q=0 ; q<Q; ++q){
-      FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
-      //for ghost at fine-coarseinterface just copy from coarse
-      FillPatchGhostFC(lev,time,q);
-    }        
-  }  
-}
-
-//Remake an existing level using provided BoxArray and DistributionMapping and 
-//fill with existing fine and coarse data.
-void AmrDG::RemakeLevel (int lev, amrex::Real time, const amrex::BoxArray& ba,
-                        const amrex::DistributionMapping& dm)
-{
-  Print(sim->ofs) << "RemakeLevel   "<< lev<<"\n";
-  
-  amrex::Vector<amrex::MultiFab> new_mf;
-  new_mf.resize(Q);
-  for(int q=0 ; q<Q; ++q){
-    new_mf[q].define(ba, dm, Np, nghost);
-    new_mf[q].setVal(0.0);    
-    FillPatch(lev, time, new_mf[q], 0, Np,q);  
-  } 
-     
-  //clear existing level MFabs defined on old ba,dm
-  ClearLevel(lev);
-  //create new level MFabs defined on new ba,dm
-  InitData_system(lev,ba,dm); 
-    
-  for(int q=0 ; q<Q; ++q){
-    std::swap(U_w[lev][q],new_mf[q]);  
-  }
-  
-  for(int q=0 ; q<Q; ++q){
-    FillPatchGhostFC(lev,time, q);
- }
-}
-
-//Make a new level using provided BoxArray and DistributionMapping and fill with 
-//interpolated coarse level data.
-void AmrDG::MakeNewLevelFromCoarse (int lev, amrex::Real time, const amrex::BoxArray& ba, 
-                                    const amrex::DistributionMapping& dm)
-{
-  Print(sim->ofs) << "make new level from coarse :   "<< lev<< "\n";
-  InitData_system(lev,ba,dm); 
-  for(int q=0 ; q<Q; ++q){
-    FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
-    FillPatchGhostFC(lev,time,q);
-  }
-}
-
-/*
-Fillpatch operations fill all cells, valid and ghost, from actual valid data at 
-that level, space-time interpolated data from the next-coarser level, 
-neighboring grids at the same level, and domain boundary conditions 
-(for examples that have non-periodic boundary conditions).
- 
-NB: this function is used for regrid and not for timestepping
-
-FillPatchSingleLevel()  :   fills a MultiFab and its ghost region at a single 
-                            level of refinement. The routine is flexible enough 
-                            to interpolate in time between two MultiFabs 
-                            associated with different times
-                            
-                            calls also MultiFab::FillBoundary,
-                            MultiFab::FillDomainBoundary()
-                            
-FillPatchTwoLevels()    :   fills a MultiFab and its ghost region at a single 
-                            level of refinement, assuming there is an underlying 
-                            coarse level. This routine is flexible enough to 
-                            interpolate the coarser level in time first using 
-                            FillPatchSingleLevel()
-*/
-
+//Fillpatch operations fill all cells, valid and ghost, from actual valid data at 
+//that level, space-time interpolated data from the next-coarser level, 
+//neighboring grids at the same level, and domain boundary conditions 
+//(for examples that have non-periodic boundary conditions).
+//NB: this function is used for regrid and not for timestepping
 void AmrDG::FillPatch(int lev, Real time, amrex::MultiFab& mf,int icomp, int ncomp, int q)
 {  
-  Print(sim->ofs) << "FillPatch   "<< lev<< " |component  "<<q<<"\n";
+  //Print(*ofs) << "FillPatch   "<< lev<< " |component  "<<q<<"\n";
 
   if (lev == 0)
   { 
@@ -497,6 +460,14 @@ void AmrDG::FillPatch(int lev, Real time, amrex::MultiFab& mf,int icomp, int nco
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> physbcf(geom[lev],bc_w[q],bcf);
     
     amrex::FillPatchSingleLevel(mf, time, smf, stime, 0, icomp, ncomp,geom[lev], physbcf, 0);  
+    //FillPatchSingleLevel()  :   fills a MultiFab and its ghost region at a single 
+    //                            level of refinement. The routine is flexible enough 
+    //                            to interpolate in time between two MultiFabs 
+    //                            associated with different times
+    //                            
+    //                            calls also MultiFab::FillBoundary,
+    //                            MultiFab::FillDomainBoundary()
+    //                            
   }
   else
   { 
@@ -513,6 +484,11 @@ void AmrDG::FillPatch(int lev, Real time, amrex::MultiFab& mf,int icomp, int nco
     amrex::FillPatchTwoLevels(mf, time, cmf, ctime, fmf, ftime,0, icomp, ncomp, 
                               geom[lev-1], geom[lev],coarse_physbcf, 0, fine_physbcf, 
                               0, refRatio(lev-1),mapper, bc_w[q], 0);
+    //FillPatchTwoLevels()    :   fills a MultiFab and its ghost region at a single 
+    //                            level of refinement, assuming there is an underlying 
+    //                           coarse level. This routine is flexible enough to 
+    //                            interpolate the coarser level in time first using 
+    //                            FillPatchSingleLevel()
 
   }
 }
@@ -578,7 +554,7 @@ void AmrDG::GetData (int lev, int q, Real time, Vector<MultiFab*>& data,
 //averages cell centered data from finer cells to the respective covered coarse cell
 void AmrDG::AverageFineToCoarse()
 {  
-  Print(sim->ofs) << "AverageFineToCoarse()"<< "\n";
+  //Print(*ofs) << "AverageFineToCoarse()"<< "\n";
   
   for (int l = finest_level; l > 0; --l){  
     for(int q=0; q<Q; ++q){   
@@ -606,6 +582,32 @@ void AmrDG::AverageFineToCoarseFlux(int lev)
   }
 }
 
+/*
+void AmrDG::AMR_settings_tune()
+{
+  /////////////////////////
+  //AMR MESH PARAMETERS (tune only if needed)
+  //please refer to AMReX_AmrMesh.H for all functions for setting the parameters
+  //Set the same blocking factor for all levels
+  SetBlockingFactor(2); 
+  SetGridEff(0.9);
+  //Different blocking factor for each refinemetn level
+
+  //amrex::Vector<int> block_fct;// (max_level+1);
+  //for (int l = 0; l <= max_level; ++l) {
+  //  if(l==0){block_fct.push_back(8);}
+  //  else if(l==1){block_fct.push_back(4);}
+  //}
+  ////NB: can also specify different block factor per dimension and different
+  ////block factor per dimension per level
+  //SetBlockingFactor(block_fct);
+
+  
+  //SetMaxGridSize(16);
+  //iterate_on_new_grids = false;//will genrete only one new level per refinement step
+  /////////////////////////
+}
+
 void AmrDG::Evolve()
 {
   
@@ -615,8 +617,8 @@ void AmrDG::Evolve()
   NormDG();
   
   ComputeDt();
-  Print(sim->ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
-  Print(sim->ofs)<<"------------------------------------------------"<<"\n";
+  Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
+  Print(*ofs)<<"------------------------------------------------"<<"\n";
   
   //time stepping
   while(t<T)
@@ -628,7 +630,7 @@ void AmrDG::Evolve()
       }
     }  
     
-    Print(sim->ofs) << "ADER Time Integraton"<< "\n";
+    Print(*ofs) << "ADER Time Integraton"<< "\n";
     //advance solution by one time-step.
     ADER();
     //limit solution
@@ -649,8 +651,8 @@ void AmrDG::Evolve()
     
     n+=1;
     t+=dt;
-    Print(sim->ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
-    Print(sim->ofs)<<"------------------------------------------------"<<"\n";
+    Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
+    Print(*ofs)<<"------------------------------------------------"<<"\n";
     
     if((t_outplt>0) && (n%t_outplt==0)){PlotFile(n, t);} 
     
@@ -675,7 +677,7 @@ void AmrDG::ADER()
     int iter=0;    
     while(iter<p)
     {
-      if(sim->model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}  
+      if(model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}  
       for(int d = 0; d<AMREX_SPACEDIM; ++d){
         Flux(l,d,qMp,&(H_w[l]),&(H[l]),&(F[l][d]),&(DF[l][d]),xi_ref_GLquad, false, true);
       }   
@@ -687,7 +689,7 @@ void AmrDG::ADER()
     }
     
     //use found predictor to compute corrector
-    if(sim->model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}     
+    if(model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}     
     for(int d = 0; d<AMREX_SPACEDIM; ++d){
       Flux(l,d,qMp,&(H_w[l]),&(H[l]),&(F[l][d]),&(DF[l][d]),xi_ref_GLquad, false, true);
       Flux(l,d,qMpbd,&(H_w[l]),&(H_m[l][d]),&(Fm[l][d]),&(DFm[l][d]),xi_ref_GLquad_bdm[d], true, true);
@@ -708,7 +710,7 @@ void AmrDG::ADER()
 //updates predictor on valid+ghost cells
 void AmrDG::Update_H_w(int lev, int q)
 { 
-  if(sim->model_pde->flag_source_term){
+  if(model_pde->flag_source_term){
 
     auto const dx = geom[lev].CellSizeArray();
     
@@ -871,7 +873,7 @@ void AmrDG::Update_H_w(int lev, int q)
 //updates solution on valid cells
 void AmrDG::Update_U_w(int lev, int q)
 { 
-  if(sim->model_pde->flag_source_term)
+  if(model_pde->flag_source_term)
   {  
     auto const dx = geom[lev].CellSizeArray(); 
 
@@ -1069,7 +1071,7 @@ void AmrDG::Update_U_w(int lev, int q)
               rhs(i,j,k,n)+=S_norm*(Sk_corr[d][n][m]*((f)[d])(i,j,k,m));
             });
           }
-          ///*
+          //
           //Mbd_norm =  (dt/(amrex::Real)dx[d]);
           shift[d] = 1;           
           Mbd_norm =  1.0/vol;
@@ -1079,21 +1081,21 @@ void AmrDG::Update_U_w(int lev, int q)
             rhs(i,j,k,n)-=(-Mbd_norm*((fnumm_int)[d])(i,j,k,n));          
           });          
           shift[d] = 0;    
-          //*/
-          /*
-
-          shift[d] = 1;
-          Mbd_norm =  (dt/(amrex::Real)dx[d]);
-          for  (int m = 0; m < qMpbd; ++m){ 
-            amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-            {
-              rhs(i,j,k,n)-=(Mbd_norm*(Mkbd[2*d+1][n][m]*((fnum)[d])(i+shift[0],j+shift[1],
-                      k+shift[2],m)-Mkbd[2*d][n][m]*((fnum)[d])(i,j,k,m)));   
-            });
-          }
-          shift[d] = 0;
+          //
           
-          */
+
+          //shift[d] = 1;
+          //Mbd_norm =  (dt/(amrex::Real)dx[d]);
+          //for  (int m = 0; m < qMpbd; ++m){ 
+          //  amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
+          //  {
+          //    rhs(i,j,k,n)-=(Mbd_norm*(Mkbd[2*d+1][n][m]*((fnum)[d])(i+shift[0],j+shift[1],
+          //            k+shift[2],m)-Mkbd[2*d][n][m]*((fnum)[d])(i,j,k,m)));   
+          //  });
+          //}
+          //shift[d] = 0;
+          
+          
         }
         
         amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
@@ -1168,7 +1170,7 @@ void AmrDG::ComputeDt()
           amrex::Vector<amrex::Real> lambda_d(AMREX_SPACEDIM);
           for(int d = 0; d < AMREX_SPACEDIM; ++d){  
             //compute at cell center so m==0
-            lambda_d.push_back(sim->model_pde->pde_CFL(d,0,i,j,k,&uc));
+            lambda_d.push_back(model_pde->pde_CFL(d,0,i,j,k,&uc));
           }
           //find max signal speed across the dimensions
           auto lambda_max_  = std::max_element(lambda_d.begin(),lambda_d.end());
@@ -1210,6 +1212,7 @@ void AmrDG::ComputeDt()
   ParallelDescriptor::ReduceRealMin(dt_min);
   dt = dt_min; 
 }
+*/
 
 //std::swap(U_w[lev][q],new_mf);    
 
