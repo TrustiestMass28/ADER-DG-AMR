@@ -14,6 +14,7 @@
 #endif
 
 #include "AmrDG.h"
+#include "ModelEquation.h"
 
 void AmrDG::FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev)
 {
@@ -77,13 +78,13 @@ void AmrDG::BoundaryCondition::operator() (const IntVect& iv, Array4<Real> const
     {   
       if ((amrdg->bc_w[q][0].lo(dim) == amrex::BCType::ext_dir) && iv[dim] < lo[dim]){
         for(int m=0; m<amrdg->qMp_L2proj; ++m){
-          bc_val[m] = amrdg->sim->model_pde->pde_BC_gDirichlet(q,dim,iv,m,dcomp,numcomp,dest,geom,-1,lev);
+          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gDirichlet(q,dim,iv,m,dcomp,numcomp,dest,geom,-1,lev);
         }
         bc_found = true;
       }
       else if ((amrdg->bc_w[q][0].hi(dim) == amrex::BCType::ext_dir) && iv[dim] > hi[dim]) {
         for(int m=0; m<amrdg->qMp_L2proj; ++m){
-          bc_val[m] = amrdg->sim->model_pde->pde_BC_gDirichlet(q,dim,iv,m,dcomp,numcomp,dest,geom,1,lev);   
+          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gDirichlet(q,dim,iv,m,dcomp,numcomp,dest,geom,1,lev);   
         }          
         bc_found = true;
       }
@@ -107,13 +108,13 @@ void AmrDG::BoundaryCondition::operator() (const IntVect& iv, Array4<Real> const
     {    
       if ((amrdg->bc_w[q][0].lo(dim) == amrex::BCType::ext_dir) && iv[dim] < lo[dim]){
         for(int m=0; m<amrdg->qMp_L2proj; ++m){
-          bc_val[m] = amrdg->sim->model_pde->pde_BC_gNeumann(q, dim,iv,m,dcomp,numcomp,dest,geom,-1,lev);  
+          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gNeumann(q, dim,iv,m,dcomp,numcomp,dest,geom,-1,lev);  
         }       
         bc_found = true;
       }      
       else if ((amrdg->bc_w[q][0].hi(dim) == amrex::BCType::ext_dir) && iv[dim] > hi[dim]) {
         for(int m=0; m<amrdg->qMp_L2proj; ++m){
-          bc_val[m] = amrdg->sim->model_pde->pde_BC_gNeumann(q, dim,iv,m,dcomp,numcomp,dest,geom,1,lev);   
+          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gNeumann(q, dim,iv,m,dcomp,numcomp,dest,geom,1,lev);   
         }        
         bc_found = true;
       } 
@@ -141,12 +142,12 @@ void AmrDG::BoundaryCondition::operator() (const IntVect& iv, Array4<Real> const
 
 amrex::Real AmrDG::gDirichlet_bc(int d, int side, int q) const
 { 
-  return sim->model_pde->pde_BC_gDirichlet(d,side,q) ;
+  return model_pde->pde_BC_gDirichlet(d,side,q) ;
 }
 
 amrex::Real AmrDG::gNeumann_bc(int d, int side, int q) const
 { 
-  return sim->model_pde->pde_BC_gNeumann(d,side,q) ;
+  return model_pde->pde_BC_gNeumann(d,side,q) ;
 }
 
 

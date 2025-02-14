@@ -6,18 +6,17 @@
 class Compressible_Euler : public ModelEquation
 {
   public:
-    Compressible_Euler(Simulation* _euler_sim, 
-                        std::string _euler_test_case, 
-                        std::string _euler_equation_type,
+    Compressible_Euler(std::string _euler_test_case, 
                         bool _euler_flag_angular_momentum,
                         bool _euler_flag_source_term); 
    
     ~Compressible_Euler() override {};
     
+    
     virtual amrex::Real pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
                                 amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                 amrex::Vector<amrex::Real> xi) const override;
-                                
+
     virtual amrex::Real pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                  amrex::Vector<amrex::Real> xi) const override;
@@ -85,10 +84,8 @@ class Compressible_Euler : public ModelEquation
     
     virtual amrex::Real pde_BC_gNeumann(int d, int side, int q) const override;                                            
 
-    
-    
-    
-  private:        
+  private:     
+      /*
     amrex::Real Pressure(amrex::Vector<amrex::Array4<const amrex::Real>>* u, 
                         int i, int j, int k,int m) const;
                         
@@ -103,7 +100,7 @@ class Compressible_Euler : public ModelEquation
 
     amrex::Real smooth_discontinuity(amrex::Real xi, amrex::Real a, 
                                     amrex::Real b, amrex::Real s) const;
-    
+      */
     amrex::Real gamma_adiab;
 };  
 

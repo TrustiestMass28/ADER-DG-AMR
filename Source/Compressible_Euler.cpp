@@ -1,13 +1,12 @@
 #include "Compressible_Euler.h"
-#include "AmrDG.h"
+#include "NumericalMethod.h"
+//#include "AmrDG.h"
 
 //using namespace amrex;
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-Compressible_Euler::Compressible_Euler(Simulation* _euler_sim, 
-                                        std::string _euler_test_case, 
-                                        std::string _euler_equation_type,
+Compressible_Euler::Compressible_Euler( std::string _euler_test_case, 
                                         bool _euler_flag_angular_momentum,
                                         bool _euler_flag_source_term)  
 
@@ -34,20 +33,20 @@ Compressible_Euler::Compressible_Euler(Simulation* _euler_sim,
  
   gamma_adiab = 1.4;
   
-  sim=_euler_sim;
   Q_model=_Q_model;
   Q_model_unique =_Q_model_unique;
   test_case = _euler_test_case;
-  equation_type =  _euler_equation_type;
   flag_angular_momentum = _euler_flag_angular_momentum;
   flag_source_term = _euler_flag_source_term;     
+
 }
+
 
 amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
                                       amrex::Vector<amrex::Real> xi)
 {
-  const auto prob_lo = sim->dg_sim->Geom(lev).ProbLoArray();
-  const auto dx     = sim->dg_sim->Geom(lev).CellSizeArray();
+  const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
+  const auto dx     = numerical_pde->Geom(lev).CellSizeArray();
   
   amrex::Real uw_ic; 
 #if (AMREX_SPACEDIM == 1)
@@ -292,13 +291,13 @@ amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
 #endif 
   return uw_ic;
 }
-/*
-For Euler equations, we specifiy Dirichlet,Neumann BCs w.r.t rho,u1,u2,p. 
-//(p used to five BC to energy)
-Then these specified values are mapped (inside AmrDG::BoundaryCondition::operator(), 
-//also considering the other components BCs) 
-to our solution vector components i.e to rho,rho_u1,rho_u2,rho_e
-*/
+
+//For Euler equations, we specifiy Dirichlet,Neumann BCs w.r.t rho,u1,u2,p. 
+////(p used to five BC to energy)
+//Then these specified values are mapped (inside AmrDG::BoundaryCondition::operator(), 
+////also considering the other components BCs) 
+//to our solution vector components i.e to rho,rho_u1,rho_u2,rho_e
+
 amrex::Real Compressible_Euler::pde_BC_gDirichlet(int d, int side, int q) const
 {
   //side: low=-1,high=1
@@ -363,8 +362,8 @@ amrex::Real Compressible_Euler::pde_source(int lev, int q, int m, int i, int j, 
   amrex::Real s;
   if(test_case == "keplerian_disc")
   {
-    const auto prob_lo = sim->dg_sim->Geom(lev).ProbLoArray();
-    const auto dx     = sim->dg_sim->Geom(lev).CellSizeArray();
+    const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
+    const auto dx     = numerical_pde->Geom(lev).CellSizeArray();
   
     amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(3.0,3.0,3.0)};
     amrex::Real x_shape_ctr = ctr_ptr[0];
@@ -403,8 +402,8 @@ void Compressible_Euler::pde_derived_qty(int lev, int q, int m, int i, int j, in
                                       amrex::Vector<amrex::Real> xi)
 {
   //get non-unique, i.e derived, quantities point-wise values
-  const auto prob_lo = sim->dg_sim->Geom(lev).ProbLoArray();
-  const auto dx     = sim->dg_sim->Geom(lev).CellSizeArray();
+  const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
+  const auto dx     = numerical_pde->Geom(lev).CellSizeArray();
 #if(AMREX_SPACEDIM ==2)  
   amrex::Real xc = prob_lo[0] + (i+0.5) * dx[0];
   amrex::Real yc = prob_lo[1] + (j+0.5) * dx[1];
@@ -470,9 +469,9 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
     if(flag_angular_momentum)
     { 
       //implementation of angular momentum conservation law
-      const auto prob_lo = sim->dg_sim->Geom(lev).ProbLoArray();
-      const auto prob_hi = sim->dg_sim->Geom(lev).ProbHiArray();
-      const auto dx     = sim->dg_sim->Geom(lev).CellSizeArray();
+      const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
+      const auto prob_hi = numerical_pde->Geom(lev).ProbHiArray();
+      const auto dx     = numerical_pde->Geom(lev).CellSizeArray();
       amrex::Real x1c = prob_lo[0] + (i+Real(0.5)) * dx[0];
       amrex::Real x2c = prob_lo[1] + (j+Real(0.5)) * dx[1];
       amrex::Real x1 = dx[0]*0.5*(xi[0])+x1c;
@@ -520,9 +519,9 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
     if(euler_flag_angular_momentum)
     { 
       //implementation of angular momentum conservation law
-      const auto prob_lo = sim->dg_sim->Geom(lev).ProbLoArray();
-      const auto prob_hi = sim->dg_sim->Geom(lev).ProbHiArray();
-      const auto dx     = sim->dg_sim->Geom(lev).CellSizeArray();
+      const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
+      const auto prob_hi = numerical_pde->Geom(lev).ProbHiArray();
+      const auto dx     = numerical_pde->Geom(lev).CellSizeArray();
       amrex::Real x1c = prob_lo[0] + (i+Real(0.5)) * dx[0];
       amrex::Real x2c = prob_lo[1] + (j+Real(0.5)) * dx[1];
       amrex::Real x3c = prob_lo[2] + (k+Real(0.5)) * dx[2];
@@ -600,17 +599,17 @@ amrex::Real Compressible_Euler::get_DU_from_U_w(int d, int q, int i, int j, int 
   amrex::Real derivative_rhou_q = 0.0;
   amrex::Real rho=0.0;
   amrex::Real rhou_q = 0.0;
-  for(int m=0; m<sim->dg_sim->Np; ++m)
+  for(int m=0; m<numerical_pde->Np; ++m)
   { 
     if(q!=0){
-      derivative_rho+=((*uw)[0])(i,j,k,m)*sim->dg_sim->DPhi(m,xi,d);
-      derivative_rhou_q +=((*uw)[q])(i,j,k,m)*sim->dg_sim->DPhi(m,xi,d);
-      rho+=((*uw)[0])(i,j,k,m)*sim->dg_sim->Phi(m,xi);
-      rhou_q+=((*uw)[q])(i,j,k,m)*sim->dg_sim->Phi(m,xi);
+      derivative_rho+=((*uw)[0])(i,j,k,m)*numerical_pde->DPhi(m,xi,d);
+      derivative_rhou_q +=((*uw)[q])(i,j,k,m)*numerical_pde->DPhi(m,xi,d);
+      rho+=((*uw)[0])(i,j,k,m)*numerical_pde->Phi(m,xi);
+      rhou_q+=((*uw)[q])(i,j,k,m)*numerical_pde->Phi(m,xi);
     }
     else
     {
-      derivative+=((*uw)[0])(i,j,k,m)*sim->dg_sim->DPhi(m,xi,d);
+      derivative+=((*uw)[0])(i,j,k,m)*numerical_pde->DPhi(m,xi,d);
     }
   }
   
@@ -638,21 +637,21 @@ amrex::Real Compressible_Euler::get_D2U_from_U_w(int d1, int d2, int q, int i, i
   amrex::Real d_derivative_rho = 0.0;
   amrex::Real rho=0.0;
   amrex::Real rhou_q = 0.0;
-  for(int m=0; m<sim->dg_sim->Np; ++m)
+  for(int m=0; m<numerical_pde->Np; ++m)
   { 
     if(q!=0){
-      d_derivative_rho+=((*uw)[0])(i,j,k,m)*sim->dg_sim->DDPhi(m,xi,d1,d2);
-      d_derivative_rhou_q +=((*uw)[q])(i,j,k,m)*sim->dg_sim->DDPhi(m,xi,d1,d2);
-      derivative1_rho+=((*uw)[0])(i,j,k,m)*sim->dg_sim->DPhi(m,xi,d1);
-      derivative1_rhou_q +=((*uw)[q])(i,j,k,m)*sim->dg_sim->DPhi(m,xi,d1);
-      derivative2_rho+=((*uw)[0])(i,j,k,m)*sim->dg_sim->DPhi(m,xi,d2);
-      derivative2_rhou_q +=((*uw)[q])(i,j,k,m)*sim->dg_sim->DPhi(m,xi,d2);
-      rho+=((*uw)[0])(i,j,k,m)*sim->dg_sim->Phi(m,xi);
-      rhou_q+=((*uw)[q])(i,j,k,m)*sim->dg_sim->Phi(m,xi);
+      d_derivative_rho+=((*uw)[0])(i,j,k,m)*numerical_pde->DDPhi(m,xi,d1,d2);
+      d_derivative_rhou_q +=((*uw)[q])(i,j,k,m)*numerical_pde->DDPhi(m,xi,d1,d2);
+      derivative1_rho+=((*uw)[0])(i,j,k,m)*numerical_pde->DPhi(m,xi,d1);
+      derivative1_rhou_q +=((*uw)[q])(i,j,k,m)*numerical_pde->DPhi(m,xi,d1);
+      derivative2_rho+=((*uw)[0])(i,j,k,m)*numerical_pde->DPhi(m,xi,d2);
+      derivative2_rhou_q +=((*uw)[q])(i,j,k,m)*numerical_pde->DPhi(m,xi,d2);
+      rho+=((*uw)[0])(i,j,k,m)*numerical_pde->Phi(m,xi);
+      rhou_q+=((*uw)[q])(i,j,k,m)*numerical_pde->Phi(m,xi);
     }
     else
     {
-      derivative+=((*uw)[0])(i,j,k,m)*sim->dg_sim->DDPhi(m,xi,d1,d2);
+      derivative+=((*uw)[0])(i,j,k,m)*numerical_pde->DDPhi(m,xi,d1,d2);
     }
   }
   
@@ -755,45 +754,45 @@ void Compressible_Euler::pde_BC(int lev, int dim,int side, int q,  int quad_pt_i
   //Ubc_valid: conserved bc
   
   //Ubc is equivalent to modes of closest valid cell evalauted at interface with ghost cell
-  amrex::Vector<const amrex::MultiFab *> state_u_w(sim->dg_sim->Q); 
-  amrex::Vector<const amrex::FArrayBox *> fab_u_w(sim->dg_sim->Q);
-  amrex::Vector<amrex::Array4<const amrex::Real>> uw(sim->dg_sim->Q);   
+  amrex::Vector<const amrex::MultiFab *> state_u_w(numerical_pde->Q); 
+  amrex::Vector<const amrex::FArrayBox *> fab_u_w(numerical_pde->Q);
+  amrex::Vector<amrex::Array4<const amrex::Real>> uw(numerical_pde->Q);   
   
-  for(int qq=0; qq<sim->dg_sim->Q; ++qq){
+  for(int qq=0; qq<numerical_pde->Q; ++qq){
     //cannot use q because is a bc class variable
-    state_u_w[qq]=&(sim->dg_sim->U_w[lev][qq]);
+    state_u_w[qq]=&(numerical_pde->U_w[lev][qq]);
   } 
 
   amrex::Vector<amrex::Real> xi_ref_bd(AMREX_SPACEDIM);
   amrex::Vector<amrex::Real> xi_ref_valid(AMREX_SPACEDIM);
   for (int d = 0; d < AMREX_SPACEDIM; ++d){
-    xi_ref_bd[d]=sim->dg_sim->xi_ref_GLquad_L2proj[quad_pt_idx][d];
-    xi_ref_valid[d]=sim->dg_sim->xi_ref_GLquad_L2proj[quad_pt_idx][d];
+    xi_ref_bd[d]=numerical_pde->xi_ref_GLquad_L2proj[quad_pt_idx][d];
+    xi_ref_valid[d]=numerical_pde->xi_ref_GLquad_L2proj[quad_pt_idx][d];
   }
   
   if(side==-1){xi_ref_bd[dim]=-1.0;}
   else if(side==1){xi_ref_bd[dim]=1.0;}
   
   int flag = amrex::MFIter::allowMultipleMFIters(true); 
-  for (MFIter mfi(sim->dg_sim->U_w[lev][q]); mfi.isValid(); ++mfi)
+  for (MFIter mfi(numerical_pde->U_w[lev][q]); mfi.isValid(); ++mfi)
   {
     Box const& bx = mfi.growntilebox();
-    for(int qq=0 ; qq<sim->dg_sim->Q; ++qq){      
+    for(int qq=0 ; qq<numerical_pde->Q; ++qq){      
       fab_u_w[qq] = state_u_w[qq]->fabPtr(mfi);
       uw[qq] = fab_u_w[qq]->const_array();
     } 
 
     if(side==-1 && bx.contains(iv+IntVect::TheDimensionVector(dim))){
-      for(int qq=0 ; qq<sim->dg_sim->Q; ++qq){ 
+      for(int qq=0 ; qq<numerical_pde->Q; ++qq){ 
         amrex::Real sum=0.0;
         amrex::Real sum_valid=0.0;
         for (int n = 0; n < ncomp; ++n){
           //evaluation at itnerface with boundary
           sum+=(uw[qq])(iv+IntVect::TheDimensionVector(dim),n+dcomp)
-              *(sim->dg_sim->Phi(n+dcomp, xi_ref_bd));
+              *(numerical_pde->Phi(n+dcomp, xi_ref_bd));
           //evaluation at cell center
           sum_valid+=(uw[qq])(iv+IntVect::TheDimensionVector(dim),n+dcomp)
-                    *(sim->dg_sim->Phi(n+dcomp, xi_ref_valid));
+                    *(numerical_pde->Phi(n+dcomp, xi_ref_valid));
         }  
         (*Ubc)[qq]=sum;
         (*Ubc_valid)[qq]=sum_valid;      
@@ -801,16 +800,16 @@ void Compressible_Euler::pde_BC(int lev, int dim,int side, int q,  int quad_pt_i
       break;
     }
     else if(side==1 && bx.contains(iv-IntVect::TheDimensionVector(dim))){     
-      for(int qq=0 ; qq<sim->dg_sim->Q; ++qq){ 
+      for(int qq=0 ; qq<numerical_pde->Q; ++qq){ 
         amrex::Real sum=0.0;
         amrex::Real sum_valid=0.0;
         for (int n = 0; n < ncomp; ++n){
           //evaluation at itnerface with boundary
           sum+=(uw[qq])(iv-IntVect::TheDimensionVector(dim),n+dcomp)
-              *(sim->dg_sim->Phi(n+dcomp, xi_ref_bd));
+              *(numerical_pde->Phi(n+dcomp, xi_ref_bd));
           //evaluation at cell center
           sum_valid+=(uw[qq])(iv-IntVect::TheDimensionVector(dim),n+dcomp)
-                    *(sim->dg_sim->Phi(n+dcomp, xi_ref_valid));
+                    *(numerical_pde->Phi(n+dcomp, xi_ref_valid));
         }  
         (*Ubc)[qq]=sum;
         (*Ubc_valid)[qq]=sum_valid;  
@@ -836,7 +835,7 @@ amrex::Real Compressible_Euler::pde_BC_gDirichlet(int q, int dim, const IntVect&
   
   const auto lo = geom.Domain().smallEnd();
   const auto hi = geom.Domain().bigEnd(); 
-  const auto dx = sim->dg_sim->Geom(lev).CellSizeArray();  
+  const auto dx = numerical_pde->Geom(lev).CellSizeArray();  
   
   amrex::Real bc_val, bc;
   
@@ -847,16 +846,16 @@ amrex::Real Compressible_Euler::pde_BC_gDirichlet(int q, int dim, const IntVect&
   amrex::Real gD_rho, gD_u1, gD_u2, gD_e;
   //Recover the primitive gradients  
   if(side==-1){
-    gD_rho =sim->dg_sim->gDbc_lo[0][dim];
-    gD_u1 =sim->dg_sim->gDbc_lo[1][dim];
-    gD_u2 =sim->dg_sim->gDbc_lo[2][dim];
-    gD_e =sim->dg_sim->gDbc_lo[3][dim];
+    gD_rho =numerical_pde->gDbc_lo[0][dim];
+    gD_u1 =numerical_pde->gDbc_lo[1][dim];
+    gD_u2 =numerical_pde->gDbc_lo[2][dim];
+    gD_e =numerical_pde->gDbc_lo[3][dim];
   }
   else if(side==1){
-    gD_rho =sim->dg_sim->gDbc_hi[0][dim];
-    gD_u1 =sim->dg_sim->gDbc_hi[1][dim];
-    gD_u2 =sim->dg_sim->gDbc_hi[2][dim];
-    gD_e =sim->dg_sim->gDbc_hi[3][dim];  
+    gD_rho =numerical_pde->gDbc_hi[0][dim];
+    gD_u1 =numerical_pde->gDbc_hi[1][dim];
+    gD_u2 =numerical_pde->gDbc_hi[2][dim];
+    gD_e =numerical_pde->gDbc_hi[3][dim];  
   }
   
   //Compute the conserved values
@@ -885,18 +884,18 @@ amrex::Real Compressible_Euler::pde_BC_gDirichlet(int q, int dim, const IntVect&
   amrex::Real gD_rho, gD_u1, gD_u2,gD_u3, gD_e;
   //Recover the primitive gradients  
   if(side==-1){
-    gD_rho =sim->dg_sim->gDbc_lo[0][dim];
-    gD_u1 =sim->dg_sim->gDbc_lo[1][dim];
-    gD_u2 =sim->dg_sim->gDbc_lo[2][dim];
-    gD_u3 =sim->dg_sim->gDbc_lo[3][dim];
-    gD_e =sim->dg_sim->gDbc_lo[4][dim];
+    gD_rho =numerical_pde->gDbc_lo[0][dim];
+    gD_u1 =numerical_pde->gDbc_lo[1][dim];
+    gD_u2 =numerical_pde->gDbc_lo[2][dim];
+    gD_u3 =numerical_pde->gDbc_lo[3][dim];
+    gD_e =numerical_pde->gDbc_lo[4][dim];
   }
   else if(side==1){
-    gD_rho =sim->dg_sim->gDbc_hi[0][dim];
-    gD_u1 =sim->dg_sim->gDbc_hi[1][dim];
-    gD_u2 =sim->dg_sim->gDbc_hi[2][dim];
-    gD_u3 =sim->dg_sim->gDbc_hi[3][dim];
-    gD_e =sim->dg_sim->gDbc_hi[4][dim];  
+    gD_rho =numerical_pde->gDbc_hi[0][dim];
+    gD_u1 =numerical_pde->gDbc_hi[1][dim];
+    gD_u2 =numerical_pde->gDbc_hi[2][dim];
+    gD_u3 =numerical_pde->gDbc_hi[3][dim];
+    gD_e =numerical_pde->gDbc_hi[4][dim];  
   }
   
   //Compute the conserved values
@@ -965,7 +964,7 @@ amrex::Real Compressible_Euler::pde_BC_gNeumann(int q, int dim,const IntVect& iv
 
   const auto lo = geom.Domain().smallEnd();
   const auto hi = geom.Domain().bigEnd(); 
-  const auto dx = sim->dg_sim->Geom(lev).CellSizeArray();
+  const auto dx = numerical_pde->Geom(lev).CellSizeArray();
   
   amrex::Real bc_val, grad;
   
@@ -975,22 +974,22 @@ amrex::Real Compressible_Euler::pde_BC_gNeumann(int q, int dim,const IntVect& iv
   amrex::Real gN_rho, gN_u1, gN_u2, gN_e;
   //Recover the primitive gradients  
   if(side==-1){
-    gN_rho =sim->dg_sim->gNbc_lo[0][dim];
-    gN_u1 =sim->dg_sim->gNbc_lo[1][dim];
-    gN_u2 =sim->dg_sim->gNbc_lo[2][dim];
-    gN_e =sim->dg_sim->gNbc_lo[3][dim];
+    gN_rho =numerical_pde->gNbc_lo[0][dim];
+    gN_u1 =numerical_pde->gNbc_lo[1][dim];
+    gN_u2 =numerical_pde->gNbc_lo[2][dim];
+    gN_e =numerical_pde->gNbc_lo[3][dim];
   }
   else if(side==1){
-    gN_rho =sim->dg_sim->gNbc_hi[0][dim];
-    gN_u1 =sim->dg_sim->gNbc_hi[1][dim];
-    gN_u2 =sim->dg_sim->gNbc_hi[2][dim];
-    gN_e =sim->dg_sim->gNbc_hi[3][dim];  
+    gN_rho =numerical_pde->gNbc_hi[0][dim];
+    gN_u1 =numerical_pde->gNbc_hi[1][dim];
+    gN_u2 =numerical_pde->gNbc_hi[2][dim];
+    gN_e =numerical_pde->gNbc_hi[3][dim];  
   }
   
   //Recover the value at the boundary interface from the closes 
   //inner valid cell. Also polynomial at center of cell valid is computed
-  amrex::Vector<amrex::Real> Ubc(sim->dg_sim->Q,0.0);
-  amrex::Vector<amrex::Real> Ubc_valid(sim->dg_sim->Q,0.0);
+  amrex::Vector<amrex::Real> Ubc(numerical_pde->Q,0.0);
+  amrex::Vector<amrex::Real> Ubc_valid(numerical_pde->Q,0.0);
   pde_BC(lev,dim,side,q,quad_pt_idx, iv, dcomp, ncomp, &Ubc,&Ubc_valid);
   
   //Compute the conserved gradients
@@ -1020,7 +1019,7 @@ amrex::Real Compressible_Euler::pde_BC_gNeumann(int q, int dim,const IntVect& iv
     //need to use same location (i.e interface) where the other gradients have been defined
     amrex::Vector<amrex::Real> xi_tmp(AMREX_SPACEDIM);
     for (int d = 0; d < AMREX_SPACEDIM; ++d){
-      xi_tmp[d]=sim->dg_sim->xi_ref_GLquad_L2proj[quad_pt_idx][d];
+      xi_tmp[d]=numerical_pde->xi_ref_GLquad_L2proj[quad_pt_idx][d];
     }    
     if(side==-1){xi_tmp[dim]=-1.0;}
     else if(side==1){xi_tmp[dim]=1.0;}
@@ -1047,24 +1046,24 @@ amrex::Real Compressible_Euler::pde_BC_gNeumann(int q, int dim,const IntVect& iv
   amrex::Real gN_rho, gN_u1, gN_u2,gN_u3, gN_e;
   //Recover the primitive gradients  
   if(side==-1){
-    gN_rho =sim->dg_sim->gNbc_lo[0][dim];
-    gN_u1 =sim->dg_sim->gNbc_lo[1][dim];
-    gN_u2 =sim->dg_sim->gNbc_lo[2][dim];
-    gN_u3 =sim->dg_sim->gNbc_lo[3][dim];
-    gN_e =sim->dg_sim->gNbc_lo[4][dim];
+    gN_rho =numerical_pde->gNbc_lo[0][dim];
+    gN_u1 =numerical_pde->gNbc_lo[1][dim];
+    gN_u2 =numerical_pde->gNbc_lo[2][dim];
+    gN_u3 =numerical_pde->gNbc_lo[3][dim];
+    gN_e =numerical_pde->gNbc_lo[4][dim];
   }
   else if(side==1){
-    gN_rho =sim->dg_sim->gNbc_hi[0][dim];
-    gN_u1 =sim->dg_sim->gNbc_hi[1][dim];
-    gN_u2 =sim->dg_sim->gNbc_hi[2][dim];
-    gN_u3 =sim->dg_sim->gNbc_hi[3][dim];    
-    gN_e =sim->dg_sim->gNbc_hi[4][dim];  
+    gN_rho =numerical_pde->gNbc_hi[0][dim];
+    gN_u1 =numerical_pde->gNbc_hi[1][dim];
+    gN_u2 =numerical_pde->gNbc_hi[2][dim];
+    gN_u3 =numerical_pde->gNbc_hi[3][dim];    
+    gN_e =numerical_pde->gNbc_hi[4][dim];  
   }
   
   //Recover the value at the boundary interface from the closes 
   //inner valid cell. Also polynomial at center of cell valid is computed
-  amrex::Vector<amrex::Real> Ubc(sim->dg_sim->Q,0.0);
-  amrex::Vector<amrex::Real> Ubc_valid(sim->dg_sim->Q,0.0);
+  amrex::Vector<amrex::Real> Ubc(numerical_pde->Q,0.0);
+  amrex::Vector<amrex::Real> Ubc_valid(numerical_pde->Q,0.0);
   pde_BC(lev,dim,side,q,quad_pt_idx, iv, dcomp, ncomp, &Ubc,&Ubc_valid);
     
   //Compute the conserved gradients
@@ -1097,7 +1096,7 @@ amrex::Real Compressible_Euler::pde_BC_gNeumann(int q, int dim,const IntVect& iv
 
     amrex::Vector<amrex::Real> xi_tmp(AMREX_SPACEDIM);
     for (int d = 0; d < AMREX_SPACEDIM; ++d){
-      xi_tmp[d]=sim->dg_sim->xi_ref_GLquad_L2proj[quad_pt_idx][d];
+      xi_tmp[d]=numerical_pde->xi_ref_GLquad_L2proj[quad_pt_idx][d];
     }    
     if(side==-1){xi_tmp[dim]=-1.0;}
     else if(side==1){xi_tmp[dim]=1.0;}
@@ -1127,7 +1126,7 @@ amrex::Real Compressible_Euler::pde_BC_gNeumann(int q, int dim,const IntVect& iv
 
     amrex::Vector<amrex::Real> xi_tmp(AMREX_SPACEDIM);
     for (int d = 0; d < AMREX_SPACEDIM; ++d){
-      xi_tmp[d]=sim->dg_sim->xi_ref_GLquad_L2proj[quad_pt_idx][d];
+      xi_tmp[d]=numerical_pde->xi_ref_GLquad_L2proj[quad_pt_idx][d];
     }    
     if(side==-1){xi_tmp[dim]=-1.0;}
     else if(side==1){xi_tmp[dim]=1.0;}
@@ -1156,7 +1155,7 @@ amrex::Real Compressible_Euler::pde_BC_gNeumann(int q, int dim,const IntVect& iv
      
     amrex::Vector<amrex::Real> xi_tmp(AMREX_SPACEDIM);
     for (int d = 0; d < AMREX_SPACEDIM; ++d){
-      xi_tmp[d]=sim->dg_sim->xi_ref_GLquad_L2proj[quad_pt_idx][d];
+      xi_tmp[d]=numerical_pde->xi_ref_GLquad_L2proj[quad_pt_idx][d];
     }    
     if(side==-1){xi_tmp[dim]=-1.0;}
     else if(side==1){xi_tmp[dim]=1.0;}
@@ -1473,9 +1472,9 @@ amrex::Real Compressible_Euler::pde_conservation(int lev,int d, int q,int i,int 
                                                 amrex::Vector<amrex::Array4<amrex::Real>>* u) const
 {
   amrex::Real cons = 0.0;
-  const auto prob_lo = sim->dg_sim->Geom(lev).ProbLoArray();
-  const auto prob_hi = sim->dg_sim->Geom(lev).ProbHiArray();
-  const auto dx      = sim->dg_sim->Geom(lev).CellSizeArray();
+  const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
+  const auto prob_hi = numerical_pde->Geom(lev).ProbHiArray();
+  const auto dx      = numerical_pde->Geom(lev).CellSizeArray();
 
   if((q==4 && AMREX_SPACEDIM == 2) || ((q==5 ||q==6 || q==7) && AMREX_SPACEDIM == 3)){
     //prepare data, e.g for angular momentum  
@@ -1490,12 +1489,12 @@ amrex::Real Compressible_Euler::pde_conservation(int lev,int d, int q,int i,int 
     IntVect lin_phi_idx(AMREX_D_DECL(0,0,0));
     
     for(int lin_idx=0; lin_idx<AMREX_SPACEDIM; ++lin_idx){
-      int s = sim->dg_sim->lin_mode_idx[lin_idx];
+      int s = numerical_pde->lin_mode_idx[lin_idx];
 
       //find linear direction
       for(int d=0; d<AMREX_SPACEDIM; ++d)
       {
-        if(sim->dg_sim->mat_idx_s[s][d] == 1)
+        if(numerical_pde->mat_idx_s[s][d] == 1)
         {
           lin_phi_idx[d]=s;
           break;
@@ -1520,10 +1519,10 @@ amrex::Real Compressible_Euler::pde_conservation(int lev,int d, int q,int i,int 
 
     amrex::Real norm_coeff = vol/std::pow(2.0,AMREX_SPACEDIM);
     amrex::Real L_integral = ((*uw)[l])(i,j,k,n)*norm_coeff
-                            *(sim->dg_sim->RefMat_phiphi(lin_phi_idx[n-1],lin_phi_idx[n-1], 
+                            *(numerical_pde->RefMat_phiphi(lin_phi_idx[n-1],lin_phi_idx[n-1], 
                             false, false)) 
                             -((*uw)[n])(i,j,k,l)*norm_coeff
-                            *(sim->dg_sim->RefMat_phiphi(lin_phi_idx[l-1],lin_phi_idx[l-1], 
+                            *(numerical_pde->RefMat_phiphi(lin_phi_idx[l-1],lin_phi_idx[l-1], 
                             false, false));
                             
     cons = L_integral;

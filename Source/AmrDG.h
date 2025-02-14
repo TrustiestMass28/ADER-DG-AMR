@@ -3,77 +3,66 @@
 
 #include <string>
 #include <limits>
-#include <memory>
 
 #ifdef AMREX_USE_OMP
 #include <omp.h>
 #endif
 
+#include "NumericalMethod.h"
 #include <AMReX_AmrCore.H>
 #include <AMReX_FluxRegister.H>
 #include <AMReX_BCRec.H>
 #include <AMReX_Interpolater.H>
 
-//class Simulation;
-#include "Simulation.h"
-#include "ModelEquation.h"
-/*------------------------------------------------------------------------*/
-/*
-VARIABLES NAMES NOTATION
-q   :   variable to iterate across solution components U=[u1,...,uq,...,uQ], it 
-        is used also for quadrature loops to indicate q-th quadrature point
-d   :   variable to iterate across dimensions
-_w  :   indicates that the data is modal
-p   :   positive/plus/+, also indicates the order of DG scheme
-m   :   negative/minus/- ,
-bd  :   data has been evaluated at boundary location
-num :   numerical
-c   :   MultiFab component indexing 
-n   :   used to iterate until Np
-m   :   used to iterate until Mp
-l   :   used to iterate until L (levels)
-x   :   used to represent point in domain
-xi  :   used to represent point in reference domain
-OBSERVATIONS
--MFiter are done differently depending on if we use MPI or MPI+OpenMP
-  if MPI: use static tiling, no parallelizatition of tile operations
-  if MPI+OMP: use dynamic tiling, each tile is given to a thread and then also 
-  the mesh loop is parallelized between the threads
--some functions require to pass a pointer to either U_w or H_w, this is done because
- in this way it is easier to e.g use the same functions in the context of Runge-Kutta
-*/
-/*------------------------------------------------------------------------*/
+class ModelEquation;
 
 using namespace amrex;
 
-class AmrDG : public amrex::AmrCore
+class AmrDG : public NumericalMethod, public amrex::AmrCore
 {
   public: 
-    AmrDG(Simulation* _sim,const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, int _coord, 
+    AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, int _coord, 
           Vector<IntVect> const& _ref_ratios, Array<int,AMREX_SPACEDIM> const& _is_per,
           amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
           amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
           amrex::Vector<amrex::Vector<int>> _bc_lo_type,
           amrex::Vector<amrex::Vector<int>> _bc_hi_type, amrex::Real _T,
           amrex::Real _CFL, int _p,
-          int _t_regrid, int _t_outplt, 
-          std::string _limiter_type, amrex::Real _TVB_M, 
-          amrex::Vector<amrex::Real> _AMR_TVB_C,
-          amrex::Vector<amrex::Real> _AMR_curl_C, 
-          amrex::Vector<amrex::Real> _AMR_div_C, 
-          amrex::Vector<amrex::Real> _AMR_grad_C, 
-          amrex::Vector<amrex::Real> _AMR_sec_der_C,
-          amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
+          int _t_regrid, int _t_outplt//, 
+          //std::string _limiter_type, amrex::Real _TVB_M, 
+          //amrex::Vector<amrex::Real> _AMR_TVB_C,
+          //amrex::Vector<amrex::Real> _AMR_curl_C, 
+          //amrex::Vector<amrex::Real> _AMR_div_C, 
+          //amrex::Vector<amrex::Real> _AMR_grad_C, 
+          //amrex::Vector<amrex::Real> _AMR_sec_der_C,
+          //amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
           , int _t_limit);
           
     virtual ~AmrDG();
     
     void Init();
     
-    void Evolve();
+    //void Evolve();
     
-    /*------------------------------------------------------------------------*/ 
+    /*------------------------------------------------------------------------*/   
     
+    //AmrCore pure virtual functions, need to provide custom implementation
+    virtual void MakeNewLevelFromScratch(int lev, amrex::Real time, 
+                                        const amrex::BoxArray& ba,
+                                        const amrex::DistributionMapping& dm) override;  
+                                          
+    virtual void MakeNewLevelFromCoarse(int lev, amrex::Real time,
+                                        const amrex::BoxArray& ba, 
+                                        const amrex::DistributionMapping& dm) override;
+                                        
+    virtual void RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
+                            const amrex::DistributionMapping& dm) override;
+                            
+    virtual void ErrorEst (int lev, amrex::TagBoxArray& tags, 
+                          amrex::Real time, int ngrow) override;
+                          
+    virtual void ClearLevel (int lev) override;
+ 
     //AMR Coarse>->Fine projection custom implementation
     class DGprojInterp : public Interpolater
     {
@@ -100,10 +89,10 @@ class AmrDG : public amrex::AmrCore
         void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
                         Array4<Real const> const& fine,int ccomp, 
                         int fcomp, IntVect const& ratio) noexcept;
-          /*             
-        void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-                                          Array4<Real const> const& fine,int ccomp, 
-                                          int fcomp, IntVect const& ratio) noexcept;     */                            
+                     
+        //void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
+        //                                  Array4<Real const> const& fine,int ccomp, 
+        //                                  int fcomp, IntVect const& ratio) noexcept;                               
         void getouterref(AmrDG* _amrdg);  
         
         void interp_proj_mat();
@@ -124,28 +113,7 @@ class AmrDG : public amrex::AmrCore
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_scatter;
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_gather;        
     };
-    
-    /*------------------------------------------------------------------------*/   
-    
-    //AmrCore pure virtual functions, need to provide custom implementation
-    virtual void MakeNewLevelFromScratch(int lev, amrex::Real time, 
-                                        const amrex::BoxArray& ba,
-                                        const amrex::DistributionMapping& dm) override;  
-                                          
-    virtual void MakeNewLevelFromCoarse(int lev, amrex::Real time,
-                                        const amrex::BoxArray& ba, 
-                                        const amrex::DistributionMapping& dm) override;
-                                        
-    virtual void RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
-                            const amrex::DistributionMapping& dm) override;
-                            
-    virtual void ErrorEst (int lev, amrex::TagBoxArray& tags, 
-                          amrex::Real time, int ngrow) override;
-                          
-    virtual void ClearLevel (int lev) override;
- 
-    /*------------------------------------------------------------------------*/    
-    
+
     //Basis Function
     
     amrex::Real Phi(int idx, amrex::Vector<amrex::Real> x) const;
@@ -160,7 +128,7 @@ class AmrDG : public amrex::AmrCore
     
     amrex::Real modPhi(int idx, amrex::Vector<amrex::Real> x) const;
     
-    /*------------------------------------------------------------------------*/  
+
     
     //Element Matrix and Quadrature Matrix
     
@@ -177,7 +145,7 @@ class AmrDG : public amrex::AmrCore
     amrex::Real Coefficient_c(int k,int l) const;     
  
     
-    /*------------------------------------------------------------------------*/
+
     
     //Modal expansion
     void get_U_from_U_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr, 
@@ -193,7 +161,7 @@ class AmrDG : public amrex::AmrCore
                         amrex::Vector<amrex::Array4< amrex::Real>>* uw, 
                         amrex::Vector<amrex::Array4< amrex::Real>>* u ,
                         amrex::Vector<amrex::Real> xi);      
-    /*------------------------------------------------------------------------*/
+  
     
     //MISC
     int factorial(int n) const;
@@ -208,7 +176,7 @@ class AmrDG : public amrex::AmrCore
     amrex::Real minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
                         bool &troubled_flag) const;  
                         
-    /*------------------------------------------------------------------------*/                        
+               
                     
     //public data members
     int Np; 
@@ -227,18 +195,10 @@ class AmrDG : public amrex::AmrCore
     amrex::Vector<amrex::Vector<amrex::Real>> gNbc_hi;
     
     amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_L2proj;
-    
+  
   private: 
   
-    /*------------------------------------------------------------------------*/
-    
-    //SImulation (used to access pointers to other classes stored in simulation)
-
-    Simulation* sim; 
-    
-    /*------------------------------------------------------------------------*/
-    
-    //Basis Function
+    //Basis Functionclear
     void PhiIdxGenerator_s();
     
     void PhiIdxGenerator_st();
@@ -247,7 +207,7 @@ class AmrDG : public amrex::AmrCore
     
     void number_quadintpts();
     
-    /*------------------------------------------------------------------------*/
+
     
     //Element Matrix and Quadrature Matrix
     void MatrixGenerator();
@@ -258,7 +218,7 @@ class AmrDG : public amrex::AmrCore
     
     void InvVandermondeMat();
         
-    /*------------------------------------------------------------------------*/
+   
     
     //Initial Conditions, and level initialization
     void InitialCondition(int lev);
@@ -268,7 +228,7 @@ class AmrDG : public amrex::AmrCore
     amrex::Real Initial_Condition_U(int lev,int q,int i,int j,int k,
                                     amrex::Vector<amrex::Real> xi) const;
     
-    /*------------------------------------------------------------------------*/
+   
     
     //Boundary Conditions
     void FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev);
@@ -277,7 +237,7 @@ class AmrDG : public amrex::AmrCore
     
     amrex::Real gNeumann_bc(int d, int side, int q) const;
 
-    /*------------------------------------------------------------------------*/
+
     
     //ADER-DG    
     void ADER();
@@ -291,7 +251,7 @@ class AmrDG : public amrex::AmrCore
     
     void Update_U_w(int lev, int q);
     
-    /*------------------------------------------------------------------------*/
+  
     
     //Non-linear fluxes, Numerical fluxes
                                                 
@@ -336,7 +296,7 @@ class AmrDG : public amrex::AmrCore
                               amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                               amrex::Vector<amrex::Real> xi);
 
-    /*------------------------------------------------------------------------*/
+
     
     //I/O and MISC
     void NormDG();//TODO:
@@ -353,7 +313,7 @@ class AmrDG : public amrex::AmrCore
     
     void Conservation(int lev, int M, amrex::Vector<amrex::Vector<amrex::Real>> xi, int d);
 
-    /*------------------------------------------------------------------------*/
+  
     
     //AMR level creation/destruction/ghost cell sync
     void InitData_system(int lev,const BoxArray& ba, 
@@ -374,12 +334,12 @@ class AmrDG : public amrex::AmrCore
     
     void FillPatchGhostFC(int lev,amrex::Real time,int q);
 
-    /*------------------------------------------------------------------------*/
+  
     
     //AMR refinement and limiting
     void AMR_settings_tune();
     
-    void Limiter_w(int lev); /*, amrex::TagBoxArray& tags, char tagval*/
+    void Limiter_w(int lev); //, amrex::TagBoxArray& tags, char tagval
     
     void Limiter_linear_tvb(int i, int j, int k, 
                               amrex::Vector<amrex::Array4<amrex::Real>>* uw, 
@@ -419,14 +379,13 @@ class AmrDG : public amrex::AmrCore
                           bool flag_local,amrex::Array4<char> const& tag,
                           char tagval,bool& any_trouble);
 
-    /*------------------------------------------------------------------------*/
+
     
     //Model Equation/Simulation settings and variables    
     amrex::Real T;
     int t_limit;
     std::string limiter_type;
     int t_outplt;
-    /*------------------------------------------------------------------------*/
 
     //DG settings
     int p;
@@ -440,7 +399,7 @@ class AmrDG : public amrex::AmrCore
     int qMp_1d;     //number of quadrature points in 1 dimension, powers of this 
                     //leads to qMp and qMpbd
 
-    /*------------------------------------------------------------------------*/
+
     
     //AMR settings 
     int L;
@@ -466,7 +425,6 @@ class AmrDG : public amrex::AmrCore
     amrex::Real TVB_M;
     amrex::Vector<amrex::Real> AMR_TVB_C;
 
-    /*------------------------------------------------------------------------*/
     
     //Multifabs vectors (LxDxQ or LxQ)
     //L:  max number of levels
@@ -496,7 +454,7 @@ class AmrDG : public amrex::AmrCore
     
     amrex::Vector<amrex::Vector<amrex::MultiFab>> S;
     
-    /*------------------------------------------------------------------------*/ 
+  
     
     //Element (analytical) Matrices and Quadrature matrices
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr;
@@ -517,7 +475,7 @@ class AmrDG : public amrex::AmrCore
     amrex::Vector<amrex::Vector<amrex::Real>> volquadmat;
     amrex::Vector<amrex::Vector<amrex::Real>> L2proj_quadmat;
 
-    /*------------------------------------------------------------------------*/
+
  
     //Interpolation nodes and Gauss-Legendre Quadrature points
     amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_s;
@@ -528,14 +486,14 @@ class AmrDG : public amrex::AmrCore
 
     amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_equidistant;
     
-    /*------------------------------------------------------------------------*/ 
+   
     
     //Basis function d.o.f
     amrex::Vector<amrex::Vector<int>> mat_idx_st; 
     //used to store the combinations of indices of 1d Legendre polynomials: e.g
     // mat_idx[5] = [0,1,4] ==> phi_5= P_0*P_1*P_4
 
-    /*------------------------------------------------------------------------*/
+  
     
     //Boundary Conditions
     amrex::Vector<amrex::Vector<amrex::BCRec>> bc_w; 
@@ -562,8 +520,36 @@ class AmrDG : public amrex::AmrCore
         int q;
         int lev;
     };
+   
 };
    
 extern AMREX_EXPORT AmrDG::DGprojInterp custom_interp;
 
 #endif
+
+/*------------------------------------------------------------------------*/
+/*
+VARIABLES NAMES NOTATION
+q   :   variable to iterate across solution components U=[u1,...,uq,...,uQ], it 
+        is used also for quadrature loops to indicate q-th quadrature point
+d   :   variable to iterate across dimensions
+_w  :   indicates that the data is modal
+p   :   positive/plus/+, also indicates the order of DG scheme
+m   :   negative/minus/- ,
+bd  :   data has been evaluated at boundary location
+num :   numerical
+c   :   MultiFab component indexing 
+n   :   used to iterate until Np
+m   :   used to iterate until Mp
+l   :   used to iterate until L (levels)
+x   :   used to represent point in domain
+xi  :   used to represent point in reference domain
+OBSERVATIONS
+-MFiter are done differently depending on if we use MPI or MPI+OpenMP
+  if MPI: use static tiling, no parallelizatition of tile operations
+  if MPI+OMP: use dynamic tiling, each tile is given to a thread and then also 
+  the mesh loop is parallelized between the threads
+-some functions require to pass a pointer to either U_w or H_w, this is done because
+ in this way it is easier to e.g use the same functions in the context of Runge-Kutta
+*/
+/*------------------------------------------------------------------------*/

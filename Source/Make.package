@@ -1,5 +1,11 @@
 CEXE_sources += main.cpp 
+
+CEXE_headers += Simulation.h
 CEXE_sources += Simulation.cpp 
+CEXE_headers += ModelEquation.h
+CEXE_headers += NumericalMethod.h
+
+CEXE_headers += AmrDG.h
 CEXE_sources += AmrDG.cpp 
 CEXE_sources += AmrDG_Basis.cpp 
 CEXE_sources += AmrDG_ElementMatrix.cpp 
@@ -7,18 +13,13 @@ CEXE_sources += AmrDG_Flux.cpp
 CEXE_sources += AmrDG_BC.cpp 
 CEXE_sources += AmrDG_IC.cpp 
 CEXE_sources += AmrDG_TagCellRef.cpp 
-CEXE_sources += AmrDG_Limiter.cpp 
 CEXE_sources += AmrDG_Interpolater.cpp
-CEXE_sources += AmrDG_Utils.cpp 
+#CEXE_sources += AmrDG_Limiter.cpp 
+#CEXE_sources += AmrDG_Utils.cpp 
 
-CEXE_sources += Compressible_Euler.cpp 
-CEXE_sources += Advection.cpp
-
-CEXE_headers += Simulation.h
-CEXE_headers += ModelEquation.h
 CEXE_headers += Compressible_Euler.h
-CEXE_headers += Advection.h
-CEXE_headers += AmrDG.h
+CEXE_sources += Compressible_Euler.cpp 
+
 
 
 
