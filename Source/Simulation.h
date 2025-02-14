@@ -16,6 +16,7 @@
 using namespace amrex;
 
 class ModelEquation;
+
 class NumericalMethod;
 
 class Simulation

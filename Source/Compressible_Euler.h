@@ -1,5 +1,5 @@
-#ifndef COMPRESSIBLE_EULER_H_
-#define COMPRESSIBLE_EULER_H_
+#ifndef COMPRESSIBLE_EULER_H
+#define COMPRESSIBLE_EULER_H
 
 #include "ModelEquation.h"
 
@@ -85,7 +85,7 @@ class Compressible_Euler : public ModelEquation
     virtual amrex::Real pde_BC_gNeumann(int d, int side, int q) const override;                                            
 
   private:     
-      /*
+    
     amrex::Real Pressure(amrex::Vector<amrex::Array4<const amrex::Real>>* u, 
                         int i, int j, int k,int m) const;
                         
@@ -100,8 +100,8 @@ class Compressible_Euler : public ModelEquation
 
     amrex::Real smooth_discontinuity(amrex::Real xi, amrex::Real a, 
                                     amrex::Real b, amrex::Real s) const;
-      */
+    
     amrex::Real gamma_adiab;
 };  
 
-#endif COMPRESSIBLE_EULER_H_
+#endif 

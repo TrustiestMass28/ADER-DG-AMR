@@ -4,6 +4,8 @@
 #include <memory>
 #include <AMReX_AmrCore.H>
 
+using namespace amrex;
+
 class NumericalMethod;
 
 class ModelEquation

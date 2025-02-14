@@ -22,14 +22,20 @@
 #include <iostream>
 
 #include "Simulation.h"
-#include "NumericalMethod.h"
 #include "ModelEquation.h"
+#include "NumericalMethod.h"
 
 using namespace amrex;
 
 Simulation::Simulation(ModelEquation* _model, NumericalMethod* _method) : model_pde(_model) , numerical_pde(_method)
 {
   //Exchange classes ptrs s.t they can communicate
+
+
+  //use numerical_pde to call method of NumericalMethod
+  //this method is actually virtual and overridden by implementation of AmrDG
+  //therefore the AmrDG implementation will be called
+
   model_pde->setNumericalMethod(numerical_pde);
   numerical_pde->setModelEquation(model_pde);
 

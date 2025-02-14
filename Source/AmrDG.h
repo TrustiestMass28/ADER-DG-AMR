@@ -1,5 +1,5 @@
-#ifndef AMRDG_H_
-#define AMRDG_H_
+#ifndef AMRDG_H
+#define AMRDG_H
 
 #include <string>
 #include <limits>
@@ -8,19 +8,20 @@
 #include <omp.h>
 #endif
 
-#include "NumericalMethod.h"
+//#include "NumericalMethod.h"
 #include <AMReX_AmrCore.H>
 #include <AMReX_FluxRegister.H>
 #include <AMReX_BCRec.H>
 #include <AMReX_Interpolater.H>
 
-class ModelEquation;
+#include "NumericalMethod.h"
 
 using namespace amrex;
 
-class AmrDG : public NumericalMethod, public amrex::AmrCore
+class AmrDG : public amrex::AmrCore, public NumericalMethod
 {
   public: 
+
     AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, int _coord, 
           Vector<IntVect> const& _ref_ratios, Array<int,AMREX_SPACEDIM> const& _is_per,
           amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
@@ -38,13 +39,16 @@ class AmrDG : public NumericalMethod, public amrex::AmrCore
           //amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
           , int _t_limit);
           
+    AmrDG() = default;
+
     virtual ~AmrDG();
     
     void Init();
     
     //void Evolve();
-    
+
     /*------------------------------------------------------------------------*/   
+    
     
     //AmrCore pure virtual functions, need to provide custom implementation
     virtual void MakeNewLevelFromScratch(int lev, amrex::Real time, 
@@ -105,8 +109,12 @@ class AmrDG : public NumericalMethod, public amrex::AmrCore
          void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
                                           Array4<Real> const& fine,int ccomp, 
                                           int fcomp, IntVect const& ratio) noexcept;
-        
+
+      //amrex::Real RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
+
       private:     
+        friend class NumericalMethod;
+          
         AmrDG* amrdg;     
         
         amrex::Vector<amrex::Vector<int >> amr_projmat_int;
