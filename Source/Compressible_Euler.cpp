@@ -1,8 +1,7 @@
 #include "Compressible_Euler.h"
 #include "NumericalMethod.h"
-//#include "AmrDG.h"
 
-//using namespace amrex;
+using namespace amrex;
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -38,9 +37,7 @@ Compressible_Euler::Compressible_Euler( std::string _euler_test_case,
   test_case = _euler_test_case;
   flag_angular_momentum = _euler_flag_angular_momentum;
   flag_source_term = _euler_flag_source_term;     
-
 }
-
 
 amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
                                       amrex::Vector<amrex::Real> xi)
@@ -1524,6 +1521,7 @@ amrex::Real Compressible_Euler::pde_conservation(int lev,int d, int q,int i,int 
                             -((*uw)[n])(i,j,k,l)*norm_coeff
                             *(numerical_pde->RefMat_phiphi(lin_phi_idx[l-1],lin_phi_idx[l-1], 
                             false, false));
+                           
                             
     cons = L_integral;
     

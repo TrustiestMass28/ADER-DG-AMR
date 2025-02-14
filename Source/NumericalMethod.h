@@ -1,8 +1,10 @@
-#ifndef NUMERICALMETHOD_H_
-#define NUMERICALMETHOD_H_
+#ifndef NUMERICALMETHOD_H
+#define NUMERICALMETHOD_H
 
 #include <memory>
 
+//construct derived:AmrDG
+//  cosntructr base: NumericalMethod
 class ModelEquation;
 
 class NumericalMethod
@@ -20,7 +22,7 @@ class NumericalMethod
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
         }
-
+  
     protected:
 
         std::shared_ptr<std::ofstream> ofs;
@@ -29,6 +31,6 @@ class NumericalMethod
 
 };
 
-#endif NUMERICALMETHOD_H_
+#endif 
 
 

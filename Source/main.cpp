@@ -2,7 +2,7 @@
 #include <AMReX.H>
 
 #include "Simulation.h"
-#include "Compressible_Euler.h"
+//#include "Compressible_Euler.h"
 #include "AmrDG.h"
 
 using namespace amrex;
@@ -20,11 +20,10 @@ int main(int argc, char* argv[])
 
       /*-------------------------------------------*/
       //Set-up simulation
-      Compressible_Euler* ce = new Compressible_Euler(test_case,angular_momentum,source_term);
-      
-      //NumericalMethod* fem = new NumericalMethod();
+      //Compressible_Euler* ce = new Compressible_Euler(test_case,angular_momentum,source_term);
+      AmrDG* dg = new AmrDG();
 
-      //Simulation sim(ce, fem);
+      //Simulation sim(ce, dg);
       //Simulation sim;
             
 

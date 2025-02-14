@@ -159,7 +159,7 @@ void AmrDG::MatrixGenerator()
   }
 }
 
-Real AmrDG::RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const
+Real AmrDG::RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const 
 {
   //computes M_{ji}=\int_{[-1,1]^D} \phi_i*\phi_j dx
   amrex::Real m= 1.0;

@@ -23,6 +23,8 @@
 
 #include <climits>
 
+#include "ModelEquation.h"
+
 
 void AmrDG::Limiter_w(int lev) 
 {
@@ -139,7 +141,7 @@ void AmrDG::Limiter_w(int lev)
             for(int q=Q_unique; q<Q; ++q){
               //computed limited pointwise evaluation of derived quantites, 
               //overwritten in correct location of u
-              sim->model_pde->pde_derived_qty(lev,q,m,i,j,k,&u,xi_ref_GLquad_L2proj[m]);      
+              model_pde->pde_derived_qty(lev,q,m,i,j,k,&u,xi_ref_GLquad_L2proj[m]);      
             }
           }
           
@@ -205,7 +207,7 @@ void AmrDG::Limiter_linear_tvb(int i, int j, int k,
     amrex::Real D_u;
 
     //Get left and right eiugenvalue matrix, we use cell average to compute it
-    L_EV = sim->model_pde->pde_EV_Lmatrix(_d,0,i,j,k,uw);
+    L_EV = model_pde->pde_EV_Lmatrix(_d,0,i,j,k,uw);
     
     //get decoupled characteristic field variables
 
@@ -239,7 +241,7 @@ void AmrDG::Limiter_linear_tvb(int i, int j, int k,
       troubled_flag[q] = (troubled_flag[q] || tmp_flag);
     }
     
-    R_EV = sim->model_pde->pde_EV_Rmatrix(_d,0,i,j,k,uw);
+    R_EV = model_pde->pde_EV_Rmatrix(_d,0,i,j,k,uw);
     //now need to convert back to conservative modes
     for (int q = 0; q < Q_unique; ++q){
       amrex::Real sum=0.0;
