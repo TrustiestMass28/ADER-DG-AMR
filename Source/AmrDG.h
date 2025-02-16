@@ -14,10 +14,34 @@
 #include <AMReX_BCRec.H>
 #include <AMReX_Interpolater.H>
 
-#include "NumericalMethod.h"
+#include "Solver.h"
+#include "ModelEquation.h"
 
 using namespace amrex;
 
+class AmrDG : public Solver<AmrDG>
+{
+  public:
+    AmrDG() = default;
+
+    ~AmrDG() = default;
+
+    void test(){
+      //std::cout << typeid(*model_pde).name() << std::endl;
+      //std::cout << typeid(*model_pde).name() << std::endl;
+      std::cout << "test" << std::endl;
+      model_pde->testModel();
+
+    }
+
+};
+
+//AmrDG::AmrDG()
+//{
+//}
+
+
+/*
 class AmrDG : public amrex::AmrCore, public NumericalMethod
 {
   public: 
@@ -47,9 +71,8 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     
     //void Evolve();
 
-    /*------------------------------------------------------------------------*/   
-    
-    
+ 
+  
     //AmrCore pure virtual functions, need to provide custom implementation
     virtual void MakeNewLevelFromScratch(int lev, amrex::Real time, 
                                         const amrex::BoxArray& ba,
@@ -532,7 +555,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
 };
    
 extern AMREX_EXPORT AmrDG::DGprojInterp custom_interp;
-
+*/
 #endif
 
 /*------------------------------------------------------------------------*/

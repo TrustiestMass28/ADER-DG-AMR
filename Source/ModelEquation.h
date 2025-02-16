@@ -6,21 +6,35 @@
 
 using namespace amrex;
 
-class NumericalMethod;
+//class Solver;
 
+template <typename EquationType>
 class ModelEquation
 {
-  public:    
+  public:   
     
     ModelEquation() {};
 
     virtual ~ModelEquation() = default;
+
+    // Set reference to ModelEquation for communication
+    void setModelEquation(std::shared_ptr<EquationType> me){
+        model_pde = me;
+    }
+
+    
+    void testModel()
+    { //std::cout << typeid(this).name() << std::endl;
+      //std::cout << typeid(*this).name() << std::endl;
+      std::cout << "testModel" << std::endl;
+    }
     //virtual ~ModelEquation() = default;  // Compiler generates default behavior
     
     //virtual void model_settings() = 0;
 
+    /*
     // Set reference to NumericalMethod for communication
-    void setNumericalMethod(std::shared_ptr<NumericalMethod> nm){
+    void setSolver(std::shared_ptr<NumericalMethodType> nm){
       numerical_pde = nm;
     }
 
@@ -115,13 +129,14 @@ class ModelEquation
     
     bool flag_angular_momentum;
     bool flag_source_term;    
-     
+     */
   protected:
 
     std::shared_ptr<std::ofstream> ofs;
-
-    std::shared_ptr<NumericalMethod> numerical_pde;
-
+    
+    std::shared_ptr<EquationType> model_pde;
+    //std::shared_ptr<NumericalMethodType> numerical_pde;
+  
 };
 
 #endif 
