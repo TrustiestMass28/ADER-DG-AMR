@@ -22,33 +22,35 @@
 #include <iostream>
 
 #include "Simulation.h"
-#include "ModelEquation.h"
-#include "NumericalMethod.h"
+//#include "ModelEquation.h"
+#include "Solver.h"
 
 using namespace amrex;
 
-Simulation::Simulation(ModelEquation* _model, NumericalMethod* _method) : model_pde(_model) , numerical_pde(_method)
+template <typename SolverType> //typename ModelEquationType, 
+Simulation<SolverType>::Simulation(SolverType* _method) :  solver(_method) //ModelEquationType* _model, model_pde(_model) ,
 {
   //Exchange classes ptrs s.t they can communicate
-
 
   //use numerical_pde to call method of NumericalMethod
   //this method is actually virtual and overridden by implementation of AmrDG
   //therefore the AmrDG implementation will be called
 
-  model_pde->setNumericalMethod(numerical_pde);
-  numerical_pde->setModelEquation(model_pde);
+  //model_pde->setNumericalMethod(numerical_pde);
+  //solver->setModelEquation(model_pde);
 
-  ofs->open("simulation_output.txt", std::ofstream::out);
-  model_pde->setOfstream(ofs);
-  numerical_pde->setOfstream(ofs);
+  //ofs->open("simulation_output.txt", std::ofstream::out);
+  //model_pde->setOfstream(ofs);
+  //numerical_pde->setOfstream(ofs);
 }
 
-Simulation::~Simulation() {
-  ofs->close();
+template <typename SolverType>
+Simulation<SolverType>::~Simulation() {
+  //ofs->close();
 }
 
-void Simulation::run()
+template <typename SolverType>
+void Simulation<SolverType>::run()
 {
   //dg_sim->Init();
   //dg_sim->Evolve();
