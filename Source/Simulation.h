@@ -18,12 +18,14 @@ using namespace amrex;
 //class ModelEquation;
 
 //class Solver;
+#include "Solver.h"
+#include "ModelEquation.h"
 
-template <typename SolverType,typename ModelEquationType>//typename ModelEquationType, 
+template <typename SolverType,typename ModelEquationType>
 class Simulation
 {
   public:    
-    Simulation(SolverType* _solver, ModelEquationType* _model); //ModelType* _model, 
+    Simulation(); 
     
     ~Simulation();
 
@@ -40,19 +42,31 @@ class Simulation
 
 };
 
-template <typename SolverType,typename ModelEquationType> //, 
-Simulation<SolverType,ModelEquationType>::Simulation(SolverType* _solver, ModelEquationType* _model) 
-                                    :  solver(_solver) , model(_model)//ModelEquationType* _model,  ,
+template <typename SolverType,typename ModelEquationType>
+Simulation<SolverType,ModelEquationType>::Simulation() 
 {
+
+  SolverType* solver = new SolverType();
+  ModelEquationType* model = new ModelEquationType();
+
+  model->testModel();
+  // Set up cross-communication
+  //solver->setModelEquation(model);
+
+  //solver->getModelEquation<ModelEquationType>()->testModel();
+  //model->setSolver(solver);
 
   //Enable base classes to access their derived classes
   //  store a pointer to derived numerical method class inside the Solver
-  solver->setNumericalMethod(solver);
+  //solver->setNumericalMethod(solver);
   //  store pointer to derived PDE problem class inside ModelEquation
-  model->setModelEquation(model);
+  //model->setModelEquation(model);
 
-  solver->setModelEquation(model);
-  solver->test();
+  //solver->setModelEquation(model);
+  //solver->test();
+
+
+
   //Enable model and numerics part to interact by exchangin pointers 
   //solver->setModelEquation(model);
 

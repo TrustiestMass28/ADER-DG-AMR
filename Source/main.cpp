@@ -21,11 +21,10 @@ int main(int argc, char* argv[])
       /*-------------------------------------------*/
       //Set-up simulation
       //Compressible_Euler* ce = new Compressible_Euler(test_case,angular_momentum,source_term);
-      
-      AmrDG* dg = new AmrDG();
-      Compressible_Euler* ce = new Compressible_Euler();
-      Simulation<AmrDG,Compressible_Euler> sim(dg,ce);
-
+      //AmrDG* dg = new AmrDG();
+      //Compressible_Euler* ce = new Compressible_Euler();
+      //Simulation<AmrDG,Compressible_Euler> sim(dg,ce);
+      Simulation<AmrDG,Compressible_Euler> sim;
             
 
       /*-------------------------------------------*/
