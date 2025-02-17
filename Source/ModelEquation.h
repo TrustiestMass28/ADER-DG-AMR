@@ -6,7 +6,9 @@
 
 using namespace amrex;
 
-//class Solver;
+
+template <typename NumericalMethodType>
+class Solver;
 
 template <typename EquationType>
 class ModelEquation
@@ -22,7 +24,11 @@ class ModelEquation
         model_pde = me;
     }
 
-    
+    // Getter methods
+    std::shared_ptr<EquationType> getModelEquation() const {
+      return model_pde;
+    }
+
     void testModel()
     { //std::cout << typeid(this).name() << std::endl;
       //std::cout << typeid(*this).name() << std::endl;
@@ -135,8 +141,9 @@ class ModelEquation
     std::shared_ptr<std::ofstream> ofs;
     
     std::shared_ptr<EquationType> model_pde;
-    //std::shared_ptr<NumericalMethodType> numerical_pde;
-  
+
+    template <typename NumericalMethodType>
+    friend class Solver;
 };
 
 #endif 

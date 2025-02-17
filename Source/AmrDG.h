@@ -28,9 +28,9 @@ class AmrDG : public Solver<AmrDG>
 
     void test(){
       //std::cout << typeid(*model_pde).name() << std::endl;
-      //std::cout << typeid(*model_pde).name() << std::endl;
+      //std::cout << typeid(model_pde).name() << std::endl;
       std::cout << "test" << std::endl;
-      model_pde->testModel();
+
 
     }
 

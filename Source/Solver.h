@@ -3,21 +3,17 @@
 
 #include <iostream>
 #include <memory>
-#include <variant>
+//#include <variant>
 
-//class Simulation;
-//#include "Simulation.h"
-//NB: ideal would be forward decl here and in numericalmethod implementation
-//where we use sim ptr actually import the Sim header. But in this way user might forget,
-//therefore already doit here.
+template <typename EquationType>
+class ModelEquation;
 
-//tempalte is usefull because in this way we can automatically
-//create a pointer to the correct derived class inside Solver
-template <typename NumericalMethodType>//, typename U = std::shared_ptr<void>
+
+template <typename NumericalMethodType>
 class Solver
 {
     public: 
-        Solver() : model_pde(nullptr) {};
+        Solver() = default;
 
         virtual ~Solver() = default;
 
@@ -26,18 +22,13 @@ class Solver
             numerical_pde = nm;
         }
 
-        template <typename M>
-        void setModelEquation(M&& m)
-        {
-            //model_pde = std::shared_ptr<U>(std::forward<M>(m));
-            //model_pde = std::static_pointer_cast<void>(std::make_shared<std::decay_t<M>>(std::forward<M>(m)));
-            model_pde = std::make_shared<std::decay_t<M>>(std::forward<M>(m));
-        }
-
-        
-
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
+        }
+
+        // Getter methods
+        std::shared_ptr<NumericalMethodType> getNumericalMethod() const {
+            return numerical_pde;
         }
 
     protected:
@@ -46,8 +37,8 @@ class Solver
 
         std::shared_ptr<NumericalMethodType> numerical_pde;
 
-        std::shared_ptr<void> model_pde;
-
+        template <typename EquationType>
+        friend class ModelEquation;
 };
 
 
