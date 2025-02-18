@@ -7,10 +7,9 @@
 class Compressible_Euler : public ModelEquation<Compressible_Euler>
 {
   public:
-  Compressible_Euler() {};
+  Compressible_Euler() {};  
 
     ~Compressible_Euler() {};
-
 
     /*
     Compressible_Euler(std::string _euler_test_case, 

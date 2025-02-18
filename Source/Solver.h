@@ -3,11 +3,11 @@
 
 #include <iostream>
 #include <memory>
-//#include <variant>
 
-template <typename EquationType>
-class ModelEquation;
+using namespace amrex;
 
+template <typename S,typename M>
+class Simulation;
 
 template <typename NumericalMethodType>
 class Solver
@@ -31,14 +31,23 @@ class Solver
             return numerical_pde;
         }
 
+        void test(){
+            //std::cout << typeid(*model_pde).name() << std::endl;
+            //std::cout << typeid(model_pde).name() << std::endl;
+            std::cout << "test" << std::endl;
+            //model_pde->testModel();
+      
+          }
+
     protected:
 
         std::shared_ptr<std::ofstream> ofs;
 
         std::shared_ptr<NumericalMethodType> numerical_pde;
 
-        template <typename EquationType>
-        friend class ModelEquation;
+        template <typename S,typename M>
+        friend class Simulation;
+
 };
 
 
