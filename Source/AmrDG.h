@@ -15,14 +15,14 @@
 #include <AMReX_Interpolater.H>
 
 #include "Solver.h"
-#include "ModelEquation.h"
+
 
 using namespace amrex;
 
 class AmrDG : public Solver<AmrDG>
 {
   public:
-    AmrDG() = default;
+    AmrDG()  = default;
 
     ~AmrDG() = default;
 
@@ -30,15 +30,13 @@ class AmrDG : public Solver<AmrDG>
       //std::cout << typeid(*model_pde).name() << std::endl;
       //std::cout << typeid(model_pde).name() << std::endl;
       std::cout << "test" << std::endl;
-
+      //ModelEquation::testModel();
+      //model_pde->testModel();
 
     }
 
 };
 
-//AmrDG::AmrDG()
-//{
-//}
 
 
 /*

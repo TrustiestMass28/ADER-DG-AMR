@@ -6,16 +6,12 @@
 
 using namespace amrex;
 
-
-template <typename NumericalMethodType>
-class Solver;
-
 template <typename EquationType>
-class ModelEquation
+class ModelEquation 
 {
   public:   
     
-    ModelEquation() {};
+    ModelEquation() = default;
 
     virtual ~ModelEquation() = default;
 
@@ -142,8 +138,6 @@ class ModelEquation
     
     std::shared_ptr<EquationType> model_pde;
 
-    template <typename NumericalMethodType>
-    friend class Solver;
 };
 
 #endif 
