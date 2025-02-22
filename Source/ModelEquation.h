@@ -19,10 +19,33 @@ class ModelEquation
 
     template <typename... Args>
     void settings(Args... args) {
-        std::cout << "test" << std::endl;
         static_cast<EquationType*>(this)->settings(std::forward<Args>(args)...);
     }
 
+    void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
+      ofs = _ofs;
+    }
+
+    void init()
+    {
+        static_cast<EquationType*>(this)->init();
+    }
+
+    //Number of model equations in the system
+    int Q_model;
+
+    //Number of model equatons in the system that are unique
+    //i.e not lienarly dependent/composed from others
+    int Q_model_unique;
+
+    //Name of simulation/problem case solved              
+    std::string model_case;
+    
+    //Flag to indicate if source term is considered
+    bool flag_source_term;    
+
+
+    //////////////////////////////////////////////////////////
     // Set reference to NumericalMethod for communication
     //void setSolver(std::shared_ptr<Solver> nm){
     //  numerical = nm;
@@ -124,24 +147,11 @@ class ModelEquation
                                         amrex::Vector<amrex::Array4<const amrex::Real>>* uw,
                                         amrex::Vector<amrex::Array4<amrex::Real>>* u) const = 0;
   
-    //variables which depends on the system fo PDEs solved
-    //The class data members below are declared in model_settings        
-    int Q_model;        //number of equations of the system
-    int Q_model_unique; //number of lin-indep equations of the system which are non
-                        //derivable from others, i.e number of solution unknowns
-                        //which are independent/unique/not function of others (e.g 
-                        //not the angular momentum)
-                        
-    std::string test_case;
-    
-    bool flag_angular_momentum;
-    bool flag_source_term;    
+
      */
   protected:
 
     std::shared_ptr<std::ofstream> ofs;
-    
-    //std::shared_ptr<Solver> numerical;
 
 };
 

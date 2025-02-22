@@ -8,26 +8,24 @@
 class Compressible_Euler : public ModelEquation<Compressible_Euler>
 {
   public:
-  Compressible_Euler() {};  
+    Compressible_Euler() = default;  
 
-    ~Compressible_Euler() {};
+    ~Compressible_Euler() = default;
 
-    void testModel()
-    { //std::cout << typeid(this).name() << std::endl;
-      //std::cout << typeid(*this).name() << std::endl;
-      std::cout << "testModel" << std::endl;
-      //numerical->numerical_pde->test();
+    void settings(std::string _euler_case);
 
-      //auto numerical_ptr = std::any_cast<std::shared_ptr<NumericalMethodType>>(numerical->numerical_pde);
-      //numerical_ptr->test();
-      //numerical_pde->test();
-    }
+  private:
+
+      //Flag to indicate if angular momentum is on/off
+      bool flag_angular_momentum;
+
+      double gamma_adiab;
 
 
     /*
-    Compressible_Euler(std::string _euler_test_case, 
-                        bool _euler_flag_angular_momentum,
-                        bool _euler_flag_source_term); 
+    Compressible_Euler(, 
+                        
+                        ); 
    
     ~Compressible_Euler() override {};
     

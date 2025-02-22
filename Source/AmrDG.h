@@ -27,16 +27,9 @@ class AmrDG : public Solver<AmrDG>
 
     void settings(int iterations, double a) {
       std::cout << "ConcreteNumericalMethod settings: iterations=" << iterations << std::endl;
-  }
-
-    void test(){
-      //std::cout << typeid(*model_pde).name() << std::endl;
-      //std::cout << typeid(model_pde).name() << std::endl;
-      std::cout << "test" << std::endl;
-      //ModelEquation::testModel();
-      //model_pde->testModel();
-
     }
+
+    void init(){ std::cout << "HERE" << std::endl;}
 
 };
 
@@ -207,16 +200,10 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
                         bool &troubled_flag) const;  
                         
                
-                    
-    //public data members
-    int Np; 
-    int Q; 
-    int Q_unique; 
-    
     amrex::Vector<amrex::Vector<int>> mat_idx_s; 
     amrex::Vector<int> lin_mode_idx;
     
-    amrex::Vector<amrex::Vector<amrex::MultiFab>> U_w;
+    
     
     amrex::Vector<amrex::Vector<amrex::Real>> gDbc_lo;
     amrex::Vector<amrex::Vector<amrex::Real>> gDbc_hi;
@@ -418,9 +405,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     int t_outplt;
 
     //DG settings
-    int p;
-    amrex::Real CFL;
-    amrex::Real dt;
+
     int nghost = 1;    
     int mNp;        //number of modes for modified basis function modphi_i
     int qMp;        //number of quadrature points for quadrature of volume integral
@@ -463,29 +448,12 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     
     //Nodal and Modal MFs containers   
     amrex::Vector<amrex::Vector<amrex::MultiFab>> H_w;
-    
-    amrex::Vector<amrex::Vector<amrex::MultiFab>> U_center;
-    amrex::Vector<amrex::Vector<amrex::MultiFab>> U;  
     amrex::Vector<amrex::Vector<amrex::MultiFab>> H;
     amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_p;
     amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_m;
         
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> F;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fm;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fp;
-    
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> DF;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> DFm;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> DFp;
-    
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnumm_int; 
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnump_int;
-    
-    amrex::Vector<amrex::Vector<amrex::MultiFab>> S;
-    
-  
-    
+
+
     //Element (analytical) Matrices and Quadrature matrices
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr;
     amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_corr;
