@@ -19,7 +19,7 @@ CEXE_headers += AmrDG.h
 ##CEXE_sources += AmrDG_Utils.cpp 
 
 CEXE_headers += Compressible_Euler.h
-#CEXE_sources += Compressible_Euler.cpp 
+CEXE_sources += Compressible_Euler.cpp 
 
 
 

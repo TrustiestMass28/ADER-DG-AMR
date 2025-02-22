@@ -1,25 +1,31 @@
 #include "Compressible_Euler.h"
-#include "Solver.h"
 
 using namespace amrex;
 
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-Compressible_Euler::Compressible_Euler( std::string _euler_test_case, 
-                                        bool _euler_flag_angular_momentum,
-                                        bool _euler_flag_source_term)  
+void Compressible_Euler::settings(std::string _euler_case){
 
-    
-{
+  model_case = _euler_case;
+
+  //settings to include new terms and or equations in the system
+  if(model_case == "keplerian_disc"){
+    flag_angular_momentum = true;
+    flag_source_term = true;
+  }
+  else{
+    flag_angular_momentum = false;
+    flag_source_term = false;
+  }
+
   int _Q_model;
   int _Q_model_unique;
+
   #if(AMREX_SPACEDIM ==2)
     //base case
     _Q_model = 4;
     _Q_model_unique = _Q_model;
     
     //additional terms
-    if(_euler_flag_angular_momentum){_Q_model = 5;}
+    if(flag_angular_momentum){_Q_model = 5;}
     
     //NB: depending on system solved, might need to modify Q_model_unique
   #elif(AMREX_SPACEDIM ==3)
@@ -27,17 +33,20 @@ Compressible_Euler::Compressible_Euler( std::string _euler_test_case,
     _Q_model_unique = _Q_model;
     
     //additional terms which are derived from the existing ones
-    if(_euler_flag_angular_momentum){_Q_model = 8;}  
+    if(flag_angular_momentum){_Q_model = 8;}  
   #endif
- 
-  gamma_adiab = 1.4;
-  
+
   Q_model=_Q_model;
   Q_model_unique =_Q_model_unique;
-  test_case = _euler_test_case;
-  flag_angular_momentum = _euler_flag_angular_momentum;
-  flag_source_term = _euler_flag_source_term;     
-}
+
+  gamma_adiab = 1.4;
+}  
+
+
+/*
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 
 amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
                                       amrex::Vector<amrex::Real> xi)
@@ -1530,4 +1539,4 @@ amrex::Real Compressible_Euler::pde_conservation(int lev,int d, int q,int i,int 
   }
                           
   return cons;
-}
+}*/

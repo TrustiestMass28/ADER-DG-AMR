@@ -55,6 +55,7 @@ Simulation<NumericalMethodType,EquationType>::Simulation()
   //Solver base class ptr (construct num method and upcast its ptr to base)
   solver = std::make_shared<NumericalMethodType>();
 
+  model = std::make_shared<EquationType>();
 }
 
 template <typename NumericalMethodType,typename EquationType>
@@ -65,9 +66,7 @@ Simulation<NumericalMethodType,EquationType>::~Simulation() {
 template <typename NumericalMethodType,typename EquationType>
 void Simulation<NumericalMethodType,EquationType>::run()
 {
-  //
-  //dg_sim->Init();
-  //dg_sim->Evolve();
+  solver->init(model);
 }
 
 #endif // SIMULATION_H

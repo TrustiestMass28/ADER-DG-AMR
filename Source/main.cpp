@@ -15,24 +15,14 @@ int main(int argc, char* argv[])
       /*-------------------------------------------*/
       //Settings
       std::string test_case = "isentropic_vortex";
-      bool source_term = false;
-      bool angular_momentum = false;      
 
       /*-------------------------------------------*/
       //Set-up simulation
-      //Compressible_Euler* ce = new Compressible_Euler(test_case,angular_momentum,source_term);
-      //AmrDG* dg = new AmrDG();
-      //Compressible_Euler* ce = new Compressible_Euler();
-      //Simulation<AmrDG,Compressible_Euler> sim(dg,ce);
       Simulation<AmrDG,Compressible_Euler> sim;
 
-      sim.setNumericalSettings(5,6.7);
-
-            
-      //setNumericSetting
-      //setModelSetting
-      //pass arguments/settings (automatically init and construct stuff in the back)
+      sim.setModelSettings(test_case);
       sim.run();
+            
       /*-------------------------------------------*/
       // wallclock time
       const auto strt_total = amrex::second();
