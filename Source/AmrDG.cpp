@@ -31,9 +31,9 @@ AmrDG::AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell,
               amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo, 
               amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
               amrex::Vector<amrex::Vector<int>> _bc_lo_type, 
-              amrex::Vector<amrex::Vector<int>> _bc_hi_type,amrex::Real _T,
-              amrex::Real _CFL, int _p,
-              int _t_regrid, int _t_outplt, //std::string _limiter_type, 
+              amrex::Vector<amrex::Vector<int>> _bc_hi_type,,
+              , ,
+              int _t_regrid, , //std::string _limiter_type, 
               //amrex::Real _TVB_M,
               //amrex::Vector<amrex::Real> _AMR_TVB_C ,
               //amrex::Vector<amrex::Real> _AMR_curl_C, 
@@ -66,11 +66,10 @@ AmrDG::AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell,
   CFL = _CFL;
   p = _p; 
   T = _T;
+
   limiter_type = _limiter_type;
   TVB_M = _TVB_M;
   
-  Q = model_pde->Q_model;  
-  Q_unique = model_pde->Q_model_unique;
   
   //Print(*ofs) <<"Solving system with:"<<"\n";
   //Print(*ofs) <<"   total equations   "<<Q<<"\n";
@@ -1108,6 +1107,8 @@ void AmrDG::Update_U_w(int lev, int q)
   }
 }
  
+
+//TODO: better define Dt=CFL Dx/lambda  
 //compute minimum time step size s.t CFL condition is met
 void AmrDG::ComputeDt()
 {

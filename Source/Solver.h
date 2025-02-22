@@ -41,13 +41,14 @@ class Solver
             static_cast<NumericalMethodType*>(this)->settings(std::forward<Args>(args)...);
         }
 
+        //TODO: pass all tempaltes of other classes from which Solver might need data to init
+        //like stuff from geometry for number of levels,...
         template <typename EquationType>
         void init(std::shared_ptr<EquationType> model_pde)
         {
             Q = model_pde->Q_model;
             Q_unique =model_pde->Q_model_unique;
             
-            std::cout << Q << std::endl;
             static_cast<NumericalMethodType*>(this)->init();
         }
 
@@ -83,17 +84,27 @@ class Solver
             ofs = _ofs;
         }
 
-        /*
+        //General class for numericla methods that use basis decomposition of the solution
         class Basis{
             public:
                 Basis() = default;
 
-                virtual ~Basis() {}
+                ~Basis() = default;
 
-                //Number of basis functions
+                //Set number of basis function/weights/modes
+                void set_number_basis() {};
+
+                //Number of basis functions/modes
                 int Np; 
         };
-        */
+
+        class Quadrature{
+            public:
+                Quadrature() = default;
+
+                ~Quadrature() = default;
+        };
+        
 
     protected:
 
@@ -111,11 +122,18 @@ class Solver
         //spatial (approxiamtion) order
         int p;
 
-        //Courant–Friedrichs–Lewy number 
+        //Courant–Friedrichs–Lewy number
         amrex::Real CFL;
 
         //Time step size
         amrex::Real Dt;
+
+        //Physical simulated time
+        amrex::Real T;
+
+        //I/O 
+        int dtn_outplt;   //data output time-steps interval
+        int dt_outplt;   //data output physical time interval
 
         //Multifabs vectors (LxDxQ or LxQ)
         //L:  max number of levels

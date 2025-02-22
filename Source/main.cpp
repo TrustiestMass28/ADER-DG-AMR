@@ -14,20 +14,23 @@ int main(int argc, char* argv[])
 
       /*-------------------------------------------*/
       //Settings
-      std::string test_case = "isentropic_vortex";
-
+      std::string simulation_case = "isentropic_vortex";
+      int p  = 1;
+      amrex::Real T = 1.0;
+      int t_outplt = 10;
       /*-------------------------------------------*/
       //Set-up simulation
       Simulation<AmrDG,Compressible_Euler> sim;
 
-      sim.setModelSettings(test_case);
-      sim.run();
-            
+      sim.setNumericalSettings(p,T);
+      sim.setModelSettings(simulation_case);
+      
       /*-------------------------------------------*/
+      //Run simulation
       // wallclock time
       const auto strt_total = amrex::second();
                           
-      //sim.run();
+      sim.run();
                     
       // wallclock time
       auto end_total = amrex::second() - strt_total;
