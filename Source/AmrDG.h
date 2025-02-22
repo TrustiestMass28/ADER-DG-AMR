@@ -18,7 +18,7 @@
 
 using namespace amrex;
 
-class AmrDG : Solver<AmrDG>
+class AmrDG : public Solver<AmrDG>
 {
   public:
     AmrDG()  = default;

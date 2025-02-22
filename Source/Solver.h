@@ -16,6 +16,14 @@ class Solver
         Solver() = default;
 
         virtual ~Solver() = default;
+        
+        template <typename... Args>
+        void settings(Args... args) {
+            std::cout << "test" << std::endl;
+            static_cast<NumericalMethodType*>(this)->settings(std::forward<Args>(args)...);
+        }
+
+
 
         void setNumericalMethod(std::shared_ptr<NumericalMethodType> nm) {
             numerical_pde = nm;
@@ -35,10 +43,6 @@ class Solver
             static_cast<NumericalMethodType*>(this)->init();
         }
 
-        template <typename... Args>
-        void settings(Args... args) {
-            static_cast<NumericalMethodType*>(this)->settings(std::forward<Args>(args)...);
-        }
 
 
     protected:
