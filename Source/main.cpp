@@ -25,8 +25,14 @@ int main(int argc, char* argv[])
       //Compressible_Euler* ce = new Compressible_Euler();
       //Simulation<AmrDG,Compressible_Euler> sim(dg,ce);
       Simulation<AmrDG,Compressible_Euler> sim;
-            
 
+      sim.setNumericalSettings(5,6.7);
+
+            
+      //setNumericSetting
+      //setModelSetting
+      //pass arguments/settings (automatically init and construct stuff in the back)
+      sim.run();
       /*-------------------------------------------*/
       // wallclock time
       const auto strt_total = amrex::second();

@@ -2,15 +2,26 @@
 #define COMPRESSIBLE_EULER_H
 
 #include "ModelEquation.h"
+#include "Solver.h"
 
 
-class Compressible_Euler : public ModelEquation<Compressible_Euler>
+class Compressible_Euler : public ModelEquation //<Compressible_Euler>
 {
   public:
   Compressible_Euler() {};  
 
     ~Compressible_Euler() {};
 
+    void testModel()
+    { //std::cout << typeid(this).name() << std::endl;
+      //std::cout << typeid(*this).name() << std::endl;
+      std::cout << "testModel" << std::endl;
+      //numerical->numerical_pde->test();
+
+      //auto numerical_ptr = std::any_cast<std::shared_ptr<NumericalMethodType>>(numerical->numerical_pde);
+      //numerical_ptr->test();
+      //numerical_pde->test();
+    }
     /*
     Compressible_Euler(std::string _euler_test_case, 
                         bool _euler_flag_angular_momentum,

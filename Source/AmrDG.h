@@ -16,15 +16,18 @@
 
 #include "Solver.h"
 
-
 using namespace amrex;
 
-class AmrDG : public Solver<AmrDG>
+class AmrDG : Solver<AmrDG>
 {
   public:
     AmrDG()  = default;
 
     ~AmrDG() = default;
+
+    void settings(int iterations, double a) {
+      std::cout << "ConcreteNumericalMethod settings: iterations=" << iterations << std::endl;
+  }
 
     void test(){
       //std::cout << typeid(*model_pde).name() << std::endl;
@@ -36,8 +39,6 @@ class AmrDG : public Solver<AmrDG>
     }
 
 };
-
-
 
 /*
 class AmrDG : public amrex::AmrCore, public NumericalMethod
