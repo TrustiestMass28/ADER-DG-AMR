@@ -145,6 +145,8 @@ class Solver
 
                 //Set spatio-temporal basis functions Phi(x,t) index mapping
                 amrex::Vector<amrex::Vector<int>> basis_idx_st;
+
+
         };
 
         class Quadrature{
@@ -152,6 +154,63 @@ class Solver
                 Quadrature() = default;
 
                 ~Quadrature() = default;
+
+                //Set number of quadrature points (should be func of order p)
+                void set_number_quadpoints();
+
+                //Generate the quadrature points
+                void set_quadpoints();
+
+                //Vandermonde matrix for mapping modes<->quadrature points
+                void set_vandermat();
+
+                void set_inv_vandermat();
+
+                //Vandermonde matrix
+                amrex::Vector<amrex::Vector<amrex::Real>> V;
+                //  inverse
+                amrex::Vector<amrex::Vector<amrex::Real>> Vinv;   
+                
+                //Interpolation nodes/quadrature points
+                //  for spatial basis functions
+                amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_s;
+                //  for spatial basis function at the boundaries
+                amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdm;
+
+                amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdp;
+                   
+                //  for temporal basis functions
+                amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_t;
+
+                //  for spatio-temporal basis functions
+                amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_st;
+                //  for spatio-temporal basis function at the boundaries
+                amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_st_bdm;
+
+                amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_st_bdp;
+
+                //amrex::Vector<amrex::Vector<amrex::Real>> L2proj_quadmat;
+                //amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_L2proj;
+                // amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_equidistant; 
+
+                //number of quadrature points in 1 dimensios, used to have 
+                //same amount of points per dimension
+                int qMp_1d;    
+
+                //number of quadrature points for quadrature of volume (spatio) integral   
+                int qMp_s;    
+                //  at the boundary, surface (spatio) integral
+                int qMp_s_bd;   
+
+                //number of quadrature points for quadrature of volume (temporal) integral   
+                int qMp_t;  
+
+                //number of quadrature points for quadrature of volume (spatio-temporal) integral   
+                int qMp_st;    
+                //  at the boundary, surface (spatio-temporal) integral
+                int qMp_st_bd;     
+
+                //  int qMp_L2proj; //number of quadrature points only in space, used for the BCs,ICs,
         };
         
 
@@ -228,50 +287,3 @@ class Solver
 };
 
 #endif 
-
-/*
-template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::set_initial_condition(int lev=0)
-{
-
-  amrex::Vector<amrex::MultiFab *> state_uw(Q);
- 
-  for(int q=0; q<Q; ++q){
-    state_uw[q] = &(U_w[lev][q]); 
-  }  
-  
-#ifdef AMREX_USE_OMP
-#pragma omp parallel 
-#endif
-  {
-    amrex::Vector<amrex::FArrayBox *> fab_uw(Q);
-    amrex::Vector< amrex::Array4<amrex::Real> > uw(Q);
-    
-    #ifdef AMREX_USE_OMP  
-    for (MFIter mfi(*(state_uw[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-    #else
-    for (MFIter mfi(*(state_uw[0]),true); mfi.isValid(); ++mfi)
-    #endif   
-    {
-
-      const amrex::Box& bx = mfi.growntilebox();
-      //we wil lfill also ghost cells at fine coarse itnerface of fine lvl
-
-      for(int q=0 ; q<Q; ++q){
-        fab_uw[q]=&((*(state_uw[q]))[mfi]);
-        uw[q]=(*(fab_uw[q])).array();
-      } 
-      
-      for(int q=0; q<Q; ++q){
-        amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-        { 
-          uw[q](i,j,k,n) = Initial_Condition_U_w(lev,q,n,i, j, k);  
-        });          
-      }
-    }   
-  }
-}
-
-
-//General loop on the grid, then specific one implemented by NumMethod Initial_Condition_U
-*/

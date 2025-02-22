@@ -48,14 +48,8 @@ class AmrDG : public Solver<AmrDG>
     
 
 QUADRATURE
+                
 
-  void number_quadintpts();
-
-  void GenerateQuadPts();
-
-  void VandermondeMat();
-
-  void InvVandermondeMat();
 
   amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_L2proj;
 
@@ -65,19 +59,15 @@ QUADRATURE
   int qMp_1d;     //number of quadrature points in 1 dimension, powers of this 
           //leads to qMp and qMpbd
 
-  amrex::Vector<amrex::Vector<amrex::Real>> volquadmat;
-  amrex::Vector<amrex::Vector<amrex::Real>> L2proj_quadmat;
+  
+  
 
 
+ 
+  
 
-  //Interpolation nodes and Gauss-Legendre Quadrature points
-  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_s;
-  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_t;
-  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad;
-  amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_GLquad_bdm;
-  amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_GLquad_bdp;
 
-  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_equidistant;  
+  
 */
 
 /*
@@ -471,9 +461,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_corr;
     amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbd;
     
-    amrex::Vector<amrex::Vector<amrex::Real>> V;
-    amrex::Vector<amrex::Vector<amrex::Real>> Vinv;   
-    
+
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w;
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w_inv;
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred;
@@ -482,7 +470,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_s;   
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_sVinv;
 
-
+      amrex::Vector<amrex::Vector<amrex::Real>> volquadmat;
    
 
   
