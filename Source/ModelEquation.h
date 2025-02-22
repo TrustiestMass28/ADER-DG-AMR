@@ -8,7 +8,7 @@
 
 using namespace amrex;
 
-//template <typename EquationType>
+template <typename EquationType>
 class ModelEquation 
 {
   public:   
@@ -16,6 +16,12 @@ class ModelEquation
     ModelEquation() = default;
 
     virtual ~ModelEquation() = default;
+
+    template <typename... Args>
+    void settings(Args... args) {
+        std::cout << "test" << std::endl;
+        static_cast<EquationType*>(this)->settings(std::forward<Args>(args)...);
+    }
 
     // Set reference to NumericalMethod for communication
     //void setSolver(std::shared_ptr<Solver> nm){

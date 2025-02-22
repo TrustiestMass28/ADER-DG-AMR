@@ -2,10 +2,10 @@
 #define COMPRESSIBLE_EULER_H
 
 #include "ModelEquation.h"
-#include "Solver.h"
+//#include "Solver.h"
 
 
-class Compressible_Euler : public ModelEquation //<Compressible_Euler>
+class Compressible_Euler : public ModelEquation<Compressible_Euler>
 {
   public:
   Compressible_Euler() {};  
@@ -22,6 +22,8 @@ class Compressible_Euler : public ModelEquation //<Compressible_Euler>
       //numerical_ptr->test();
       //numerical_pde->test();
     }
+
+
     /*
     Compressible_Euler(std::string _euler_test_case, 
                         bool _euler_flag_angular_momentum,

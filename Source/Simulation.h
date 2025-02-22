@@ -18,7 +18,7 @@ using namespace amrex;
 #include "Solver.h"
 #include "ModelEquation.h"
 
-template <typename NumericalMethodType,typename ModelEquationType>
+template <typename NumericalMethodType,typename EquationType>
 class Simulation
 {
   public:    
@@ -30,83 +30,40 @@ class Simulation
 
     template <typename... Args>
     void setNumericalSettings(Args... args) {
-          num_method->settings(args...);
+      solver->settings(args...);
     }
     
+    template <typename... Args>
+    void setModelSettings(Args... args) {
+          model->settings(args...);
+    }
+
   private:
     int _coord = 0;//cartesian, don't touch
 
     std::shared_ptr<std::ofstream> ofs;
 
-    std::shared_ptr<ModelEquationType> model;
+    std::shared_ptr<ModelEquation<EquationType>> model;
 
-    std::shared_ptr<NumericalMethodType> num_method;
-
-    std::shared_ptr<Solver<NumericalMethodType>> solver; 
-
+    std::shared_ptr<Solver<NumericalMethodType>> solver;
 };
 
 
-
-//Solver object
-//Numerical base object
-//  AmrDG object
-//
-
-//pass AmrDG
-//init AmrDG
-//init templated derived NumericalMethod<AmrDG>  : public Solver
-//inti base Solver
-
-
-//AmrDG
-//  |
-//  NumericalMethod<AmrDG>
-//Solver
-//  |
-//  |
-//Model
-//  ModelEquation<Euler>
-//  |
-//Euler
-
-/*
-If want to call methods of Modelequn from inside AmrDG, gotta pass template parameter holding COmpressible_Eulr method
-
-*/
-
-//NumericalMethod<AmrDG> stored ptr to AmrDG
-template <typename NumericalMethodType,typename ModelEquationType>
-Simulation<NumericalMethodType,ModelEquationType>::Simulation() 
+template <typename NumericalMethodType,typename EquationType>
+Simulation<NumericalMethodType,EquationType>::Simulation() 
 {
-  //Solver derived class ptr
-  num_method = std::make_shared<NumericalMethodType>();
-  //Solver base class ptr (implicit conversion)
-  //solver = num_method;
+  //Solver base class ptr (construct num method and upcast its ptr to base)
+  solver = std::make_shared<NumericalMethodType>();
 
-
-  //solver = 
-  //std::shared_ptr<Solver<AmrDG>> solverPtr = std::make_shared<AmrDG>();
-
-  //solver->setNumericalMethod(solver);
-  //model = std::make_shared<ModelEquationType>();
-
-  //using SolverType = typename std::remove_cvref_t<decltype(SolverTypeTag{})>;
-  //using ModelEquationType = typename std::remove_cvref_t<decltype(ModelEquationTypeTag{})>;
-
-  //model->setSolver(solver);
-  //model->testModel();
-  //model->test();
-  //solver->test();
 }
 
-template <typename NumericalMethodType,typename ModelEquationType>
-Simulation<NumericalMethodType,ModelEquationType>::~Simulation() {
+template <typename NumericalMethodType,typename EquationType>
+Simulation<NumericalMethodType,EquationType>::~Simulation() {
   //ofs->close();
 }
 
-template <typename NumericalMethodType,typename ModelEquationType>
-void Simulation<NumericalMethodType,ModelEquationType>::run()
+template <typename NumericalMethodType,typename EquationType>
+void Simulation<NumericalMethodType,EquationType>::run()
 {
   //
   //dg_sim->Init();
