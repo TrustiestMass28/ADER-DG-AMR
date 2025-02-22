@@ -25,13 +25,89 @@ class AmrDG : public Solver<AmrDG>
 
     ~AmrDG() = default;
 
-    void settings(int iterations, double a) {
-      std::cout << "ConcreteNumericalMethod settings: iterations=" << iterations << std::endl;
+    void settings(int _p, amrex::Real _T) {
+      p = _p;
+      T = _T;
     }
 
     void init(){ std::cout << "HERE" << std::endl;}
 
+    class BasisLegendre : public Basis
+    {
+
+    }
+
 };
+
+/*
+BASIS FUNCTION STUFF
+
+//Basis Function
+
+  amrex::Real Phi(int idx, amrex::Vector<amrex::Real> x) const;
+
+  amrex::Real DPhi(int idx, amrex::Vector<amrex::Real> x, int d) const;
+
+  amrex::Real DDPhi(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) const;
+
+  amrex::Real Dtphi(int tidx, amrex::Real tau) const;
+
+  amrex::Real tphi(int tidx, amrex::Real tau) const;    
+
+  amrex::Real modPhi(int idx, amrex::Vector<amrex::Real> x) const;
+
+  //Basis Functionclear
+  void PhiIdxGenerator_s();
+
+  void PhiIdxGenerator_st();
+
+  void number_modes();
+
+  amrex::Vector<amrex::Vector<int>> mat_idx_s; 
+  amrex::Vector<int> lin_mode_idx;
+
+  int mNp;        //number of modes for modified basis function modphi_i
+
+
+  //Basis function d.o.f
+  amrex::Vector<amrex::Vector<int>> mat_idx_st; 
+  //used to store the combinations of indices of 1d Legendre polynomials: e.g
+  // mat_idx[5] = [0,1,4] ==> phi_5= P_0*P_1*P_4
+
+    
+
+QUADRATURE
+
+  void number_quadintpts();
+
+  void GenerateQuadPts();
+
+  void VandermondeMat();
+
+  void InvVandermondeMat();
+
+  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_L2proj;
+
+  int qMp;        //number of quadrature points for quadrature of volume integral
+  int qMp_L2proj; //number of quadrature points only in space, used for the BCs,ICs,
+  int qMpbd;      //number of quadrature points for quadrature of surface integral
+  int qMp_1d;     //number of quadrature points in 1 dimension, powers of this 
+          //leads to qMp and qMpbd
+
+  amrex::Vector<amrex::Vector<amrex::Real>> volquadmat;
+  amrex::Vector<amrex::Vector<amrex::Real>> L2proj_quadmat;
+
+
+
+  //Interpolation nodes and Gauss-Legendre Quadrature points
+  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_s;
+  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_t;
+  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad;
+  amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_GLquad_bdm;
+  amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_GLquad_bdp;
+
+  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_equidistant;  
+*/
 
 /*
 class AmrDG : public amrex::AmrCore, public NumericalMethod
@@ -137,19 +213,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_gather;        
     };
 
-    //Basis Function
-    
-    amrex::Real Phi(int idx, amrex::Vector<amrex::Real> x) const;
-    
-    amrex::Real DPhi(int idx, amrex::Vector<amrex::Real> x, int d) const;
-    
-    amrex::Real DDPhi(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) const;
-    
-    amrex::Real Dtphi(int tidx, amrex::Real tau) const;
-    
-    amrex::Real tphi(int tidx, amrex::Real tau) const;    
-    
-    amrex::Real modPhi(int idx, amrex::Vector<amrex::Real> x) const;
+
     
 
     
@@ -199,43 +263,27 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     amrex::Real minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
                         bool &troubled_flag) const;  
                         
-               
-    amrex::Vector<amrex::Vector<int>> mat_idx_s; 
-    amrex::Vector<int> lin_mode_idx;
-    
-    
-    
+              
     amrex::Vector<amrex::Vector<amrex::Real>> gDbc_lo;
     amrex::Vector<amrex::Vector<amrex::Real>> gDbc_hi;
 
     amrex::Vector<amrex::Vector<amrex::Real>> gNbc_lo;
     amrex::Vector<amrex::Vector<amrex::Real>> gNbc_hi;
     
-    amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_L2proj;
+
   
   private: 
   
-    //Basis Functionclear
-    void PhiIdxGenerator_s();
-    
-    void PhiIdxGenerator_st();
-    
-    void number_modes();
-    
-    void number_quadintpts();
-    
 
+        
+   
     
     //Element Matrix and Quadrature Matrix
     void MatrixGenerator();
     
-    void GenerateQuadPts();
+
     
-    void VandermondeMat();
-    
-    void InvVandermondeMat();
-        
-   
+
     
     //Initial Conditions, and level initialization
     void InitialCondition(int lev);
@@ -399,21 +447,14 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
 
     
     //Model Equation/Simulation settings and variables    
-    amrex::Real T;
+    
     int t_limit;
     std::string limiter_type;
-    int t_outplt;
 
     //DG settings
 
-    int nghost = 1;    
-    int mNp;        //number of modes for modified basis function modphi_i
-    int qMp;        //number of quadrature points for quadrature of volume integral
-    int qMp_L2proj; //number of quadrature points only in space, used for the BCs,ICs,
-    int qMpbd;      //number of quadrature points for quadrature of surface integral
-    int qMp_1d;     //number of quadrature points in 1 dimension, powers of this 
-                    //leads to qMp and qMpbd
-
+    int nghost= 1;    
+ 
 
     
     //AMR settings 
@@ -470,26 +511,8 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_s;   
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_sVinv;
 
-    amrex::Vector<amrex::Vector<amrex::Real>> volquadmat;
-    amrex::Vector<amrex::Vector<amrex::Real>> L2proj_quadmat;
 
-
- 
-    //Interpolation nodes and Gauss-Legendre Quadrature points
-    amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_s;
-    amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_t;
-    amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_GLquad_bdm;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_GLquad_bdp;
-
-    amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_equidistant;
-    
    
-    
-    //Basis function d.o.f
-    amrex::Vector<amrex::Vector<int>> mat_idx_st; 
-    //used to store the combinations of indices of 1d Legendre polynomials: e.g
-    // mat_idx[5] = [0,1,4] ==> phi_5= P_0*P_1*P_4
 
   
     
