@@ -34,45 +34,16 @@ class AmrDG : public Solver<AmrDG>
 
     class BasisLegendre : public Basis
     {
+      public:
+        BasisLegendre() = default;
 
-    }
+        ~BasisLegendre() = default;
+        //amrex::Vector<int> basis_idx_linear; //used for limiting
+    };
 
 };
 
 /*
-BASIS FUNCTION STUFF
-
-//Basis Function
-
-  amrex::Real Phi(int idx, amrex::Vector<amrex::Real> x) const;
-
-  amrex::Real DPhi(int idx, amrex::Vector<amrex::Real> x, int d) const;
-
-  amrex::Real DDPhi(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) const;
-
-  amrex::Real Dtphi(int tidx, amrex::Real tau) const;
-
-  amrex::Real tphi(int tidx, amrex::Real tau) const;    
-
-  amrex::Real modPhi(int idx, amrex::Vector<amrex::Real> x) const;
-
-  //Basis Functionclear
-  void PhiIdxGenerator_s();
-
-  void PhiIdxGenerator_st();
-
-  void number_modes();
-
-  amrex::Vector<amrex::Vector<int>> mat_idx_s; 
-  amrex::Vector<int> lin_mode_idx;
-
-  int mNp;        //number of modes for modified basis function modphi_i
-
-
-  //Basis function d.o.f
-  amrex::Vector<amrex::Vector<int>> mat_idx_st; 
-  //used to store the combinations of indices of 1d Legendre polynomials: e.g
-  // mat_idx[5] = [0,1,4] ==> phi_5= P_0*P_1*P_4
 
     
 
