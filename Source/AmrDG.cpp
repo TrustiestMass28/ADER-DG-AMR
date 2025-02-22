@@ -1,3 +1,8 @@
+
+#include <AMReX_AmrCore.H>
+#include <AMReX_FluxRegister.H>
+
+#include <AMReX_Interpolater.H>
 #include <AMReX_ParallelDescriptor.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_MultiFab.H>
@@ -25,9 +30,7 @@
 using namespace amrex;
 
 //AmrDG class constructor, also initializes the AmrCore class (used for AMR)
-AmrDG::AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
-              int _coord, Vector<IntVect> const& _ref_ratios,  
-              Array<int,AMREX_SPACEDIM> const& _is_per, 
+AmrDG::AmrDG(
               amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo, 
               amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
               amrex::Vector<amrex::Vector<int>> _bc_lo_type, 
@@ -92,9 +95,11 @@ AmrDG::AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell,
   //mMpbd  : number of interpolation nodes on a boundary (equidistant) related to mNp
   //qMpbd : number of quadrature points on a boundary (Gauss-Lobatto distribution)
 
-  U_w.resize(L); 
   H_w.resize(L); 
   H.resize(L); 
+
+
+  U_w.resize(L); 
   U.resize(L); 
   if(model_pde->flag_source_term){S.resize(L);}
   U_center.resize(L); 
@@ -299,43 +304,15 @@ FillPatchGhostFC(lev,time,q);
 }
 }
 
-//Init data structures for level for all solution components of the system
+
 void AmrDG::InitData_system(int lev,const BoxArray& ba, const DistributionMapping& dm)
 {
   //Print(*ofs) <<"AmrDG::InitData_system() "<< lev<<"\n";
   
-  U_w[lev].resize(Q); 
-  H_w[lev].resize(Q); 
-  U[lev].resize(Q);
-  H[lev].resize(Q);   
-  if(model_pde->flag_source_term){S[lev].resize(Q);}
-  U_center[lev].resize(Q); 
-  
-  F[lev].resize(AMREX_SPACEDIM);
-  Fm[lev].resize(AMREX_SPACEDIM);
-  Fp[lev].resize(AMREX_SPACEDIM);
-  DF[lev].resize(AMREX_SPACEDIM);
-  DFm[lev].resize(AMREX_SPACEDIM);
-  DFp[lev].resize(AMREX_SPACEDIM);
-  H_p[lev].resize(AMREX_SPACEDIM);
-  H_m[lev].resize(AMREX_SPACEDIM);
-  Fnum[lev].resize(AMREX_SPACEDIM);
-  Fnumm_int[lev].resize(AMREX_SPACEDIM);
-  Fnump_int[lev].resize(AMREX_SPACEDIM);
-  for(int d=0; d<AMREX_SPACEDIM; ++d){
-    F[lev][d].resize(Q);
-    Fm[lev][d].resize(Q);
-    Fp[lev][d].resize(Q);
-    DF[lev][d].resize(Q);
-    DFm[lev][d].resize(Q);
-    DFp[lev][d].resize(Q);
+  //ADER SPECIFIC
 
-    H_p[lev][d].resize(Q);
-    H_m[lev][d].resize(Q);
-    Fnum[lev][d].resize(Q);
-    Fnumm_int[lev][d].resize(Q);
-    Fnump_int[lev][d].resize(Q);
-  }
+  //SOLVER
+
   
   for(int q=0; q<Q; ++q){
     InitData_component(lev, ba,dm,q); 
@@ -349,17 +326,29 @@ void AmrDG::InitData_component(int lev,const BoxArray& ba,
   
   //Print(*ofs) <<"AmrDG::InitData_component() "<< q<<"\n";
    
+  //ADER SPECIFIC
+  H_w[lev][q].define(ba, dm, mNp, nghost);
+  H_w[lev][q].setVal(0.0);
+  H[lev][q].define(ba, dm, qMp, nghost);
+  H[lev][q].setVal(0.0);
+
+  for(int d=0; d<AMREX_SPACEDIM; ++d){ 
+    H_p[lev][d][q].define(ba, dm,qMpbd,nghost);
+    H_p[lev][d][q].setVal(0.0);
+    
+    H_m[lev][d][q].define(ba, dm,qMpbd,nghost);
+    H_m[lev][d][q].setVal(0.0);
+  }
+  //SOLVER
   U_w[lev][q].define(ba, dm, Np, nghost);
   U_w[lev][q].setVal(0.0);
 
-  H_w[lev][q].define(ba, dm, mNp, nghost);
-  H_w[lev][q].setVal(0.0);
+
   
   U[lev][q].define(ba, dm, qMp, nghost);
   U[lev][q].setVal(0.0);
     
-  H[lev][q].define(ba, dm, qMp, nghost);
-  H[lev][q].setVal(0.0);
+
   
   U_center[lev][q].define(ba, dm, 1, nghost);
   U_center[lev][q].setVal(0.0);
@@ -380,13 +369,7 @@ void AmrDG::InitData_component(int lev,const BoxArray& ba,
     
     DF[lev][d][q].define(ba, dm,qMp,nghost);
     DF[lev][d][q].setVal(0.0);
-    
-    H_p[lev][d][q].define(ba, dm,qMpbd,nghost);
-    H_p[lev][d][q].setVal(0.0);
-    
-    H_m[lev][d][q].define(ba, dm,qMpbd,nghost);
-    H_m[lev][d][q].setVal(0.0);
-    
+  
     Fm[lev][d][q].define(ba, dm,qMpbd,nghost);
     Fm[lev][d][q].setVal(0.0);
     
@@ -414,10 +397,18 @@ void AmrDG::InitData_component(int lev,const BoxArray& ba,
 void AmrDG::ClearLevel(int lev) 
 {
   //Print(*ofs) << "ClearLevel   "<< lev<<"\n";
-  U_w[lev].clear();  
-  U[lev].clear();  
+
+  //ADER SPECIFIC
   H_w[lev].clear();  
   H[lev].clear();  
+  for(int d=0; d<AMREX_SPACEDIM; ++d){
+    H_p[lev][d].clear(); 
+    H_m[lev][d].clear();
+  }
+  //SOLVER
+  U_w[lev].clear();  
+  U[lev].clear();  
+
   if(model_pde->flag_source_term){S[lev].clear();}
   U_center[lev].clear();  
   
@@ -426,8 +417,6 @@ void AmrDG::ClearLevel(int lev)
   idc_grad_K[lev].clear();
   
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    H_p[lev][d].clear(); 
-    H_m[lev][d].clear();
     F[lev][d].clear();
     DF[lev][d].clear();
     Fm[lev][d].clear();
