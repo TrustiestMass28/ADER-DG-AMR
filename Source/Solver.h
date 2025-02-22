@@ -84,18 +84,67 @@ class Solver
             ofs = _ofs;
         }
 
-        //General class for numericla methods that use basis decomposition of the solution
+        //General class for numerical methods that use basis decomposition of the solution
+        //can maange spatial,temporal and mixed basis functions
         class Basis{
             public:
                 Basis() = default;
 
                 ~Basis() = default;
 
-                //Set number of basis function/weights/modes
-                void set_number_basis() {};
+                //Spatial basis function, evaluated at x
+                //NB: dim(x) = AMREX_SPACEDIM
+                amrex::Real phi_s(int idx, amrex::Vector<amrex::Real> x) const;
 
-                //Number of basis functions/modes
-                int Np; 
+                //Spatial basis function first derivative dphi/dx_d, evaluated at x
+                amrex::Real dphi_s(int idx, amrex::Vector<amrex::Real> x, int d) const;
+
+                //Spatial basis function second derivative d^2phi/dx_d1dx_d2, evaluated at x
+                amrex::Real ddphi_s(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) const;
+
+                //Temporal basis function, evaluated at t
+                //NB: dim(t) = 1
+                amrex::Real phi_t(int tidx, amrex::Real tau) const;
+
+                //Temporal basis function first derivative dtphi/dt, evaluated at t
+                amrex::Real dtphi_t(int tidx, amrex::Real tau) const;
+
+                //Spatio-temporal basis function, evaluated at x
+                //NB: dim(x) = AMREX_SPACEDIM+1
+                amrex::Real phi_st(int idx, amrex::Vector<amrex::Real> x) const;
+
+                //Set number of basis function/weights/modes Np,mNp
+                void set_number_basis();
+
+                //Set spatial basis functions Phi(x) index mapping
+                void set_idx_mapping_s();
+
+                //Set temporal basis function Phi(t) index mapping
+                void set_idx_mapping_t();
+
+                //Set spatio-temporal basis functions Phi(x,t) index mapping
+                void set_idx_mapping_st();
+
+                //Number of spatial basis functions/modes
+                int Np_s; 
+
+                //Number of temporal basis functions/modes
+                int Np_t; 
+
+                //Number of spatio-temporal basis functions/modes
+                int Np_st; 
+
+                //Spatial basis functions Phi(x) index mapping
+                amrex::Vector<amrex::Vector<int>> basis_idx_s; 
+                //  used to store the combinations of indices of 1d Basis functions: e.g
+                //  basis_idx[5] = [0,1,4] ==> phi_5= P_0*P_1*P_4
+                //  with P_i e.g beign the i-th Legendre polynomial 1d basis
+
+                //Set temporal basis function Phi(t) index mapping
+                amrex::Vector<amrex::Vector<int>> basis_idx_t;
+
+                //Set spatio-temporal basis functions Phi(x,t) index mapping
+                amrex::Vector<amrex::Vector<int>> basis_idx_st;
         };
 
         class Quadrature{
