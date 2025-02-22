@@ -4,7 +4,7 @@ CEXE_headers += Simulation.h
 #CEXE_sources += Simulation.cpp 
 CEXE_headers += ModelEquation.h
 CEXE_headers += Solver.h
-
+CEXE_headers += Mesh.h
 
 CEXE_headers += AmrDG.h
 #CEXE_sources += AmrDG.cpp 

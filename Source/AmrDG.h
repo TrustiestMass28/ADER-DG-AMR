@@ -8,7 +8,6 @@
 #include <omp.h>
 #endif
 
-//#include "NumericalMethod.h"
 #include <AMReX_AmrCore.H>
 #include <AMReX_FluxRegister.H>
 #include <AMReX_BCRec.H>
@@ -32,6 +31,9 @@ class AmrDG : public Solver<AmrDG>
 
     void init(){ std::cout << "HERE" << std::endl;}
 
+    void set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
+                              const DistributionMapping& dm, int q);
+
     class BasisLegendre : public Basis
     {
       public:
@@ -41,83 +43,62 @@ class AmrDG : public Solver<AmrDG>
         //amrex::Vector<int> basis_idx_linear; //used for limiting
     };
 
+  private:
+      //ADER predictor vector U(x,t) 
+      amrex::Vector<amrex::Vector<amrex::MultiFab>> H;
+
+      //ADER Modal/Nodal predictor vector H_w
+      amrex::Vector<amrex::Vector<amrex::MultiFab>> H_w;
+
+      //ADER predictor vector U(x,t) evaluated at boundary plus (+) b+
+      amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_p;
+
+      //ADER predictor vector U(x,t) evaluated at boundary minus (-) b-
+      amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_m;
 };
 
-/*
+void AmrDG::set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
+                                  const DistributionMapping& dm, int q)
+{/*
+  H_w[lev].resize(Q); 
+  H[lev].resize(Q);  
+  H_p[lev].resize(AMREX_SPACEDIM);
+  H_m[lev].resize(AMREX_SPACEDIM);
 
-    
-
-QUADRATURE
-                
-
-
-  amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_L2proj;
-
-  int qMp;        //number of quadrature points for quadrature of volume integral
-  int qMp_L2proj; //number of quadrature points only in space, used for the BCs,ICs,
-  int qMpbd;      //number of quadrature points for quadrature of surface integral
-  int qMp_1d;     //number of quadrature points in 1 dimension, powers of this 
-          //leads to qMp and qMpbd
-
-  
-  
-
-
- 
-  
-
-
-  
-*/
+  for(int d=0; d<AMREX_SPACEDIM; ++d){
+    H_p[lev][d].resize(Q);
+    H_m[lev][d].resize(Q);
+  } */
+}
 
 /*
-class AmrDG : public amrex::AmrCore, public NumericalMethod
-{
-  public: 
+SOLVER
+    //DG settings
+             
+ADAPTIVE MESH REFINEMENT (GEOMETRY BASED OPERATIONS)
+    //AMR settings 
 
-    AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, int _coord, 
-          Vector<IntVect> const& _ref_ratios, Array<int,AMREX_SPACEDIM> const& _is_per,
-          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
-          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
-          amrex::Vector<amrex::Vector<int>> _bc_lo_type,
-          amrex::Vector<amrex::Vector<int>> _bc_hi_type, amrex::Real _T,
-          amrex::Real _CFL, int _p,
-          int _t_regrid, int _t_outplt//, 
-          //std::string _limiter_type, amrex::Real _TVB_M, 
-          //amrex::Vector<amrex::Real> _AMR_TVB_C,
-          //amrex::Vector<amrex::Real> _AMR_curl_C, 
-          //amrex::Vector<amrex::Real> _AMR_div_C, 
-          //amrex::Vector<amrex::Real> _AMR_grad_C, 
-          //amrex::Vector<amrex::Real> _AMR_sec_der_C,
-          //amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
-          , int _t_limit);
-          
-    AmrDG() = default;
 
-    virtual ~AmrDG();
+
+
+    void FillPatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
     
-    void Init();
+    void FillCoarsePatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
     
-    //void Evolve();
+    void GetData (int lev, int q, Real time, Vector<MultiFab*>& data, Vector<Real>& datatime);
+    
+    void AverageFineToCoarse();    
+    
+    void AverageFineToCoarseFlux(int lev);
+    
+    void FillPatchGhostFC(int lev,amrex::Real time,int q);
 
- 
-  
-    //AmrCore pure virtual functions, need to provide custom implementation
-    virtual void MakeNewLevelFromScratch(int lev, amrex::Real time, 
-                                        const amrex::BoxArray& ba,
-                                        const amrex::DistributionMapping& dm) override;  
-                                          
-    virtual void MakeNewLevelFromCoarse(int lev, amrex::Real time,
-                                        const amrex::BoxArray& ba, 
-                                        const amrex::DistributionMapping& dm) override;
-                                        
-    virtual void RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
-                            const amrex::DistributionMapping& dm) override;
-                            
-    virtual void ErrorEst (int lev, amrex::TagBoxArray& tags, 
-                          amrex::Real time, int ngrow) override;
-                          
-    virtual void ClearLevel (int lev) override;
+    //AMR refinement and limiting
+    void AMR_settings_tune();
+
+AMR INTERPOLATOR
+
+
  
     //AMR Coarse>->Fine projection custom implementation
     class DGprojInterp : public Interpolater
@@ -175,7 +156,29 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     };
 
 
-    
+
+*/
+/*
+class AmrDG : public amrex::AmrCore, public NumericalMethod
+{
+  public: 
+
+    AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, int _coord, 
+          Vector<IntVect> const& _ref_ratios, Array<int,AMREX_SPACEDIM> const& _is_per,
+          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
+          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
+          amrex::Vector<amrex::Vector<int>> _bc_lo_type,
+          amrex::Vector<amrex::Vector<int>> _bc_hi_type, amrex::Real _T,
+          amrex::Real _CFL, int _p,
+          int _t_regrid, int _t_outplt//, 
+          //std::string _limiter_type, amrex::Real _TVB_M, 
+          //amrex::Vector<amrex::Real> _AMR_TVB_C,
+          //amrex::Vector<amrex::Real> _AMR_curl_C, 
+          //amrex::Vector<amrex::Real> _AMR_div_C, 
+          //amrex::Vector<amrex::Real> _AMR_grad_C, 
+          //amrex::Vector<amrex::Real> _AMR_sec_der_C,
+          //amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
+          , int _t_limit);
 
     
     //Element Matrix and Quadrature Matrix
@@ -339,32 +342,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     
     void Conservation(int lev, int M, amrex::Vector<amrex::Vector<amrex::Real>> xi, int d);
 
-  
-    
-    //AMR level creation/destruction/ghost cell sync
-    void InitData_system(int lev,const BoxArray& ba, 
-                        const DistributionMapping& dm);
-    
-    void InitData_component(int lev,const BoxArray& ba, 
-                            const DistributionMapping& dm, int q);
-    
-    void FillPatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
-    
-    void FillCoarsePatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
-    
-    void GetData (int lev, int q, Real time, Vector<MultiFab*>& data, Vector<Real>& datatime);
-    
-    void AverageFineToCoarse();    
-    
-    void AverageFineToCoarseFlux(int lev);
-    
-    void FillPatchGhostFC(int lev,amrex::Real time,int q);
 
-  
-    
-    //AMR refinement and limiting
-    void AMR_settings_tune();
-    
     void Limiter_w(int lev); //, amrex::TagBoxArray& tags, char tagval
     
     void Limiter_linear_tvb(int i, int j, int k, 
@@ -412,15 +390,6 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     int t_limit;
     std::string limiter_type;
 
-    //DG settings
-
-    int nghost= 1;    
- 
-
-    
-    //AMR settings 
-    int L;
-    int t_regrid;  
 
     amrex::Vector<amrex::Real> AMR_C;
     
@@ -448,11 +417,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     //D:  dimensions
     //Q:  number of solution components
     
-    //Nodal and Modal MFs containers   
-    amrex::Vector<amrex::Vector<amrex::MultiFab>> H_w;
-    amrex::Vector<amrex::Vector<amrex::MultiFab>> H;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_p;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_m;
+
         
 
 

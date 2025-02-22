@@ -20,10 +20,8 @@
 #include <AMReX_MemProfiler.H>
 #endif
 
-//Framework for FDM,FVM,DG and other spectral methods
-//for FDM,FVM U_w==U, and thus Np == 1
-//numerical methods user defiend classes
-//provide both spatial and temporal integrators
+class Mesh;
+
 using namespace amrex;
 
 template <typename NumericalMethodType>
@@ -44,13 +42,7 @@ class Solver
         //TODO: pass all tempaltes of other classes from which Solver might need data to init
         //like stuff from geometry for number of levels,...
         template <typename EquationType>
-        void init(std::shared_ptr<EquationType> model_pde)
-        {
-            Q = model_pde->Q_model;
-            Q_unique =model_pde->Q_model_unique;
-            
-            static_cast<NumericalMethodType*>(this)->init();
-        }
+        void init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh> mesh);
 
         //execute simulation (time-stepping and possible AMR operations)
         void evolve();
@@ -75,10 +67,12 @@ class Solver
         void set_initial_condition();
 
         //declare and init data structures holding system equation 
-        void set_init_data_system();
+        void set_init_data_system(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba,
+                                    const DistributionMapping& dm);
 
         //declare and init data structures holding single equation 
-        void set_init_data_component();
+        void set_init_data_component(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba, 
+                                        const DistributionMapping& dm, int q);
 
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
@@ -285,5 +279,61 @@ class Solver
         amrex::Vector<amrex::Vector<amrex::MultiFab>> S;
 
 };
+
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh> mesh) {
+    Q = model_pde->Q_model;
+    Q_unique = model_pde->Q_model_unique;
+
+    static_cast<NumericalMethodType*>(this)->init();
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::set_init_data_system(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba,
+                                                        const DistributionMapping& dm)
+{
+    /*
+    //Init data structures for level for all solution components of the system
+    U_w[lev].resize(Q); 
+    U[lev].resize(Q);
+    if(model_pde->flag_source_term){S[lev].resize(Q);}
+    U_center[lev].resize(Q); 
+    F[lev].resize(AMREX_SPACEDIM);
+    Fm[lev].resize(AMREX_SPACEDIM);
+    Fp[lev].resize(AMREX_SPACEDIM);
+    DF[lev].resize(AMREX_SPACEDIM);
+    DFm[lev].resize(AMREX_SPACEDIM);
+    DFp[lev].resize(AMREX_SPACEDIM);
+  
+    Fnum[lev].resize(AMREX_SPACEDIM);
+    Fnumm_int[lev].resize(AMREX_SPACEDIM);
+    Fnump_int[lev].resize(AMREX_SPACEDIM);
+
+    for(int d=0; d<AMREX_SPACEDIM; ++d){
+      F[lev][d].resize(Q);
+      Fm[lev][d].resize(Q);
+      Fp[lev][d].resize(Q);
+      DF[lev][d].resize(Q);
+      DFm[lev][d].resize(Q);
+      DFp[lev][d].resize(Q);
+      Fnum[lev][d].resize(Q);
+      Fnumm_int[lev][d].resize(Q);
+      Fnump_int[lev][d].resize(Q);
+    }
+
+    //NumericalMethod specific data structure initialization (e.g additional)
+    static_cast<NumericalMethodType*>(this)->set_init_data_system(mesh, lev, ba, dm, q);
+    */
+
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::set_init_data_component(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba, 
+                                                        const DistributionMapping& dm, int q)
+{
+
+}
+
 
 #endif 

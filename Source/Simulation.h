@@ -16,6 +16,7 @@
 
 #include "Solver.h"
 #include "ModelEquation.h"
+#include "Mesh.h"
 
 using namespace amrex;
 
@@ -30,14 +31,15 @@ class Simulation
     void run();
 
     template <typename... Args>
-    void setNumericalSettings(Args... args) {
-      solver->settings(args...);
-    }
+    void setNumericalSettings(Args... args);
     
     template <typename... Args>
-    void setModelSettings(Args... args) {
-          model->settings(args...);
-    }
+    void setModelSettings(Args... args);
+
+    void setGeometrySettings(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
+                    int _coord, Vector<IntVect> const& _ref_ratios,  
+                    Array<int,AMREX_SPACEDIM> const& _is_per, int L = 1, int dtn_regrid = 0, 
+                    int dt_regrid = 0,int nghost= 1);
 
     void setIO(int _n_out, amrex::Real _t_out);
 
@@ -50,6 +52,8 @@ class Simulation
 
     std::shared_ptr<Solver<NumericalMethodType>> solver;
 
+    std::shared_ptr<Mesh> mesh;
+
     //I/O 
     int dtn_outplt;   //data output time-steps interval
 
@@ -59,12 +63,7 @@ class Simulation
 
 template <typename NumericalMethodType,typename EquationType>
 Simulation<NumericalMethodType,EquationType>::Simulation() 
-{
-  //Solver base class ptr (construct num method and upcast its ptr to base)
-  solver = std::make_shared<NumericalMethodType>();
-
-  model = std::make_shared<EquationType>();
-}
+{}
 
 template <typename NumericalMethodType,typename EquationType>
 Simulation<NumericalMethodType,EquationType>::~Simulation() {
@@ -74,8 +73,34 @@ Simulation<NumericalMethodType,EquationType>::~Simulation() {
 template <typename NumericalMethodType,typename EquationType>
 void Simulation<NumericalMethodType,EquationType>::run()
 {
-  solver->init(model);
+  solver->init(model,mesh);
 }
+
+template <typename NumericalMethodType,typename EquationType>
+template <typename... Args>
+void Simulation<NumericalMethodType,EquationType>::setNumericalSettings(Args... args) {
+  solver = std::make_shared<NumericalMethodType>();
+  solver->settings(args...);
+}
+
+template <typename NumericalMethodType,typename EquationType>
+template <typename... Args>
+void Simulation<NumericalMethodType,EquationType>::setModelSettings(Args... args) {
+  model = std::make_shared<EquationType>();
+  model->settings(args...);
+}
+
+template <typename NumericalMethodType,typename EquationType>
+void Simulation<NumericalMethodType,EquationType>::setGeometrySettings(const RealBox& _rb, int _max_level,
+                                                                      const Vector<int>& _n_cell, 
+                                                                      int _coord, Vector<IntVect> const& _ref_ratios,  
+                                                                      Array<int,AMREX_SPACEDIM> const& _is_per,
+                                                                      int L , int dtn_regrid , 
+                                                                      int dt_regrid ,int nghost)
+{
+  mesh = std::make_shared<Mesh>(_rb,_max_level,_n_cell,_coord,_ref_ratios,_is_per,
+                    L, dtn_regrid, dt_regrid, nghost);   
+} 
 
 template <typename NumericalMethodType,typename EquationType>
 void Simulation<NumericalMethodType,EquationType>::setIO(int _n_out, amrex::Real _t_out)
