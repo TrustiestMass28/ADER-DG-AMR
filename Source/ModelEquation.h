@@ -4,9 +4,11 @@
 #include <memory>
 #include <AMReX_AmrCore.H>
 
+//class Solver;
+
 using namespace amrex;
 
-template <typename EquationType>
+//template <typename EquationType>
 class ModelEquation 
 {
   public:   
@@ -15,30 +17,27 @@ class ModelEquation
 
     virtual ~ModelEquation() = default;
 
+    // Set reference to NumericalMethod for communication
+    //void setSolver(std::shared_ptr<Solver> nm){
+    //  numerical = nm;
+    //}
+
     // Set reference to ModelEquation for communication
-    void setModelEquation(std::shared_ptr<EquationType> me){
-        model_pde = me;
-    }
+    //void setModelEquation(std::shared_ptr<EquationType> me){
+    //    model_pde = me;
+    //}
 
     // Getter methods
-    std::shared_ptr<EquationType> getModelEquation() const {
-      return model_pde;
-    }
+    //std::shared_ptr<EquationType> getModelEquation() const {
+    //  return model_pde;
+    //}
 
-    void testModel()
-    { //std::cout << typeid(this).name() << std::endl;
-      //std::cout << typeid(*this).name() << std::endl;
-      std::cout << "testModel" << std::endl;
-    }
     //virtual ~ModelEquation() = default;  // Compiler generates default behavior
     
     //virtual void model_settings() = 0;
 
     /*
-    // Set reference to NumericalMethod for communication
-    void setSolver(std::shared_ptr<NumericalMethodType> nm){
-      numerical_pde = nm;
-    }
+
 
     void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
       ofs = _ofs;
@@ -136,7 +135,7 @@ class ModelEquation
 
     std::shared_ptr<std::ofstream> ofs;
     
-    std::shared_ptr<EquationType> model_pde;
+    //std::shared_ptr<Solver> numerical;
 
 };
 
