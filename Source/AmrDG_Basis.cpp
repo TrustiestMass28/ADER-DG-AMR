@@ -32,7 +32,7 @@ void AmrDG::number_quadintpts()
 }
 
 //Generate 1D quadrature points (depending on how close we are to the boundary, 
-//a different generation technique is used)
+//a different generation technique is used) //and Gauss-Legendre Quadrature points
 void AmrDG::GenerateQuadPts()
 {
   int N = qMp_1d;
