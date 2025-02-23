@@ -73,6 +73,7 @@ Simulation<NumericalMethodType,EquationType>::~Simulation() {
 template <typename NumericalMethodType,typename EquationType>
 void Simulation<NumericalMethodType,EquationType>::run()
 {
+  mesh->init(solver);
   solver->init(model,mesh);
 }
 

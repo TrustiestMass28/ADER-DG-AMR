@@ -42,6 +42,8 @@ class Mesh : public amrex::AmrCore
 
         ~Mesh() = default;   
 
+        void init(std::shared_ptr<Solver<NumericalMethodType>> _solver);
+
         //AmrCore pure virtual function override
         //  Make a new level from scratch using provided BoxArray and DistributionMapping.
         //  Only used during initialization
@@ -83,7 +85,9 @@ class Mesh : public amrex::AmrCore
         //Number of ghost cells
         int nghost= 1;    
 
-    protected:
+    private:
+        
+        void setSolver(std::shared_ptr<Solver<NumericalMethodType>> _solver);
 
         std::shared_ptr<Solver<NumericalMethodType>> solver;       
 };
@@ -99,6 +103,18 @@ Mesh<NumericalMethodType>::Mesh(const RealBox& _rb, int _max_level,const Vector<
     dtn_regrid = _dtn_regrid;
     dt_regrid = _dt_regrid;
     nghost= _nghost;
+}
+
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::init(std::shared_ptr<Solver<NumericalMethodType>> _solver)
+{
+    setSolver(solver);
+}
+
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::setSolver(std::shared_ptr<Solver<NumericalMethodType>> _solver)
+{
+    solver = _solver;
 }
 
 template <typename NumericalMethodType>
