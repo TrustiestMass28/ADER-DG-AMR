@@ -41,14 +41,28 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         BasisLegendre() = default;
 
         ~BasisLegendre() = default;
-        //amrex::Vector<int> basis_idx_linear; //used for limiting
+
+        void init();
+        
 
         void set_number_basis() override;
 
+        void set_idx_mapping_s() override;
+
+        void set_idx_mapping_st() override;
+
+        amrex::Real phi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map, 
+                            const amrex::Vector<amrex::Real>& x) const override;
+
+        amrex::Real phi_t(int tidx, amrex::Real tau) const override;
+
+        amrex::Real phi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                            const amrex::Vector<amrex::Real>& x) const override;
+
+      private:
         int factorial(int n) const;
 
-        void init();
- 
+        amrex::Vector<int> basis_idx_linear; //used for limiting
     };
       
   private:
@@ -76,12 +90,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 /*
 ///////////////////////////////////////////////////////////////////////
 DG/SOLVER
-
-
-    number_modes();
-  number_quadintpts();
-
-    
   //Print(*ofs) <<"Solving system with:"<<"\n";
   //Print(*ofs) <<"   total equations   "<<Q<<"\n";
   //Print(*ofs) <<"   unique equations  "<<Q_unique<<"\n";
@@ -99,16 +107,7 @@ DG/SOLVER
   //mMpbd  : number of interpolation nodes on a boundary (equidistant) related to mNp
   //qMpbd : number of quadrature points on a boundary (Gauss-Lobatto distribution)
 
-
-
-
-    //basis functions d.o.f mapper
-  mat_idx_s.resize(Np, amrex::Vector<int>(AMREX_SPACEDIM));
-  mat_idx_st.resize(mNp, amrex::Vector<int>(AMREX_SPACEDIM+1));  
-  PhiIdxGenerator_s();
-  PhiIdxGenerator_st();
-
-
+  number_quadintpts();
   
   //Gaussian quadrature
   xi_ref_GLquad_s.resize( (int)std::pow(qMp_1d,AMREX_SPACEDIM),

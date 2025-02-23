@@ -31,17 +31,25 @@ void AmrDG::init()
     H_p.resize(mesh->L);
     H_m.resize(mesh->L);
 
+
+    //Basis function
     basefunc = std::make_shared<BasisLegendre>();
 
     basefunc->setNumericalMethod(this);
-    
+
     //Number of modes/components of solution decomposition
-    
+    basefunc->set_number_basis();
+
+    //basis functions d.o.f idx mapper
+    basefunc->basis_idx_s.resize(basefunc->Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
+    basefunc->basis_idx_st.resize(basefunc->Np_st, amrex::Vector<int>(AMREX_SPACEDIM+1));  
+
+    basefunc->set_idx_mapping_s();
+    basefunc->set_idx_mapping_st();
 
 
-    //basefunc->set_number_basis();
 
-    //Basis functions d.of. mappers
+
 
     //Number of quadrature pts
 
