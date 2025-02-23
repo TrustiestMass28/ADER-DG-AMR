@@ -106,62 +106,19 @@ amrex::Real AmrDG::BasisLegendre::phi_s(int idx, const amrex::Vector<amrex::Vect
   return phi;
 }
 
-//temporal basis function
-amrex::Real AmrDG::BasisLegendre::phi_t(int tidx, amrex::Real tau) const 
-{
-  return std::legendre(basis_idx_st[tidx][AMREX_SPACEDIM], tau);
-  //TODO: use basis_idx_t?? with only 1 dimension?
-}
-
-//spatio temporal basis function, evaluated at x\in [-1,1]^{D+1}
-amrex::Real AmrDG::BasisLegendre::phi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
-                                          const amrex::Vector<amrex::Real>& x) const 
-{
-  amrex::Real mphi = phi_s(idx,basis_idx_st,x);
-  mphi*=phi_t(idx,x[AMREX_SPACEDIM]);
-
-  return mphi;
-}
-
-
-
-
-int AmrDG::BasisLegendre::factorial(int n)  const
-{
-  if (n == 0 || n == 1){
-    return 1;
-  } 
-  else{
-    return n * factorial(n - 1);
-  }
-}
-
-
-
-
-/*
-
-
-//derivative of temporal basis function
-amrex::Real AmrDG::Dtphi(int tidx, amrex::Real tau) const
-{
-  return (std::assoc_legendre(mat_idx_st[tidx][AMREX_SPACEDIM],1,tau))
-          /(std::sqrt(1.0-std::pow(tau,2))); 
-}
-
-
 //spatial basis function first derivative in direction d, evaluated at x\in [-1,1]^{D}
-amrex::Real AmrDG::DPhi(int idx, amrex::Vector<amrex::Real> x, int d) const
+amrex::Real AmrDG::BasisLegendre::dphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                          const amrex::Vector<amrex::Real>& x, int d) const 
 {
   amrex::Real phi = 1.0;
   for  (int a = 0; a < AMREX_SPACEDIM; ++a){
     if(a!=d)
     {
-      phi*=std::legendre(mat_idx_s[idx][a], x[a]);
+      phi*=std::legendre(idx_map[idx][a], x[a]);
     }
     else
     {
-      phi*=(std::assoc_legendre(mat_idx_s[idx][d],1,x[d]))/(std::sqrt(1.0-std::pow(x[d],2.0)));
+      phi*=(std::assoc_legendre(idx_map[idx][d],1,x[d]))/(std::sqrt(1.0-std::pow(x[d],2.0)));
     }   
   }
   return phi;
@@ -169,7 +126,8 @@ amrex::Real AmrDG::DPhi(int idx, amrex::Vector<amrex::Real> x, int d) const
 
 //spatial basis function second derivative in direction d1 and d2, evaluated at 
 //x\in [-1,1]^{D}
-amrex::Real AmrDG::DDPhi(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) const
+amrex::Real AmrDG::BasisLegendre::ddphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                            const amrex::Vector<amrex::Real>& x, int d1, int d2) const 
 {
   //evaluates basis function second derivatives in d1 and d2 direction at desired 
   //reference location x\in [-1,1]
@@ -183,16 +141,16 @@ amrex::Real AmrDG::DDPhi(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) 
     {
       if(a!=d1 && a!=d2)
       {
-        phi*=std::legendre(mat_idx_s[idx][a], x[a]);
+        phi*=std::legendre(idx_map[idx][a], x[a]);
       }
       else if(a==d1)
       {
-        phi*=(std::assoc_legendre(mat_idx_s[idx][d1],1,x[d1]))
+        phi*=(std::assoc_legendre(idx_map[idx][d1],1,x[d1]))
             /(std::sqrt(1.0-std::pow(x[d1],2.0)));
       }
       else if(a==d2)
       {
-        phi*=(std::assoc_legendre(mat_idx_s[idx][d2],1,x[d2]))
+        phi*=(std::assoc_legendre(idx_map[idx][d2],1,x[d2]))
             /(std::sqrt(1.0-std::pow(x[d2],2.0)));
       }
     }
@@ -200,18 +158,52 @@ amrex::Real AmrDG::DDPhi(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) 
     {
       if(a!=d1 && a!=d2)
       {
-        phi*=std::legendre(mat_idx_s[idx][a], x[a]);
+        phi*=std::legendre(idx_map[idx][a], x[a]);
       }
       else
       { 
-        phi*=(std::assoc_legendre(mat_idx_s[idx][d2],2,x[d2]))
+        phi*=(std::assoc_legendre(idx_map[idx][d2],2,x[d2]))
             /(1.0-std::pow(x[d2],2.0));      
       }
     }
   }
   return phi;
 }
-*/
+
+//temporal basis function
+amrex::Real AmrDG::BasisLegendre::phi_t(int tidx, amrex::Real tau) const 
+{
+  return std::legendre(basis_idx_st[tidx][AMREX_SPACEDIM], tau);
+  //TODO: use basis_idx_t?? with only 1 dimension?
+}
+
+//derivative of temporal basis function
+amrex::Real AmrDG::BasisLegendre::dtphi_t(int tidx, amrex::Real tau) const
+{
+  return (std::assoc_legendre(basis_idx_st[tidx][AMREX_SPACEDIM],1,tau))
+          /(std::sqrt(1.0-std::pow(tau,2))); 
+}
+
+
+//spatio temporal basis function, evaluated at x\in [-1,1]^{D+1}
+amrex::Real AmrDG::BasisLegendre::phi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                                          const amrex::Vector<amrex::Real>& x) const 
+{
+  amrex::Real mphi = phi_s(idx,basis_idx_st,x);
+  mphi*=phi_t(idx,x[AMREX_SPACEDIM]);
+
+  return mphi;
+}
+
+int AmrDG::BasisLegendre::factorial(int n)  const
+{
+  if (n == 0 || n == 1){
+    return 1;
+  } 
+  else{
+    return n * factorial(n - 1);
+  }
+}
 
 
 

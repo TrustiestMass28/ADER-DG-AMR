@@ -53,8 +53,16 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         amrex::Real phi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map, 
                             const amrex::Vector<amrex::Real>& x) const override;
+        
+        amrex::Real dphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                            const amrex::Vector<amrex::Real>& x, int d) const override;
+
+        amrex::Real ddphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+          const amrex::Vector<amrex::Real>& x, int d1, int d2) const override;
 
         amrex::Real phi_t(int tidx, amrex::Real tau) const override;
+
+        amrex::Real dtphi_t(int tidx, amrex::Real tau) const override;
 
         amrex::Real phi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
                             const amrex::Vector<amrex::Real>& x) const override;

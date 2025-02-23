@@ -95,12 +95,12 @@ class Solver
                                             const amrex::Vector<amrex::Real>& x) const { return 0.0; }
 
                 //Spatial basis function first derivative dphi/dx_d, evaluated at x
-                virtual amrex::Real dphi_s(int idx, amrex::Vector<amrex::Vector<int>> idx_map,
-                                            amrex::Vector<amrex::Real> x, int d) const { return 0.0; }
+                virtual amrex::Real dphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                                            const amrex::Vector<amrex::Real>& x, int d) const { return 0.0; }
 
                 //Spatial basis function second derivative d^2phi/dx_d1dx_d2, evaluated at x
-                virtual amrex::Real ddphi_s(int idx, amrex::Vector<amrex::Vector<int>> idx_map,
-                                            amrex::Vector<amrex::Real> x, int d1, int d2) const { return 0.0; }
+                virtual amrex::Real ddphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                                            const amrex::Vector<amrex::Real>& x, int d1, int d2) const { return 0.0; }
 
                 //Temporal basis function, evaluated at t
                 //NB: dim(t) = 1
@@ -113,6 +113,14 @@ class Solver
                 //NB: dim(x) = AMREX_SPACEDIM+1
                 virtual amrex::Real phi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
                                             const amrex::Vector<amrex::Real>& x) const { return 0.0; }
+
+                //First derivative
+                virtual amrex::Real dphi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                                            const amrex::Vector<amrex::Real>& x) const { return 0.0; }
+
+                //Second derivative
+                virtual amrex::Real ddphi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
+                                        const amrex::Vector<amrex::Real>& x) const { return 0.0; }
 
                 //Set number of basis function/weights/modes Np,mNp
                 virtual void set_number_basis() {}
