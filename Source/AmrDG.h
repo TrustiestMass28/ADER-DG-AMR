@@ -18,7 +18,7 @@
 
 using namespace amrex;
 
-class AmrDG : public Solver<AmrDG>
+class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 {
   public:
     AmrDG()  = default;
@@ -44,11 +44,14 @@ class AmrDG : public Solver<AmrDG>
         //amrex::Vector<int> basis_idx_linear; //used for limiting
 
         void set_number_basis() override;
+
+        int factorial(int n) const;
+
+        void init();
+ 
     };
       
   private:
-
-    int factorial(int n) const;
 
     int KroneckerDelta(int a, int b) const;
 

@@ -32,8 +32,14 @@ void AmrDG::init()
     H_m.resize(mesh->L);
 
     basefunc = std::make_shared<BasisLegendre>();
+
+    basefunc->setNumericalMethod(this);
+    
     //Number of modes/components of solution decomposition
-    basefunc->set_number_basis();
+    
+
+
+    //basefunc->set_number_basis();
 
     //Basis functions d.of. mappers
 
@@ -42,11 +48,6 @@ void AmrDG::init()
     //Generation of quadrature pts
 
     //Init data structure holdin quadrature data
-}
-
-void AmrDG::BasisLegendre::set_number_basis()
-{
-  Print() << "HERE   "<<"\n";
 }
 
 
