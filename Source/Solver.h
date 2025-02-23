@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 
+#include <AMReX_AmrCore.H>
 #include <AMReX_ParallelDescriptor.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_MultiFab.H>
@@ -66,15 +67,15 @@ class Solver
         //sometimes IC is for modes/weights, other for actual sol vector
         //depending on num method it will call 
         void set_initial_condition();
-        /*
+        
         //declare and init data structures holding system equation 
-        void set_init_data_system(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba,
+        void set_init_data_system(int lev,const BoxArray& ba,
                                     const DistributionMapping& dm);
 
         //declare and init data structures holding single equation 
-        void set_init_data_component(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba, 
+        void set_init_data_component(int lev,const BoxArray& ba, 
                                         const DistributionMapping& dm, int q);
-        */
+        
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
         }
@@ -89,36 +90,36 @@ class Solver
 
                 //Spatial basis function, evaluated at x
                 //NB: dim(x) = AMREX_SPACEDIM
-                amrex::Real phi_s(int idx, amrex::Vector<amrex::Real> x) const;
+                virtual amrex::Real phi_s(int idx, amrex::Vector<amrex::Real> x) const { return 0.0; }
 
                 //Spatial basis function first derivative dphi/dx_d, evaluated at x
-                amrex::Real dphi_s(int idx, amrex::Vector<amrex::Real> x, int d) const;
+                virtual amrex::Real dphi_s(int idx, amrex::Vector<amrex::Real> x, int d) const { return 0.0; }
 
                 //Spatial basis function second derivative d^2phi/dx_d1dx_d2, evaluated at x
-                amrex::Real ddphi_s(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) const;
+                virtual amrex::Real ddphi_s(int idx, amrex::Vector<amrex::Real> x, int d1, int d2) const { return 0.0; }
 
                 //Temporal basis function, evaluated at t
                 //NB: dim(t) = 1
-                amrex::Real phi_t(int tidx, amrex::Real tau) const;
+                virtual amrex::Real phi_t(int tidx, amrex::Real tau) const { return 0.0; }
 
                 //Temporal basis function first derivative dtphi/dt, evaluated at t
-                amrex::Real dtphi_t(int tidx, amrex::Real tau) const;
+                virtual amrex::Real dtphi_t(int tidx, amrex::Real tau) const { return 0.0; }
 
                 //Spatio-temporal basis function, evaluated at x
                 //NB: dim(x) = AMREX_SPACEDIM+1
-                amrex::Real phi_st(int idx, amrex::Vector<amrex::Real> x) const;
+                virtual amrex::Real phi_st(int idx, amrex::Vector<amrex::Real> x) const { return 0.0; }
 
                 //Set number of basis function/weights/modes Np,mNp
-                void set_number_basis();
+                virtual void set_number_basis() {}
 
                 //Set spatial basis functions Phi(x) index mapping
-                void set_idx_mapping_s();
+                virtual void set_idx_mapping_s() {}
 
                 //Set temporal basis function Phi(t) index mapping
-                void set_idx_mapping_t();
+                virtual void set_idx_mapping_t() {}
 
                 //Set spatio-temporal basis functions Phi(x,t) index mapping
-                void set_idx_mapping_st();
+                virtual void set_idx_mapping_st() {}
 
                 //Number of spatial basis functions/modes
                 int Np_s; 
@@ -224,6 +225,9 @@ class Solver
         //not the angular momentum)
         int Q_unique; 
 
+        //Flag to indicate if source term is considered
+        bool flag_source_term;  
+
         //spatial (approxiamtion) order
         int p;
 
@@ -289,12 +293,20 @@ class Solver
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh) {
+void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh) 
+{
+    setMesh(_mesh);
+
+    //Get model specific data that influence numerical set-up
     Q = model_pde->Q_model;
     Q_unique = model_pde->Q_model_unique;
+    flag_source_term = model_pde->flag_source_term;
 
-
+    //Numerical method specific initialization
     static_cast<NumericalMethodType*>(this)->init();
+
+    const Real time = 0.0;
+    //InitFromScratch(time);    
 }
 
 template <typename NumericalMethodType>
@@ -303,16 +315,16 @@ void Solver<NumericalMethodType>::setMesh(std::shared_ptr<Mesh<NumericalMethodTy
     mesh = _mesh;
 }
 
-/*
+
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::set_init_data_system(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba,
+void Solver<NumericalMethodType>::set_init_data_system(int lev,const BoxArray& ba,
                                                         const DistributionMapping& dm)
 {
     
     //Init data structures for level for all solution components of the system
     U_w[lev].resize(Q); 
     U[lev].resize(Q);
-    if(model_pde->flag_source_term){S[lev].resize(Q);}
+    if(flag_source_term){S[lev].resize(Q);}
     U_center[lev].resize(Q); 
     F[lev].resize(AMREX_SPACEDIM);
     Fm[lev].resize(AMREX_SPACEDIM);
@@ -338,17 +350,19 @@ void Solver<NumericalMethodType>::set_init_data_system(std::shared_ptr<Mesh> mes
     }
 
     //NumericalMethod specific data structure initialization (e.g additional)
-    static_cast<NumericalMethodType*>(this)->set_init_data_system(mesh, lev, ba, dm, q);
+    //can also clear up Solver data members that arent needed for particular method
+    //e.g the numerical fluxes
+    static_cast<NumericalMethodType*>(this)->set_init_data_system(lev, ba, dm);
     
 
 }
 
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::set_init_data_component(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba, 
+void Solver<NumericalMethodType>::set_init_data_component(int lev,const BoxArray& ba, 
                                                         const DistributionMapping& dm, int q)
 {
 
 }
-*/
+
 
 #endif 

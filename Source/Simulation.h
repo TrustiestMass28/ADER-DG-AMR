@@ -38,7 +38,7 @@ class Simulation
 
     void setGeometrySettings(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
                     int _coord, Vector<IntVect> const& _ref_ratios,  
-                    Array<int,AMREX_SPACEDIM> const& _is_per, int L = 1, int dtn_regrid = 0, 
+                    Array<int,AMREX_SPACEDIM> const& _is_per, int dtn_regrid = 0, 
                     int dt_regrid = 0,int nghost= 1);
 
     void setIO(int _n_out, amrex::Real _t_out);
@@ -96,11 +96,10 @@ void Simulation<NumericalMethodType,EquationType>::setGeometrySettings(const Rea
                                                                       const Vector<int>& _n_cell, 
                                                                       int _coord, Vector<IntVect> const& _ref_ratios,  
                                                                       Array<int,AMREX_SPACEDIM> const& _is_per,
-                                                                      int L , int dtn_regrid , 
-                                                                      int dt_regrid ,int nghost)
+                                                                      int dtn_regrid, int dt_regrid ,int nghost)
 {
   mesh = std::make_shared<Mesh<NumericalMethodType>>(_rb,_max_level,_n_cell,_coord,_ref_ratios,_is_per,
-                    L, dtn_regrid, dt_regrid, nghost);   
+                                                      dtn_regrid, dt_regrid, nghost);   
 } 
 
 template <typename NumericalMethodType,typename EquationType>

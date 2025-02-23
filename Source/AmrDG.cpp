@@ -1,3 +1,82 @@
+#include <Eigen/Dense>
+#include <Eigen/Core>
+#include <Eigen/SVD>
+
+#include "AmrDG.h"
+
+using namespace amrex;
+
+void AmrDG::init()
+{
+    //Set vectors size
+    U_w.resize(mesh->L); 
+    U.resize(mesh->L); 
+    if(flag_source_term){S.resize(mesh->L);}
+    U_center.resize(mesh->L); 
+
+    F.resize(mesh->L);
+    Fm.resize(mesh->L);
+    Fp.resize(mesh->L);
+
+    DF.resize(mesh->L);
+    DFm.resize(mesh->L);
+    DFp.resize(mesh->L);
+
+    Fnum.resize(mesh->L);
+    Fnumm_int.resize(mesh->L);
+    Fnump_int.resize(mesh->L);
+
+    H_w.resize(mesh->L); 
+    H.resize(mesh->L); 
+    H_p.resize(mesh->L);
+    H_m.resize(mesh->L);
+
+    basefunc = std::make_shared<BasisLegendre>();
+    //Number of modes/components of solution decomposition
+    basefunc->set_number_basis();
+
+    //Basis functions d.of. mappers
+
+    //Number of quadrature pts
+
+    //Generation of quadrature pts
+
+    //Init data structure holdin quadrature data
+}
+
+void AmrDG::BasisLegendre::set_number_basis()
+{
+  Print() << "HERE   "<<"\n";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
 
 #include <AMReX_AmrCore.H>
 #include <AMReX_FluxRegister.H>
@@ -18,156 +97,14 @@
 #ifdef AMREX_MEM_PROFILING
 #include <AMReX_MemProfiler.H>
 #endif
+BOUNDARY CONDITIONS
 
-#include <Eigen/Dense>
-#include <Eigen/Core>
-#include <Eigen/SVD>
-
-#include "AmrDG.h"
-#include "ModelEquation.h"
-
-
-using namespace amrex;
-
-//AmrDG class constructor, also initializes the AmrCore class (used for AMR)
-AmrDG::AmrDG(
-              amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo, 
-              amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
-              amrex::Vector<amrex::Vector<int>> _bc_lo_type, 
-              amrex::Vector<amrex::Vector<int>> _bc_hi_type,,
-              , ,
-              int _t_regrid, , //std::string _limiter_type, 
-              //amrex::Real _TVB_M,
-              //amrex::Vector<amrex::Real> _AMR_TVB_C ,
-              //amrex::Vector<amrex::Real> _AMR_curl_C, 
-              //amrex::Vector<amrex::Real> _AMR_div_C,  
-              //amrex::Vector<amrex::Real> _AMR_grad_C, 
-              //amrex::Vector<amrex::Real> _AMR_sec_der_C,
-              //amrex::Real _AMR_sec_der_indicator, 
-              //amrex::Vector<amrex::Real> _AMR_C, 
-              int _t_limit) 
-              
-              :  AmrCore (_rb, _max_level, _n_cell, _coord, _ref_ratios, _is_per)
-{ 
-  /*
-  //I/O settings
-  t_outplt = _t_outplt;
-  
-  //AMR SETTINGS 
-  L = _max_level+1;
-  t_regrid = _t_regrid;
-  t_limit  = _t_limit;
-  AMR_curl_C = _AMR_curl_C;
-  AMR_div_C = _AMR_div_C;
-  AMR_grad_C = _AMR_grad_C;
-  AMR_sec_der_C = _AMR_sec_der_C;
-  AMR_sec_der_indicator = _AMR_sec_der_indicator;
-  AMR_TVB_C = _AMR_TVB_C;
-  AMR_C = _AMR_C;
-  
-  //DG SETTINGS
-  CFL = _CFL;
-  p = _p; 
-  T = _T;
-
-  limiter_type = _limiter_type;
-  TVB_M = _TVB_M;
-  
-  
-  //Print(*ofs) <<"Solving system with:"<<"\n";
-  //Print(*ofs) <<"   total equations   "<<Q<<"\n";
-  //Print(*ofs) <<"   unique equations  "<<Q_unique<<"\n";
-  
-  //number of modes and nodes
-  number_modes();
-  number_quadintpts();
-
-  //Print(*ofs) <<"Np         : "<<Np<<"\n";
-  //Print(*ofs) <<"mNp        : "<<mNp<<"\n";
-  //Print(*ofs) <<"qMp        : "<<qMp<<"\n";
-  //Print(*ofs) <<"qMpbd      : "<<qMpbd<<"\n";
-  //Print(*ofs) <<"qMp_L2proj : "<<qMp_L2proj<<"\n";
-  
-  //Np    : number of modes
-  //mNp   : number of modes for modified basis function
-  //mMp   : number of interpolation nodes (equidistant) related to mNp
-  //qMp   : number of quadrature  points (Gauss-Lobatto distribution) 
-  //mMpbd  : number of interpolation nodes on a boundary (equidistant) related to mNp
-  //qMpbd : number of quadrature points on a boundary (Gauss-Lobatto distribution)
-
-  H_w.resize(L); 
-  H.resize(L); 
+  amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo, 
+  amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
+  amrex::Vector<amrex::Vector<int>> _bc_lo_type, 
+  amrex::Vector<amrex::Vector<int>> _bc_hi_type,,
 
 
-  U_w.resize(L); 
-  U.resize(L); 
-  if(model_pde->flag_source_term){S.resize(L);}
-  U_center.resize(L); 
-  F.resize(L);
-  Fm.resize(L);
-  Fp.resize(L);
-  DF.resize(L);
-  DFm.resize(L);
-  DFp.resize(L);
-  H_p.resize(L);
-  H_m.resize(L);
-  Fnum.resize(L);
-  Fnumm_int.resize(L);
-  Fnump_int.resize(L);
-  
-  idc_curl_K.resize(L);
-  idc_div_K.resize(L);
-  idc_grad_K.resize(L);
-  
-  //basis functions d.o.f mapper
-  mat_idx_s.resize(Np, amrex::Vector<int>(AMREX_SPACEDIM));
-  mat_idx_st.resize(mNp, amrex::Vector<int>(AMREX_SPACEDIM+1));  
-  PhiIdxGenerator_s();
-  PhiIdxGenerator_st();
-
-  //Gaussian quadrature
-  xi_ref_GLquad_s.resize( (int)std::pow(qMp_1d,AMREX_SPACEDIM),
-                  amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
-                  
-  xi_ref_GLquad_t.resize(qMp_1d,amrex::Vector<amrex::Real> (1)); 
-  xi_ref_equidistant.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
-  xi_ref_GLquad.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
-  xi_ref_GLquad_L2proj.resize(qMp_L2proj,amrex::Vector<amrex::Real> (AMREX_SPACEDIM)); 
-  xi_ref_GLquad_bdm.resize(AMREX_SPACEDIM,
-                    amrex::Vector<amrex::Vector<amrex::Real>> (qMpbd,
-                    amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));                    
-  xi_ref_GLquad_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>> (qMpbd,
-                    amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
-  volquadmat.resize(Np,amrex::Vector<amrex::Real>(qMp));  
-  L2proj_quadmat.resize(Np,amrex::Vector<amrex::Real>(qMp_L2proj));  
-  GenerateQuadPts();
-
-  //Initialize generalized Vandermonde matrix (only volume, no boudnary version)
-  //and their inverse
-  V.resize(qMp,amrex::Vector<amrex::Real> (mNp)); 
-  Vinv.resize(mNp,amrex::Vector<amrex::Real> (qMp));
-  VandermondeMat();
-  InvVandermondeMat();
-  
-  //Element matrices for ADER-DG corrector
-  Mk_corr.resize(Np,amrex::Vector<amrex::Real>(Np));
-  Sk_corr.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(Np,
-          amrex::Vector<amrex::Real>(qMp)));
-  Mkbd.resize((int)(2*AMREX_SPACEDIM), amrex::Vector<amrex::Vector<amrex::Real>>(Np,
-          amrex::Vector<amrex::Real>(qMpbd)));
-  
-  //Element matrices for predictor evolution
-  Mk_h_w.resize(mNp,amrex::Vector<amrex::Real>(mNp));
-  Mk_h_w_inv.resize(mNp,amrex::Vector<amrex::Real>(mNp));
-  Mk_pred.resize(mNp,amrex::Vector<amrex::Real>(Np));  
-  Sk_pred.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(mNp,
-            amrex::Vector<amrex::Real>(mNp)));
-  Mk_s.resize(mNp,amrex::Vector<amrex::Real>(mNp));
-  Sk_predVinv.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(mNp,
-            amrex::Vector<amrex::Real>(qMp)));
-  Mk_sVinv.resize(mNp,amrex::Vector<amrex::Real>(qMp));
-  MatrixGenerator();
-  
   //Amrex boundary data
   bc_w.resize(Q,amrex::Vector<amrex::BCRec>(Np));
   for(int q=0; q<Q; ++q){
@@ -183,13 +120,13 @@ AmrDG::AmrDG(
   //AmrDG boundary data
   bc_lo_type.resize(Q);
   bc_hi_type.resize(Q);
-  
+
   gDbc_lo.resize(Q);
   gDbc_hi.resize(Q);
-  
+
   gNbc_lo.resize(Q);
   gNbc_hi.resize(Q);
-  
+
   for(int q=0; q<Q; ++q){
     bc_lo_type[q].resize(AMREX_SPACEDIM);
     bc_hi_type[q].resize(AMREX_SPACEDIM);
@@ -211,26 +148,64 @@ AmrDG::AmrDG(
         gNbc_hi[q][d] =gNeumann_bc(d,1,q);             
     }
   }
+
+///////////////////////////////////////////////////////////////////////
+LIMITING AND REFINING ADVANCED
+
+  //std::string _limiter_type, 
+  //amrex::Real _TVB_M,
+  //amrex::Vector<amrex::Real> _AMR_TVB_C ,
+  //amrex::Vector<amrex::Real> _AMR_curl_C, 
+  //amrex::Vector<amrex::Real> _AMR_div_C,  
+  //amrex::Vector<amrex::Real> _AMR_grad_C, 
+  //amrex::Vector<amrex::Real> _AMR_sec_der_C,
+  //amrex::Real _AMR_sec_der_indicator, 
+  //amrex::Vector<amrex::Real> _AMR_C, 
+  int _t_limit
+
+  t_limit  = _t_limit;
+  AMR_curl_C = _AMR_curl_C;
+  AMR_div_C = _AMR_div_C;
+  AMR_grad_C = _AMR_grad_C;
+  AMR_sec_der_C = _AMR_sec_der_C;
+  AMR_sec_der_indicator = _AMR_sec_der_indicator;
+  AMR_TVB_C = _AMR_TVB_C;
+  AMR_C = _AMR_C;
   
+    limiter_type = _limiter_type;
+  TVB_M = _TVB_M;
+
+  idc_curl_K.resize(L);
+  idc_div_K.resize(L);
+  idc_grad_K.resize(L);
+
+///////////////////////////////////////////////////////////////////////
+AMR
+  int _t_regrid, , 
+ t_regrid = _t_regrid;
+
+   //Refinement parameters fine tuning
+  AMR_settings_tune();
+
+
+///////////////////////////////////////////////////////////////////////
+Mesh Interpolation
+
+
   //Interpolation coarse<->fine data scatter/gather
   custom_interp.getouterref(this); 
   custom_interp.interp_proj_mat();
   
-  //Refinement parameters fine tuning
-  AMR_settings_tune();
-
-  */
-}
+*/
+//AmrDG class constructor, also initializes the AmrCore class (used for AMR)
+/*
+AmrDG::AmrDG(){}
 
 AmrDG::~AmrDG() {}
 
 //initialize multilevel mesh, geometry, Box array and DistributionMap
 void AmrDG::Init()
 {
-  
-  //Print(*ofs) <<"AmrDG::Init()"<<"\n";  
-  const Real time = 0.0;
-  InitFromScratch(time);
 }
 
 // Make a new level from scratch using provided BoxArray and DistributionMapping.
@@ -569,7 +544,7 @@ void AmrDG::AverageFineToCoarseFlux(int lev)
     } 
   }
 }
-
+*/
 /*
 void AmrDG::AMR_settings_tune()
 {

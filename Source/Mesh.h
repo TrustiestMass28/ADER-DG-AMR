@@ -37,7 +37,7 @@ class Mesh : public amrex::AmrCore
     public:
         Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
             int _coord, Vector<IntVect> const& _ref_ratios,  
-            Array<int,AMREX_SPACEDIM> const& _is_per, int _L = 1, int _dtn_regrid = 0, 
+            Array<int,AMREX_SPACEDIM> const& _is_per, int _dtn_regrid = 0, 
             int _dt_regrid = 0, int _nghost= 1);
 
         ~Mesh() = default;   
@@ -95,11 +95,11 @@ class Mesh : public amrex::AmrCore
 template <typename NumericalMethodType>
 Mesh<NumericalMethodType>::Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
             int _coord, Vector<IntVect> const& _ref_ratios,  
-            Array<int,AMREX_SPACEDIM> const& _is_per, int _L, int _dtn_regrid , 
+            Array<int,AMREX_SPACEDIM> const& _is_per, int _dtn_regrid , 
             int _dt_regrid,int _nghost) 
     :  AmrCore (_rb, _max_level, _n_cell, _coord, _ref_ratios, _is_per) 
 {
-    L = _L;
+    L = _max_level+1;
     dtn_regrid = _dtn_regrid;
     dt_regrid = _dt_regrid;
     nghost= _nghost;
@@ -138,5 +138,90 @@ void Mesh<NumericalMethodType>::ErrorEst (int lev, amrex::TagBoxArray& tags,
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::ClearLevel (int lev) {}
 
+/*
+
+ADAPTIVE MESH REFINEMENT (GEOMETRY BASED OPERATIONS)
+    //AMR settings 
+
+
+
+
+    void FillPatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
+    
+    void FillCoarsePatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
+    
+    void GetData (int lev, int q, Real time, Vector<MultiFab*>& data, Vector<Real>& datatime);
+    
+    void AverageFineToCoarse();    
+    
+    void AverageFineToCoarseFlux(int lev);
+    
+    void FillPatchGhostFC(int lev,amrex::Real time,int q);
+
+    //AMR refinement and limiting
+    void AMR_settings_tune();
+
+AMR INTERPOLATOR
+
+
+ 
+    //AMR Coarse>->Fine projection custom implementation
+    class DGprojInterp : public Interpolater
+    {
+      public:
+        
+        Box CoarseBox (const Box& fine, int ratio) override;
+        
+        Box CoarseBox (const Box& fine, const IntVect& ratio) override;
+            
+        void interp (const FArrayBox& crse, int crse_comp,FArrayBox& fine,
+                    int  fine_comp,int ncomp, const Box& fine_region, 
+                    const IntVect&   ratio, const Geometry& crse_geom, 
+                    const Geometry& fine_geom,Vector<BCRec> const& bcr,
+                    int actual_comp,int actual_state, RunOn runon) override;
+                           
+        void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
+                        int fcomp, Array4<Real const> const& crse, int ccomp, 
+                        int ncomp, IntVect const& ratio) noexcept;
+                                            
+        void average_down(const MultiFab& S_fine, MultiFab& S_crse,
+                         int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
+                         const int lev_coarse, int d=0, bool flag_flux=false);
+                  
+        void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
+                        Array4<Real const> const& fine,int ccomp, 
+                        int fcomp, IntVect const& ratio) noexcept;
+                     
+        //void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
+        //                                  Array4<Real const> const& fine,int ccomp, 
+        //                                  int fcomp, IntVect const& ratio) noexcept;                               
+        void getouterref(AmrDG* _amrdg);  
+        
+        void interp_proj_mat();
+        
+        void average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
+                                      int scomp, int ncomp, const IntVect& ratio, 
+                                      const int lev_fine, const int lev_coarse, 
+                                      int d, bool flag_flux);
+                                      
+         void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
+                                          Array4<Real> const& fine,int ccomp, 
+                                          int fcomp, IntVect const& ratio) noexcept;
+
+      //amrex::Real RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
+
+      private:     
+        friend class NumericalMethod;
+          
+        AmrDG* amrdg;     
+        
+        amrex::Vector<amrex::Vector<int >> amr_projmat_int;
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_scatter;
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_gather;        
+    };
+
+
+
+*/
 
 #endif 
