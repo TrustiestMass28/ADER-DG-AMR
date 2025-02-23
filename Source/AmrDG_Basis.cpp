@@ -7,18 +7,31 @@
 
 using namespace amrex;
 
-/*
 void AmrDG::BasisLegendre::set_number_basis()
 {
-  Print() << "HERE   "<<"\n";
-}*/
+  Np_s = (int)((amrex::Real)factorial(numme->p+AMREX_SPACEDIM)
+        /((amrex::Real)factorial(numme->p)*(amrex::Real)factorial(AMREX_SPACEDIM)));
+
+  Np_st = (int)((amrex::Real)factorial(numme->p+AMREX_SPACEDIM+1)
+        /((amrex::Real)factorial(numme->p)*(amrex::Real)factorial(AMREX_SPACEDIM+1)));
+
+  Np_t = Np_st-Np_s;
+}
+
+int AmrDG::BasisLegendre::factorial(int n)  const
+{
+  if (n == 0 || n == 1){
+    return 1;
+  } 
+  else{
+    return n * factorial(n - 1);
+  }
+}
+
 /*
 void AmrDG::number_modes()
 {
-  Np = (int)((amrex::Real)factorial(p+AMREX_SPACEDIM)
-        /((amrex::Real)factorial(p)*(amrex::Real)factorial(AMREX_SPACEDIM)));
-  mNp = (int)((amrex::Real)factorial(p+AMREX_SPACEDIM+1)
-        /((amrex::Real)factorial(p)*(amrex::Real)factorial(AMREX_SPACEDIM+1)));
+
 }
 
 void AmrDG::number_quadintpts()
@@ -405,13 +418,4 @@ void AmrDG::NewtonRhapson(amrex::Real& x, int n)
   }
 }
 
-int AmrDG::factorial(int n)  const
-{
-  if (n == 0 || n == 1){
-    return 1;
-  } 
-  else{
-    return n * factorial(n - 1);
-  }
-}
 */

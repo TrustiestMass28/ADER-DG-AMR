@@ -82,11 +82,12 @@ class Solver
 
         //General class for numerical methods that use basis decomposition of the solution
         //can maange spatial,temporal and mixed basis functions
+        //TODO: use CRTP
         class Basis{
             public:
                 Basis() = default;
 
-                ~Basis() = default;
+                ~Basis();
 
                 //Spatial basis function, evaluated at x
                 //NB: dim(x) = AMREX_SPACEDIM
@@ -142,6 +143,11 @@ class Solver
                 //Set spatio-temporal basis functions Phi(x,t) index mapping
                 amrex::Vector<amrex::Vector<int>> basis_idx_st;
 
+                void setNumericalMethod(NumericalMethodType* _numme);
+
+            protected:
+
+                NumericalMethodType* numme;
 
         };
 
@@ -208,10 +214,8 @@ class Solver
 
                 //  int qMp_L2proj; //number of quadrature points only in space, used for the BCs,ICs,
         };
-        
 
     protected:
-
         std::shared_ptr<std::ofstream> ofs;
 
         std::shared_ptr<Mesh<NumericalMethodType>> mesh;
@@ -364,5 +368,16 @@ void Solver<NumericalMethodType>::set_init_data_component(int lev,const BoxArray
 
 }
 
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::Basis::setNumericalMethod(NumericalMethodType* _numme)
+{
+    numme = _numme;
+}
+
+template <typename NumericalMethodType>
+Solver<NumericalMethodType>::Basis::~Basis()
+{
+    delete numme;
+}
 
 #endif 
