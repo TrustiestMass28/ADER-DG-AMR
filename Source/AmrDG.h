@@ -14,6 +14,7 @@
 #include <AMReX_Interpolater.H>
 
 #include "Solver.h"
+#include "Mesh.h"
 
 using namespace amrex;
 
@@ -29,11 +30,11 @@ class AmrDG : public Solver<AmrDG>
       T = _T;
     }
 
-    void init(){ std::cout << "HERE" << std::endl;}
+    void init();
 
-    //void set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
-    //                          const DistributionMapping& dm, int q);
-
+    void set_init_data_system(int lev,const BoxArray& ba,
+                              const DistributionMapping& dm);
+    
     class BasisLegendre : public Basis
     {
       public:
@@ -41,24 +42,121 @@ class AmrDG : public Solver<AmrDG>
 
         ~BasisLegendre() = default;
         //amrex::Vector<int> basis_idx_linear; //used for limiting
+
+        void set_number_basis() override;
     };
-
+      
   private:
-      //ADER predictor vector U(x,t) 
-      amrex::Vector<amrex::Vector<amrex::MultiFab>> H;
 
-      //ADER Modal/Nodal predictor vector H_w
-      amrex::Vector<amrex::Vector<amrex::MultiFab>> H_w;
+    int factorial(int n) const;
 
-      //ADER predictor vector U(x,t) evaluated at boundary plus (+) b+
-      amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_p;
+    int KroneckerDelta(int a, int b) const;
 
-      //ADER predictor vector U(x,t) evaluated at boundary minus (-) b-
-      amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_m;
+    void NewtonRhapson(amrex::Real &x, int n); 
+
+    //ADER predictor vector U(x,t) 
+    amrex::Vector<amrex::Vector<amrex::MultiFab>> H;
+
+    //ADER Modal/Nodal predictor vector H_w
+    amrex::Vector<amrex::Vector<amrex::MultiFab>> H_w;
+
+    //ADER predictor vector U(x,t) evaluated at boundary plus (+) b+
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_p;
+
+    //ADER predictor vector U(x,t) evaluated at boundary minus (-) b-
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_m;
+
+    std::shared_ptr<BasisLegendre> basefunc;  //TODO:maybe doe snot need to be shared
 };
+
+
 /*
-void AmrDG::set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
-                                  const DistributionMapping& dm, int q)
+///////////////////////////////////////////////////////////////////////
+DG/SOLVER
+
+
+    number_modes();
+  number_quadintpts();
+
+    
+  //Print(*ofs) <<"Solving system with:"<<"\n";
+  //Print(*ofs) <<"   total equations   "<<Q<<"\n";
+  //Print(*ofs) <<"   unique equations  "<<Q_unique<<"\n";
+
+  //Print(*ofs) <<"Np         : "<<Np<<"\n";
+  //Print(*ofs) <<"mNp        : "<<mNp<<"\n";
+  //Print(*ofs) <<"qMp        : "<<qMp<<"\n";
+  //Print(*ofs) <<"qMpbd      : "<<qMpbd<<"\n";
+  //Print(*ofs) <<"qMp_L2proj : "<<qMp_L2proj<<"\n";
+  
+  //Np    : number of modes
+  //mNp   : number of modes for modified basis function
+  //mMp   : number of interpolation nodes (equidistant) related to mNp
+  //qMp   : number of quadrature  points (Gauss-Lobatto distribution) 
+  //mMpbd  : number of interpolation nodes on a boundary (equidistant) related to mNp
+  //qMpbd : number of quadrature points on a boundary (Gauss-Lobatto distribution)
+
+
+
+
+    //basis functions d.o.f mapper
+  mat_idx_s.resize(Np, amrex::Vector<int>(AMREX_SPACEDIM));
+  mat_idx_st.resize(mNp, amrex::Vector<int>(AMREX_SPACEDIM+1));  
+  PhiIdxGenerator_s();
+  PhiIdxGenerator_st();
+
+
+  
+  //Gaussian quadrature
+  xi_ref_GLquad_s.resize( (int)std::pow(qMp_1d,AMREX_SPACEDIM),
+                  amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
+                  
+  xi_ref_GLquad_t.resize(qMp_1d,amrex::Vector<amrex::Real> (1)); 
+  xi_ref_equidistant.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
+  xi_ref_GLquad.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
+  xi_ref_GLquad_L2proj.resize(qMp_L2proj,amrex::Vector<amrex::Real> (AMREX_SPACEDIM)); 
+  xi_ref_GLquad_bdm.resize(AMREX_SPACEDIM,
+                    amrex::Vector<amrex::Vector<amrex::Real>> (qMpbd,
+                    amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));                    
+  xi_ref_GLquad_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>> (qMpbd,
+                    amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
+  volquadmat.resize(Np,amrex::Vector<amrex::Real>(qMp));  
+  L2proj_quadmat.resize(Np,amrex::Vector<amrex::Real>(qMp_L2proj));  
+  GenerateQuadPts();
+
+  //Initialize generalized Vandermonde matrix (only volume, no boudnary version)
+  //and their inverse
+  V.resize(qMp,amrex::Vector<amrex::Real> (mNp)); 
+  Vinv.resize(mNp,amrex::Vector<amrex::Real> (qMp));
+  VandermondeMat();
+  InvVandermondeMat();
+
+
+    //Element matrices for ADER-DG corrector
+  Mk_corr.resize(Np,amrex::Vector<amrex::Real>(Np));
+  Sk_corr.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(Np,
+          amrex::Vector<amrex::Real>(qMp)));
+  Mkbd.resize((int)(2*AMREX_SPACEDIM), amrex::Vector<amrex::Vector<amrex::Real>>(Np,
+          amrex::Vector<amrex::Real>(qMpbd)));
+  
+  //Element matrices for predictor evolution
+  Mk_h_w.resize(mNp,amrex::Vector<amrex::Real>(mNp));
+  Mk_h_w_inv.resize(mNp,amrex::Vector<amrex::Real>(mNp));
+  Mk_pred.resize(mNp,amrex::Vector<amrex::Real>(Np));  
+  Sk_pred.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(mNp,
+            amrex::Vector<amrex::Real>(mNp)));
+  Mk_s.resize(mNp,amrex::Vector<amrex::Real>(mNp));
+  Sk_predVinv.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(mNp,
+            amrex::Vector<amrex::Real>(qMp)));
+  Mk_sVinv.resize(mNp,amrex::Vector<amrex::Real>(qMp));
+  MatrixGenerator();
+
+*/
+
+
+/*
+void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
+                                  const DistributionMapping& dm)
 {
   H_w[lev].resize(Q); 
   H[lev].resize(Q);  
@@ -71,93 +169,14 @@ void AmrDG::set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
   } 
 }
 */
-/*
-SOLVER
-    //DG settings
-             
-ADAPTIVE MESH REFINEMENT (GEOMETRY BASED OPERATIONS)
-    //AMR settings 
 
 
 
 
-    void FillPatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
-    
-    void FillCoarsePatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
-    
-    void GetData (int lev, int q, Real time, Vector<MultiFab*>& data, Vector<Real>& datatime);
-    
-    void AverageFineToCoarse();    
-    
-    void AverageFineToCoarseFlux(int lev);
-    
-    void FillPatchGhostFC(int lev,amrex::Real time,int q);
-
-    //AMR refinement and limiting
-    void AMR_settings_tune();
-
-AMR INTERPOLATOR
-
-
- 
-    //AMR Coarse>->Fine projection custom implementation
-    class DGprojInterp : public Interpolater
-    {
-      public:
-        
-        Box CoarseBox (const Box& fine, int ratio) override;
-        
-        Box CoarseBox (const Box& fine, const IntVect& ratio) override;
-            
-        void interp (const FArrayBox& crse, int crse_comp,FArrayBox& fine,
-                    int  fine_comp,int ncomp, const Box& fine_region, 
-                    const IntVect&   ratio, const Geometry& crse_geom, 
-                    const Geometry& fine_geom,Vector<BCRec> const& bcr,
-                    int actual_comp,int actual_state, RunOn runon) override;
-                           
-        void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
-                        int fcomp, Array4<Real const> const& crse, int ccomp, 
-                        int ncomp, IntVect const& ratio) noexcept;
-                                            
-        void average_down(const MultiFab& S_fine, MultiFab& S_crse,
-                         int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
-                         const int lev_coarse, int d=0, bool flag_flux=false);
-                  
-        void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
-                        Array4<Real const> const& fine,int ccomp, 
-                        int fcomp, IntVect const& ratio) noexcept;
-                     
-        //void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-        //                                  Array4<Real const> const& fine,int ccomp, 
-        //                                  int fcomp, IntVect const& ratio) noexcept;                               
-        void getouterref(AmrDG* _amrdg);  
-        
-        void interp_proj_mat();
-        
-        void average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
-                                      int scomp, int ncomp, const IntVect& ratio, 
-                                      const int lev_fine, const int lev_coarse, 
-                                      int d, bool flag_flux);
-                                      
-         void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-                                          Array4<Real> const& fine,int ccomp, 
-                                          int fcomp, IntVect const& ratio) noexcept;
-
-      //amrex::Real RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
-
-      private:     
-        friend class NumericalMethod;
-          
-        AmrDG* amrdg;     
-        
-        amrex::Vector<amrex::Vector<int >> amr_projmat_int;
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_scatter;
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_gather;        
-    };
 
 
 
-*/
+
 /*
 class AmrDG : public amrex::AmrCore, public NumericalMethod
 {
@@ -180,25 +199,17 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
           //amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
           , int _t_limit);
 
+///////////////////////////////////////////////////////////////////////////
+    //DG 
+    //Initial Conditions, and level initialization
+    void InitialCondition(int lev);
     
-    //Element Matrix and Quadrature Matrix
+    amrex::Real Initial_Condition_U_w(int lev,int q,int n,int i,int j,int k) const;
     
-    amrex::Real RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
-    
-    amrex::Real RefBDMat_phiphi(int i,int j, int dim, int xi_bd) const;
-    
-    amrex::Real RefMat_phiDphi(int i,int j, int dim) const;   
-    
-    amrex::Real RefMat_tphitphi(int i,int j) const;
-    
-    amrex::Real RefMat_tphiDtphi(int i,int j) const;
-      
-    amrex::Real Coefficient_c(int k,int l) const;     
+    amrex::Real Initial_Condition_U(int lev,int q,int i,int j,int k,
+                                    amrex::Vector<amrex::Real> xi) const;
  
-    
-
-    
-    //Modal expansion
+      //Modal expansion
     void get_U_from_U_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                         amrex::Vector<amrex::MultiFab>* U_ptr,
                         amrex::Vector<amrex::Real> xi, bool is_predictor);
@@ -213,52 +224,69 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
                         amrex::Vector<amrex::Array4< amrex::Real>>* u ,
                         amrex::Vector<amrex::Real> xi);      
   
+                                      
+///////////////////////////////////////////////////////////////////////////
+    //Element Matrix and Quadrature Matrix
+    amrex::Real RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
     
-    //MISC
-    int factorial(int n) const;
+    amrex::Real RefBDMat_phiphi(int i,int j, int dim, int xi_bd) const;
+    
+    amrex::Real RefMat_phiDphi(int i,int j, int dim) const;   
+    
+    amrex::Real RefMat_tphitphi(int i,int j) const;
+    
+    amrex::Real RefMat_tphiDtphi(int i,int j) const;
+      
+    amrex::Real Coefficient_c(int k,int l) const;     
+    
+    
+    //Element Matrix and Quadrature Matrix
+    void MatrixGenerator();
+
+
+
+
+    
+    //Multifabs vectors (LxDxQ or LxQ)
+    //L:  max number of levels
+    //D:  dimensions
+    //Q:  number of solution components
+    
+
         
-    int KroneckerDelta(int a, int b) const;
+
+
+    //Element (analytical) Matrices and Quadrature matrices
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr;
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_corr;
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbd;
     
-    void NewtonRhapson(amrex::Real &x, int n); 
+
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w;
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w_inv;
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred;
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_pred;
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_predVinv;
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_s;   
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_sVinv;
+
+      amrex::Vector<amrex::Vector<amrex::Real>> volquadmat;
+   
+
+  
     
-    amrex::Real minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
-                        bool &troubled_flag, int l) const;
-    
-    amrex::Real minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
-                        bool &troubled_flag) const;  
-                        
+///////////////////////////////////////////////////////////////////////////
+//BOUNDARY CODNITION
+
               
     amrex::Vector<amrex::Vector<amrex::Real>> gDbc_lo;
     amrex::Vector<amrex::Vector<amrex::Real>> gDbc_hi;
 
     amrex::Vector<amrex::Vector<amrex::Real>> gNbc_lo;
     amrex::Vector<amrex::Vector<amrex::Real>> gNbc_hi;
-    
 
-  
-  private: 
-  
 
-        
-   
-    
-    //Element Matrix and Quadrature Matrix
-    void MatrixGenerator();
-    
-
-    
-
-    
-    //Initial Conditions, and level initialization
-    void InitialCondition(int lev);
-    
-    amrex::Real Initial_Condition_U_w(int lev,int q,int n,int i,int j,int k) const;
-    
-    amrex::Real Initial_Condition_U(int lev,int q,int i,int j,int k,
-                                    amrex::Vector<amrex::Real> xi) const;
-    
-   
-    
+      
     //Boundary Conditions
     void FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev);
     
@@ -266,81 +294,42 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     
     amrex::Real gNeumann_bc(int d, int side, int q) const;
 
+//Boundary Conditions
+    amrex::Vector<amrex::Vector<amrex::BCRec>> bc_w; 
+    amrex::Vector<amrex::Vector<int>> bc_lo_type;
+    amrex::Vector<amrex::Vector<int>> bc_hi_type;
+     
+    class BoundaryCondition
+    {
+      public: 
+        BoundaryCondition(AmrDG* _amrdg, int _q, int _lev);
+                        
+        virtual ~BoundaryCondition();
+        
+        void operator() (const IntVect& iv, Array4<Real> const& dest,
+                        const int dcomp, const int numcomp,
+                        GeometryData const& geom, const Real time,
+                        const BCRec* bcr, const int bcomp,
+                        const int orig_comp) const;
+                       
+      private:
+        int boundary_lo_type[AMREX_SPACEDIM];
+        int boundary_hi_type[AMREX_SPACEDIM];
+        AmrDG* amrdg;
+        int q;
+        int lev;
+    };
+///////////////////////////////////////////////////////////////////////////
+//LIMTIING/TAGGING
 
-    
-    //ADER-DG    
-    void ADER();
-    
-    void ComputeDt();
-    
-    void Predictor_set(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-                      amrex::Vector<amrex::MultiFab>* H_w_ptr);
-                      
-    void Update_H_w(int lev, int q);
-    
-    void Update_U_w(int lev, int q);
-    
-  
-    
-    //Non-linear fluxes, Numerical fluxes
-                                                
-    void Flux(int lev,int d, int M, 
-              amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-              amrex::Vector<amrex::MultiFab>* U_ptr,
-              amrex::Vector<amrex::MultiFab>* F_ptr,
-              amrex::Vector<amrex::MultiFab>* DF_ptr,
-              amrex::Vector<amrex::Vector<amrex::Real>> xi,
-              bool flag_bd, bool is_predictor);
-              
-    void Source(int lev,int M,
-                amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-                amrex::Vector<amrex::MultiFab>* U_ptr,
-                amrex::Vector<amrex::MultiFab>* S_ptr,
-                amrex::Vector<amrex::Vector<amrex::Real>> xi, 
-                bool is_predictor);
-              
-    void InterfaceNumFlux(int lev,int d,int M, 
-                          amrex::Vector<amrex::MultiFab>* U_ptr_m, 
-                          amrex::Vector<amrex::MultiFab>* U_ptr_p);
-    
-    void InterfaceNumFlux_integrate(int lev,int d,int M);
-                                      
-    amrex::Real NumericalFlux(int d, int m,int i, int j, int k, 
-                              amrex::Array4<const amrex::Real> up, 
-                              amrex::Array4<const amrex::Real> um, 
-                              amrex::Array4<const amrex::Real> fp,
-                              amrex::Array4<const amrex::Real> fm,  
-                              amrex::Array4<const amrex::Real> dfp,
-                              amrex::Array4<const amrex::Real> dfm);
-                              
-    amrex::Real PhysicalFlux(int lev, int d,int q, int m, int i, int j, int k,
-                            amrex::Vector<amrex::Array4<const amrex::Real>>* u,                             
-                            amrex::Vector<amrex::Real> xi);
-                            
-    amrex::Real DPhysicalFlux(int lev, int d,int q, int m, int i, int j, int k,
-                            amrex::Vector<amrex::Array4<const amrex::Real>>* u,                             
-                            amrex::Vector<amrex::Real> xi);
-                              
-    amrex::Real PhysicalSource(int lev,int q, int m, int i, int j, int k,
-                              amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                              amrex::Vector<amrex::Real> xi);
 
 
     
-    //I/O and MISC
-    void NormDG();//TODO:
+    amrex::Real minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
+                        bool &troubled_flag, int l) const;
     
-    void PlotFile(int tstep, amrex::Real time) const;
-    
-    void L1Norm_DG_AMR();
-
-    void L2Norm_DG_AMR();   
-    
-    void LpNorm_DG_AMR(int _p, amrex::Vector<amrex::Vector<amrex::Real>> quad_pt, int N) const;
-    
-    void DEBUG_print_MFab();
-    
-    void Conservation(int lev, int M, amrex::Vector<amrex::Vector<amrex::Real>> xi, int d);
+    amrex::Real minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
+                        bool &troubled_flag) const;  
 
 
     void Limiter_w(int lev); //, amrex::TagBoxArray& tags, char tagval
@@ -410,62 +399,87 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
     
     amrex::Real TVB_M;
     amrex::Vector<amrex::Real> AMR_TVB_C;
+///////////////////////////////////////////////////////////////////////////
 
-    
-    //Multifabs vectors (LxDxQ or LxQ)
-    //L:  max number of levels
-    //D:  dimensions
-    //Q:  number of solution components
-    
-
-        
-
-
-    //Element (analytical) Matrices and Quadrature matrices
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_corr;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbd;
-    
-
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w;
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w_inv;
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_pred;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_predVinv;
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_s;   
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_sVinv;
-
-      amrex::Vector<amrex::Vector<amrex::Real>> volquadmat;
-   
 
   
-    
-    //Boundary Conditions
-    amrex::Vector<amrex::Vector<amrex::BCRec>> bc_w; 
-    amrex::Vector<amrex::Vector<int>> bc_lo_type;
-    amrex::Vector<amrex::Vector<int>> bc_hi_type;
-     
-    class BoundaryCondition
-    {
-      public: 
-        BoundaryCondition(AmrDG* _amrdg, int _q, int _lev);
-                        
-        virtual ~BoundaryCondition();
-        
-        void operator() (const IntVect& iv, Array4<Real> const& dest,
-                        const int dcomp, const int numcomp,
-                        GeometryData const& geom, const Real time,
-                        const BCRec* bcr, const int bcomp,
-                        const int orig_comp) const;
-                       
-      private:
-        int boundary_lo_type[AMREX_SPACEDIM];
-        int boundary_hi_type[AMREX_SPACEDIM];
-        AmrDG* amrdg;
-        int q;
-        int lev;
-    };
+  private: 
+
+
    
+
+    
+    //ADER-DG    
+    void ADER();
+    
+    void ComputeDt();
+    
+    void Predictor_set(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                      amrex::Vector<amrex::MultiFab>* H_w_ptr);
+                      
+    void Update_H_w(int lev, int q);
+    
+    void Update_U_w(int lev, int q);
+    
+  
+    
+    //Non-linear fluxes, Numerical fluxes
+                                                
+    void Flux(int lev,int d, int M, 
+              amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+              amrex::Vector<amrex::MultiFab>* U_ptr,
+              amrex::Vector<amrex::MultiFab>* F_ptr,
+              amrex::Vector<amrex::MultiFab>* DF_ptr,
+              amrex::Vector<amrex::Vector<amrex::Real>> xi,
+              bool flag_bd, bool is_predictor);
+              
+    void Source(int lev,int M,
+                amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                amrex::Vector<amrex::MultiFab>* U_ptr,
+                amrex::Vector<amrex::MultiFab>* S_ptr,
+                amrex::Vector<amrex::Vector<amrex::Real>> xi, 
+                bool is_predictor);
+              
+    void InterfaceNumFlux(int lev,int d,int M, 
+                          amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+                          amrex::Vector<amrex::MultiFab>* U_ptr_p);
+    
+    void InterfaceNumFlux_integrate(int lev,int d,int M);
+                                      
+    amrex::Real NumericalFlux(int d, int m,int i, int j, int k, 
+                              amrex::Array4<const amrex::Real> up, 
+                              amrex::Array4<const amrex::Real> um, 
+                              amrex::Array4<const amrex::Real> fp,
+                              amrex::Array4<const amrex::Real> fm,  
+                              amrex::Array4<const amrex::Real> dfp,
+                              amrex::Array4<const amrex::Real> dfm);
+                              
+    amrex::Real PhysicalFlux(int lev, int d,int q, int m, int i, int j, int k,
+                            amrex::Vector<amrex::Array4<const amrex::Real>>* u,                             
+                            amrex::Vector<amrex::Real> xi);
+                            
+    amrex::Real DPhysicalFlux(int lev, int d,int q, int m, int i, int j, int k,
+                            amrex::Vector<amrex::Array4<const amrex::Real>>* u,                             
+                            amrex::Vector<amrex::Real> xi);
+                              
+    amrex::Real PhysicalSource(int lev,int q, int m, int i, int j, int k,
+                              amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                              amrex::Vector<amrex::Real> xi);
+
+    //I/O and MISC
+    void NormDG();//TODO:
+    
+    void PlotFile(int tstep, amrex::Real time) const;
+    
+    void L1Norm_DG_AMR();
+
+    void L2Norm_DG_AMR();   
+    
+    void LpNorm_DG_AMR(int _p, amrex::Vector<amrex::Vector<amrex::Real>> quad_pt, int N) const;
+    
+    void DEBUG_print_MFab();
+    
+    void Conservation(int lev, int M, amrex::Vector<amrex::Vector<amrex::Real>> xi, int d);
 };
    
 extern AMREX_EXPORT AmrDG::DGprojInterp custom_interp;

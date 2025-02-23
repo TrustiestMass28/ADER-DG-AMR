@@ -1,20 +1,18 @@
-#include <AMReX_ParallelDescriptor.H>
-#include <AMReX_ParmParse.H>
-#include <AMReX_MultiFab.H>
-#include <AMReX_MultiFabUtil.H>
-#include <AMReX_FillPatchUtil.H>
-#include <AMReX_PlotFileUtil.H>
-#include <AMReX_VisMF.H>
-#include <AMReX_PhysBCFunct.H>
-#include <AMReX_Print.H>
-#include <cmath>
-#include <math.h>
-#ifdef AMREX_MEM_PROFILING
-#include <AMReX_MemProfiler.H>
-#endif
+#include <Eigen/Dense>
+#include <Eigen/Core>
+#include <Eigen/SVD>
 
 #include "AmrDG.h"
 
+
+using namespace amrex;
+
+/*
+void AmrDG::BasisLegendre::set_number_basis()
+{
+  Print() << "HERE   "<<"\n";
+}*/
+/*
 void AmrDG::number_modes()
 {
   Np = (int)((amrex::Real)factorial(p+AMREX_SPACEDIM)
@@ -416,3 +414,4 @@ int AmrDG::factorial(int n)  const
     return n * factorial(n - 1);
   }
 }
+*/
