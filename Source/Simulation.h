@@ -52,7 +52,7 @@ class Simulation
 
     std::shared_ptr<Solver<NumericalMethodType>> solver;
 
-    std::shared_ptr<Mesh> mesh;
+    std::shared_ptr<Mesh<NumericalMethodType>> mesh;
 
     //I/O 
     int dtn_outplt;   //data output time-steps interval
@@ -98,7 +98,7 @@ void Simulation<NumericalMethodType,EquationType>::setGeometrySettings(const Rea
                                                                       int L , int dtn_regrid , 
                                                                       int dt_regrid ,int nghost)
 {
-  mesh = std::make_shared<Mesh>(_rb,_max_level,_n_cell,_coord,_ref_ratios,_is_per,
+  mesh = std::make_shared<Mesh<NumericalMethodType>>(_rb,_max_level,_n_cell,_coord,_ref_ratios,_is_per,
                     L, dtn_regrid, dt_regrid, nghost);   
 } 
 

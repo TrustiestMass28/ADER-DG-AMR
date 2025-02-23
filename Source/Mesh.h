@@ -28,6 +28,10 @@
 
 using namespace amrex;
 
+template <typename NumericalMethodType>
+class Solver;
+
+template <typename NumericalMethodType>
 class Mesh : public amrex::AmrCore
 {
     public:
@@ -78,9 +82,14 @@ class Mesh : public amrex::AmrCore
 
         //Number of ghost cells
         int nghost= 1;    
+
+    protected:
+
+        std::shared_ptr<Solver<NumericalMethodType>> solver;       
 };
 
-Mesh::Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
+template <typename NumericalMethodType>
+Mesh<NumericalMethodType>::Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
             int _coord, Vector<IntVect> const& _ref_ratios,  
             Array<int,AMREX_SPACEDIM> const& _is_per, int _L, int _dtn_regrid , 
             int _dt_regrid,int _nghost) 
@@ -92,21 +101,26 @@ Mesh::Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell,
     nghost= _nghost;
 }
 
-void Mesh::MakeNewLevelFromScratch(int lev, amrex::Real time, 
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::MakeNewLevelFromScratch(int lev, amrex::Real time, 
                                     const amrex::BoxArray& ba,
                                     const amrex::DistributionMapping& dm) {}
 
-void Mesh::MakeNewLevelFromCoarse(int lev, amrex::Real time,
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::MakeNewLevelFromCoarse(int lev, amrex::Real time,
                                     const amrex::BoxArray& ba, 
                                     const amrex::DistributionMapping& dm) {}
 
-void Mesh::RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
                         const amrex::DistributionMapping& dm) {}
 
-void Mesh::ErrorEst (int lev, amrex::TagBoxArray& tags, 
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::ErrorEst (int lev, amrex::TagBoxArray& tags, 
                     amrex::Real time, int ngrow) {}
 
-void Mesh::ClearLevel (int lev) {}
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::ClearLevel (int lev) {}
 
 
 #endif 
