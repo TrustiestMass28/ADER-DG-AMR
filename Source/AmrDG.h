@@ -31,8 +31,8 @@ class AmrDG : public Solver<AmrDG>
 
     void init(){ std::cout << "HERE" << std::endl;}
 
-    void set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
-                              const DistributionMapping& dm, int q);
+    //void set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
+    //                          const DistributionMapping& dm, int q);
 
     class BasisLegendre : public Basis
     {
@@ -56,10 +56,10 @@ class AmrDG : public Solver<AmrDG>
       //ADER predictor vector U(x,t) evaluated at boundary minus (-) b-
       amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_m;
 };
-
+/*
 void AmrDG::set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
                                   const DistributionMapping& dm, int q)
-{/*
+{
   H_w[lev].resize(Q); 
   H[lev].resize(Q);  
   H_p[lev].resize(AMREX_SPACEDIM);
@@ -68,9 +68,9 @@ void AmrDG::set_init_data_system(Mesh* mesh, int lev,const BoxArray& ba,
   for(int d=0; d<AMREX_SPACEDIM; ++d){
     H_p[lev][d].resize(Q);
     H_m[lev][d].resize(Q);
-  } */
+  } 
 }
-
+*/
 /*
 SOLVER
     //DG settings

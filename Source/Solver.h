@@ -20,6 +20,7 @@
 #include <AMReX_MemProfiler.H>
 #endif
 
+template <typename NumericalMethodType>
 class Mesh;
 
 using namespace amrex;
@@ -42,7 +43,7 @@ class Solver
         //TODO: pass all tempaltes of other classes from which Solver might need data to init
         //like stuff from geometry for number of levels,...
         template <typename EquationType>
-        void init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh> mesh);
+        void init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> mesh);
 
         //execute simulation (time-stepping and possible AMR operations)
         void evolve();
@@ -65,7 +66,7 @@ class Solver
         //sometimes IC is for modes/weights, other for actual sol vector
         //depending on num method it will call 
         void set_initial_condition();
-
+        /*
         //declare and init data structures holding system equation 
         void set_init_data_system(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba,
                                     const DistributionMapping& dm);
@@ -73,7 +74,7 @@ class Solver
         //declare and init data structures holding single equation 
         void set_init_data_component(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba, 
                                         const DistributionMapping& dm, int q);
-
+        */
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
         }
@@ -282,18 +283,19 @@ class Solver
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh> mesh) {
+void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> mesh) {
     Q = model_pde->Q_model;
     Q_unique = model_pde->Q_model_unique;
 
     static_cast<NumericalMethodType*>(this)->init();
 }
 
+/*
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::set_init_data_system(std::shared_ptr<Mesh> mesh, int lev,const BoxArray& ba,
                                                         const DistributionMapping& dm)
 {
-    /*
+    
     //Init data structures for level for all solution components of the system
     U_w[lev].resize(Q); 
     U[lev].resize(Q);
@@ -324,7 +326,7 @@ void Solver<NumericalMethodType>::set_init_data_system(std::shared_ptr<Mesh> mes
 
     //NumericalMethod specific data structure initialization (e.g additional)
     static_cast<NumericalMethodType*>(this)->set_init_data_system(mesh, lev, ba, dm, q);
-    */
+    
 
 }
 
@@ -334,6 +336,6 @@ void Solver<NumericalMethodType>::set_init_data_component(std::shared_ptr<Mesh> 
 {
 
 }
-
+*/
 
 #endif 
