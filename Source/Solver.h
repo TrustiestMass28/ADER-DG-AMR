@@ -43,7 +43,7 @@ class Solver
         //TODO: pass all tempaltes of other classes from which Solver might need data to init
         //like stuff from geometry for number of levels,...
         template <typename EquationType>
-        void init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> mesh);
+        void init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
         //execute simulation (time-stepping and possible AMR operations)
         void evolve();
@@ -213,6 +213,8 @@ class Solver
 
         std::shared_ptr<std::ofstream> ofs;
 
+        std::shared_ptr<Mesh<NumericalMethodType>> mesh;
+
         //number of equations of the system
         int Q; 
 
@@ -279,15 +281,26 @@ class Solver
         //Source/Sink term S(x,t)
         amrex::Vector<amrex::Vector<amrex::MultiFab>> S;
 
+    private:
+    
+        void setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
+
 };
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> mesh) {
+void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh) {
     Q = model_pde->Q_model;
     Q_unique = model_pde->Q_model_unique;
 
+
     static_cast<NumericalMethodType*>(this)->init();
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh)
+{
+    mesh = _mesh;
 }
 
 /*
