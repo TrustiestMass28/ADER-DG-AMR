@@ -6,15 +6,14 @@ CEXE_headers += ModelEquation.h
 CEXE_headers += Solver.h
 CEXE_headers += Mesh.h
 
-
 CEXE_headers += AmrDG.h
 CEXE_headers += Compressible_Euler.h
 
 CEXE_sources += AmrDG.cpp 
 CEXE_sources += AmrDG_Basis.cpp 
+CEXE_sources += AmrDG_Quadrature.cpp 
+CEXE_sources += AmrDG_ElementMatrix.cpp 
 
-
-#CEXE_sources += AmrDG_ElementMatrix.cpp 
 #CEXE_sources += AmrDG_Flux.cpp 
 #CEXE_sources += AmrDG_BC.cpp 
 #CEXE_sources += AmrDG_IC.cpp 

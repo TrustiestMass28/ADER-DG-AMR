@@ -8,82 +8,105 @@ using namespace amrex;
 
 void AmrDG::init()
 {
-    //Set vectors size
-    U_w.resize(mesh->L); 
-    U.resize(mesh->L); 
-    if(flag_source_term){S.resize(mesh->L);}
-    U_center.resize(mesh->L); 
+  //Set vectors size
+  U_w.resize(mesh->L); 
+  U.resize(mesh->L); 
+  if(flag_source_term){S.resize(mesh->L);}
+  U_center.resize(mesh->L); 
 
-    F.resize(mesh->L);
-    Fm.resize(mesh->L);
-    Fp.resize(mesh->L);
+  F.resize(mesh->L);
+  Fm.resize(mesh->L);
+  Fp.resize(mesh->L);
 
-    DF.resize(mesh->L);
-    DFm.resize(mesh->L);
-    DFp.resize(mesh->L);
+  DF.resize(mesh->L);
+  DFm.resize(mesh->L);
+  DFp.resize(mesh->L);
 
-    Fnum.resize(mesh->L);
-    Fnumm_int.resize(mesh->L);
-    Fnump_int.resize(mesh->L);
+  Fnum.resize(mesh->L);
+  Fnumm_int.resize(mesh->L);
+  Fnump_int.resize(mesh->L);
 
-    H_w.resize(mesh->L); 
-    H.resize(mesh->L); 
-    H_p.resize(mesh->L);
-    H_m.resize(mesh->L);
-
-
-    //Basis function
-    basefunc = std::make_shared<BasisLegendre>();
-
-    basefunc->setNumericalMethod(this);
-
-    //Number of modes/components of solution decomposition
-    basefunc->set_number_basis();
-
-    //basis functions d.o.f idx mapper
-    basefunc->basis_idx_s.resize(basefunc->Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
-    basefunc->basis_idx_st.resize(basefunc->Np_st, amrex::Vector<int>(AMREX_SPACEDIM+1));  
-
-    basefunc->set_idx_mapping_s();
-    basefunc->set_idx_mapping_st();
+  H_w.resize(mesh->L); 
+  H.resize(mesh->L); 
+  H_p.resize(mesh->L);
+  H_m.resize(mesh->L);
 
 
+  //Basis function
+  basefunc = std::make_shared<BasisLegendre>();
 
+  basefunc->setNumericalMethod(this);
 
+  //Number of modes/components of solution decomposition
+  basefunc->set_number_basis();
 
-    //Number of quadrature pts
+  //basis functions d.o.f idx mapper
+  basefunc->basis_idx_s.resize(basefunc->Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
+  basefunc->basis_idx_st.resize(basefunc->Np_st, amrex::Vector<int>(AMREX_SPACEDIM+1));  
 
-    //Generation of quadrature pts
+  basefunc->set_idx_mapping_s();
+  basefunc->set_idx_mapping_st();
 
-    //Init data structure holdin quadrature data
+  //Set-up quadrature rule
+  quadrule = std::make_shared<QuadratureGaussLegendre>();
+
+  //Number of quadrature pts
+  quadrule->set_number_quadpoints();
+
+  //Init data structure holdin quadrature data
+  quadrule->xi_ref_quad_s.resize(quadrule->qMp_s,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
+  quadrule->xi_ref_quad_t.resize(quadrule->qMp_t,amrex::Vector<amrex::Real> (1)); 
+  quadrule->xi_ref_quad_st.resize(quadrule->qMp_st,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
+  quadrule->xi_ref_quad_st_bdm.resize(AMREX_SPACEDIM,
+                            amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_st_bd,
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));                    
+  quadrule->xi_ref_quad_st_bdp.resize(AMREX_SPACEDIM,
+                            amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_st_bd,
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
+
+  //xi_ref_equidistant.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)); 
+
+  //Generation of quadrature pts
+  quadrule->set_quadpoints();
+
+  //Initialize generalized Vandermonde matrix (only volume, no boudnary version)
+  //and their inverse
+  V.resize(quadrule->qMp_st,amrex::Vector<amrex::Real> (basefunc->Np_st)); 
+  Vinv.resize(basefunc->Np_st,amrex::Vector<amrex::Real> (quadrule->qMp_st));
+
+  //Initialize L2 projeciton quadrature matrix
+  quadmat.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(quadrule->qMp_s));  
+
+  //Initialize generalized Element matrices for ADER-DG corrector
+  Mk_corr.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(basefunc->Np_s));
+  Sk_corr.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
+                amrex::Vector<amrex::Real>(quadrule->qMp_st)));
+  Mkbd.resize((int)(2*AMREX_SPACEDIM), amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
+                amrex::Vector<amrex::Real>(quadrule->qMp_st_bd)));
+  Mk_corr_src.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(quadrule->qMp_st));  
+
+  //Initialize generalized Element matrices for ADER predictor
+  Mk_h_w.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
+  Mk_h_w_inv.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
+  Mk_pred.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_s));  
+  Sk_pred.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_st,
+                  amrex::Vector<amrex::Real>(basefunc->Np_st)));
+  Mk_pred_src.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
+
+  Sk_predVinv.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_st,
+                      amrex::Vector<amrex::Real>(quadrule->qMp_st)));
+  Mk_pred_srcVinv.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(quadrule->qMp_st));
+
+  //Construct system matrices
+  set_vandermat();
+  set_inv_vandermat();
+  set_ref_element_matrix();
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+AmrDG::~AmrDG(){
+  //delete basefunc;
+  //delete quadrule;
+}
 
 /*
 
@@ -206,12 +229,9 @@ Mesh Interpolation
   custom_interp.interp_proj_mat();
   
 */
-//AmrDG class constructor, also initializes the AmrCore class (used for AMR)
+
+
 /*
-AmrDG::AmrDG(){}
-
-AmrDG::~AmrDG() {}
-
 //initialize multilevel mesh, geometry, Box array and DistributionMap
 void AmrDG::Init()
 {
