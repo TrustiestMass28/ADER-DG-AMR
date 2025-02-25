@@ -92,8 +92,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     //Vandermonde matrix for mapping modes<->quadrature points
     void set_vandermat();
 
-    void set_inv_vandermat();
-
     //Element Matrix and Quadrature Matrix
     void set_ref_element_matrix();
 

@@ -99,7 +99,7 @@ void AmrDG::init()
 
   //Construct system matrices
   set_vandermat();
-  set_inv_vandermat();
+
   set_ref_element_matrix();
 }
 
