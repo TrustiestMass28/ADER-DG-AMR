@@ -187,23 +187,7 @@ void AmrDG::set_ref_element_matrix()
   }  
 }
 
-amrex::Real AmrDG::refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const {return 0.0;}
-
-amrex::Real AmrDG::refBDMat_phiphi(int i,int j, int dim, int xi_bd) const {return 0.0;}
-
-amrex::Real AmrDG::refMat_phiDphi(int i,int j, int dim) const {return 0.0;}
-
-amrex::Real AmrDG::refMat_tphitphi(int i,int j) const {return 0.0;}
-
-amrex::Real AmrDG::refMat_tphiDtphi(int i,int j) const {return 0.0;}
-
-/*
-void AmrDG::MatrixGenerator()
-{
-
-}
-
-Real AmrDG::RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const 
+amrex::Real AmrDG::refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const 
 {
   //computes M_{ji}=\int_{[-1,1]^D} \phi_i*\phi_j dx
   amrex::Real m= 1.0;
@@ -216,8 +200,8 @@ Real AmrDG::RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) 
       //utilizes indexing of modified basis function and of classic basis function, 
       //used in predictor U_w term
       for(int d=0; d<AMREX_SPACEDIM; ++d){
-        m*=(amrex::Real)KroneckerDelta(mat_idx_s[i][d],mat_idx_st[j][d])
-            *(2.0/(2.0*(amrex::Real)mat_idx_st[j][d]+1.0));
+        m*=(amrex::Real)kroneckerDelta(basefunc->basis_idx_s[i][d],basefunc->basis_idx_st[j][d])
+            *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_st[j][d]+1.0));
       }     
     }
     else
@@ -226,8 +210,8 @@ Real AmrDG::RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) 
       //(which are a tensor product of 1d Legendre polynomials)
       //utilizes indexing of modified basis function
       for(int d=0; d<AMREX_SPACEDIM; ++d){
-        m*=(amrex::Real)KroneckerDelta(mat_idx_st[i][d],mat_idx_st[j][d])
-            *(2.0/(2.0*(amrex::Real)mat_idx_st[j][d]+1.0));
+        m*=(amrex::Real)kroneckerDelta(basefunc->basis_idx_st[i][d],basefunc->basis_idx_st[j][d])
+            *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_st[j][d]+1.0));
       } 
     }
   }
@@ -237,64 +221,16 @@ Real AmrDG::RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) 
     //(which are a tensor product of 1d Legendre polynomials)
     //utilizes indexing of classic basis fucntion 
     for(int d=0; d<AMREX_SPACEDIM; ++d){
-      m*=(amrex::Real)KroneckerDelta(mat_idx_s[i][d],mat_idx_s[j][d])
-          *(2.0/(2.0*(amrex::Real)mat_idx_s[j][d]+1.0));
+      m*=(amrex::Real)kroneckerDelta(basefunc->basis_idx_s[i][d],basefunc->basis_idx_s[j][d])
+          *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_s[j][d]+1.0));
     }
   }
 
   return m;
 }
 
-Real AmrDG::RefMat_tphitphi(int i,int j) const
+amrex::Real AmrDG::refMat_phiDphi(int i,int j, int dim) const 
 {
-  //computes t_M_{ji}=\int_{[-1,1]^D} P_i*P_j dx
-  //compute mass matrix for integral of temporal only basis functions
-  //currently we use also for time Legendre polynomials, but in theory 
-  //the reference integral of any
-  //basis function can be implemented here
-  //index[-1] indicates time coordinate
-  
-  return (amrex::Real)KroneckerDelta(mat_idx_st[i][AMREX_SPACEDIM],
-          mat_idx_st[j][AMREX_SPACEDIM])
-          *(2.0/(2.0*(amrex::Real)mat_idx_st[j][AMREX_SPACEDIM]+1.0));
-
-}
-
-Real AmrDG::RefMat_tphiDtphi(int i,int j) const
-{
-  //computes Sd_{ji}=\int_{[-1,1]^D} P_i(t)*d/dt P_j(t) dt
-  
-  ////computes the integral using analytical form
-  //amrex::Real m2= 0.0;
-  //amrex::Real m3= 0.0;
-  
-  //int l = mat_idx_st[i][AMREX_SPACEDIM]+1;
-  //for(int k=0; k<=l; ++k){
-  //  m2+=Coefficient_c(k,l)*(amrex::Real)KroneckerDelta(mat_idx_st[j][AMREX_SPACEDIM],k)
-  //      *(2.0/(2.0*(amrex::Real)k+1.0));
-  //}
-  //m2*=0.5;
-
-  //m3 = 0.5*(amrex::Real)l*((amrex::Real)l-1.0)*(2.0/(2.0*(amrex::Real)l+1.0))
-  //    *(amrex::Real)KroneckerDelta(mat_idx_st[j][AMREX_SPACEDIM],l);
-  
-  //return (m2+m3);
-  
- 
-  //computes the integral using gaussian quadrature
-  int N = qMp_1d;
-  amrex::Real w;
-  amrex::Real tphiDtphi=0.0;
-  for(int q=0; q<N;++q){  
-    w = 1.0;
-    w*=2.0/(amrex::Real)std::pow((amrex::Real)std::assoc_legendre(N,1,xi_ref_GLquad_t[q][0]),2.0);
-    tphiDtphi+=(tphi(j, xi_ref_GLquad_t[q][0])*Dtphi(i, xi_ref_GLquad_t[q][0])*w);  
-  }
-  return tphiDtphi;
-}
-
-Real AmrDG::RefMat_phiDphi(int i,int j, int dim) const
-{ 
   //computes Sd_{ji}=\int_{[-1,1]^D} \phi_i*d/dx_d \phi_j dx
   
   //computes the integral using analytical form
@@ -324,40 +260,87 @@ Real AmrDG::RefMat_phiDphi(int i,int j, int dim) const
   
   //
   //computes the integral using gaussian quadrature
-  int N = qMp_1d;
+  int N = quadrule->qMp_1d;
   amrex::Real w;
   amrex::Real sum=0.0;
   for(int q=0; q<(int)std::pow(N,AMREX_SPACEDIM);++q){  
     w = 1.0;
-    amrex::Real phi = 1.0;
+    amrex::Real phi = 1.0; 
     for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-      phi*=std::legendre(mat_idx_st[j][d], xi_ref_GLquad_s[q][d]);
+      phi*=std::legendre(basefunc->basis_idx_st[j][d], quadrule->xi_ref_quad_s[q][d]);
     }
     
     amrex::Real dphi = 1.0;
     for  (int a = 0; a < AMREX_SPACEDIM; ++a){
       if(a!=dim)
       {
-        dphi*=std::legendre(mat_idx_st[i][a], xi_ref_GLquad_s[q][a]);
+        dphi*=std::legendre(basefunc->basis_idx_st[i][a], quadrule->xi_ref_quad_s[q][a]);
       }
       else
       {
-        dphi*=(std::assoc_legendre(mat_idx_st[i][dim],1,xi_ref_GLquad_s[q][dim]))
-            /(std::sqrt(1.0-std::pow(xi_ref_GLquad_s[q][dim],2.0)));
+        dphi*=(std::assoc_legendre(basefunc->basis_idx_st[i][dim],1,quadrule->xi_ref_quad_s[q][dim]))
+            /(std::sqrt(1.0-std::pow(quadrule->xi_ref_quad_s[q][dim],2.0)));
       }   
     }
     
     for(int d=0; d<AMREX_SPACEDIM; ++d){
-      w*=2.0/std::pow(std::assoc_legendre(N,1,xi_ref_GLquad_s[q][d]),2.0);
+      w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_s[q][d]),2.0);
     }
     sum+=(phi*dphi*w);   
   }
 
   return sum; 
-  //
 }
 
-int AmrDG::KroneckerDelta(int a, int b) const
+amrex::Real AmrDG::refMat_tphitphi(int i,int j) const 
+{
+  //computes t_M_{ji}=\int_{[-1,1]^D} P_i*P_j dx
+  //compute mass matrix for integral of temporal only basis functions
+  //currently we use also for time Legendre polynomials, but in theory 
+  //the reference integral of any
+  //basis function can be implemented here
+  //index[-1] indicates time coordinate
+  
+  return (amrex::Real)kroneckerDelta(basefunc->basis_idx_st[i][AMREX_SPACEDIM],
+    basefunc->basis_idx_st[j][AMREX_SPACEDIM])
+    *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_st[j][AMREX_SPACEDIM]+1.0));
+}
+
+amrex::Real AmrDG::refMat_tphiDtphi(int i,int j) const 
+{
+  //computes Sd_{ji}=\int_{[-1,1]^D} P_i(t)*d/dt P_j(t) dt
+  
+  ////computes the integral using analytical form
+  //amrex::Real m2= 0.0;
+  //amrex::Real m3= 0.0;
+  
+  //int l = mat_idx_st[i][AMREX_SPACEDIM]+1;
+  //for(int k=0; k<=l; ++k){
+  //  m2+=Coefficient_c(k,l)*(amrex::Real)KroneckerDelta(mat_idx_st[j][AMREX_SPACEDIM],k)
+  //      *(2.0/(2.0*(amrex::Real)k+1.0));
+  //}
+  //m2*=0.5;
+
+  //m3 = 0.5*(amrex::Real)l*((amrex::Real)l-1.0)*(2.0/(2.0*(amrex::Real)l+1.0))
+  //    *(amrex::Real)KroneckerDelta(mat_idx_st[j][AMREX_SPACEDIM],l);
+  
+  //return (m2+m3);
+  
+ 
+  //computes the integral using gaussian quadrature
+  int N = quadrule->qMp_1d;
+  amrex::Real w;
+  amrex::Real tphiDtphi=0.0;
+  for(int q=0; q<N;++q){  
+    w = 1.0;
+    w*=2.0/(amrex::Real)std::pow((amrex::Real)std::assoc_legendre(N,1,basefunc->basis_idx_t[q][0]),2.0);
+    tphiDtphi+=(basefunc->phi_t(j, basefunc->basis_idx_t[q][0])*basefunc->dtphi_t(i, basefunc->basis_idx_t[q][0])*w);  
+  }
+  return tphiDtphi;
+  
+}
+
+int AmrDG::kroneckerDelta(int a, int b) const
 {
   int k;
   if(a==b){k=1;}
@@ -365,7 +348,7 @@ int AmrDG::KroneckerDelta(int a, int b) const
   return k;
 }
 
-Real AmrDG::Coefficient_c(int k,int l) const
+Real AmrDG::coefficient_c(int k,int l) const
 { 
   if(k==l)
   {
@@ -376,5 +359,14 @@ Real AmrDG::Coefficient_c(int k,int l) const
     return (2.0*(amrex::Real)k+1.0)*(1.0+std::pow(-1.0,k+l));
   }  
 }
+
+/*
+
+Real AmrDG::RefMat_phiDphi(int i,int j, int dim) const
+{ 
+
+  //
+}
+
 
 */

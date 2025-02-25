@@ -97,8 +97,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     amrex::Real refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
 
-    amrex::Real refBDMat_phiphi(int i,int j, int dim, int xi_bd) const;
-    
     amrex::Real refMat_phiDphi(int i,int j, int dim) const;   
     
     amrex::Real refMat_tphitphi(int i,int j) const;

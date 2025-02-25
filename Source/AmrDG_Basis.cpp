@@ -191,7 +191,7 @@ amrex::Real AmrDG::BasisLegendre::phi_st(int idx, const amrex::Vector<amrex::Vec
 {
   amrex::Real mphi = phi_s(idx,basis_idx_st,x);
   mphi*=phi_t(idx,x[AMREX_SPACEDIM]);
-
+  
   return mphi;
 }
 
