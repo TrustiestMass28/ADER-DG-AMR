@@ -167,24 +167,14 @@ class Solver
             public:
                 Quadrature() = default;
 
-                ~Quadrature() = default;
+                ~Quadrature();
 
                 //Set number of quadrature points (should be func of order p)
-                void set_number_quadpoints();
+                virtual void set_number_quadpoints() {};
 
                 //Generate the quadrature points
-                void set_quadpoints();
+                virtual void set_quadpoints() {};
 
-                //Vandermonde matrix for mapping modes<->quadrature points
-                void set_vandermat();
-
-                void set_inv_vandermat();
-
-                //Vandermonde matrix
-                amrex::Vector<amrex::Vector<amrex::Real>> V;
-                //  inverse
-                amrex::Vector<amrex::Vector<amrex::Real>> Vinv;   
-                
                 //Interpolation nodes/quadrature points
                 //  for spatial basis functions
                 amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_s;
@@ -225,7 +215,13 @@ class Solver
                 int qMp_st_bd;     
 
                 //  int qMp_L2proj; //number of quadrature points only in space, used for the BCs,ICs,
-        };
+
+                void setNumericalMethod(NumericalMethodType* _numme);
+                
+                protected:
+                    //Ptr used to access numerical method and solver data
+                    NumericalMethodType* numme;
+            };
 
     protected:
         std::shared_ptr<std::ofstream> ofs;
@@ -391,5 +387,18 @@ Solver<NumericalMethodType>::Basis::~Basis()
 {
     delete numme;
 }
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::Quadrature::setNumericalMethod(NumericalMethodType* _numme)
+{
+    numme = _numme;
+}
+
+template <typename NumericalMethodType>
+Solver<NumericalMethodType>::Quadrature::~Quadrature()
+{
+    delete numme;
+}
+
 
 #endif 

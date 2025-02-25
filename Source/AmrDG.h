@@ -23,7 +23,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
   public:
     AmrDG()  = default;
 
-    ~AmrDG() = default;
+    ~AmrDG();
 
     void settings(int _p, amrex::Real _T) {
       p = _p;
@@ -72,12 +72,78 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         amrex::Vector<int> basis_idx_linear; //used for limiting
     };
+
+    class QuadratureGaussLegendre : public Quadrature
+    {
+      public:
+        QuadratureGaussLegendre() = default;
+
+        ~QuadratureGaussLegendre() = default;
+
+        void set_number_quadpoints() override; 
+
+        void set_quadpoints() override;
+
+        void NewtonRhapson(amrex::Real &x, int n); 
+    };
       
   private:
 
-    int KroneckerDelta(int a, int b) const;
+    //Vandermonde matrix for mapping modes<->quadrature points
+    void set_vandermat();
 
-    void NewtonRhapson(amrex::Real &x, int n); 
+    void set_inv_vandermat();
+
+    //Element Matrix and Quadrature Matrix
+    void set_ref_element_matrix();
+
+    amrex::Real refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
+
+    amrex::Real refBDMat_phiphi(int i,int j, int dim, int xi_bd) const;
+    
+    amrex::Real refMat_phiDphi(int i,int j, int dim) const;   
+    
+    amrex::Real refMat_tphitphi(int i,int j) const;
+    
+    amrex::Real refMat_tphiDtphi(int i,int j) const;
+      
+    amrex::Real coefficient_c(int k,int l) const;     
+
+    int kroneckerDelta(int a, int b) const;
+
+    
+    //Vandermonde matrix
+    amrex::Vector<amrex::Vector<amrex::Real>> V;
+    //  inverse
+    amrex::Vector<amrex::Vector<amrex::Real>> Vinv;   
+
+    //L2 projection quadrature matrix
+    amrex::Vector<amrex::Vector<amrex::Real>> quadmat;
+
+    //Mass element matrix for ADER-DG corrector
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr;
+    
+    //Stiffness element matrix for ADER-DG corrector
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_corr;
+
+    //Mass boundary element matrix for ADER-DG corrector and predictor
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbd;
+
+    //Mass element matrix for source term (corrector step)
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr_src;
+
+    //Mass element matrix for ADER predictor
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w;
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w_inv;
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred;
+
+    //Stiffness element matrix for ADER predictor
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_pred;
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_predVinv;
+
+    //Mass element matrix for source term (predictor step)
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred_src;   
+    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred_srcVinv; 
 
     //ADER predictor vector U(x,t) 
     amrex::Vector<amrex::Vector<amrex::MultiFab>> H;
@@ -91,79 +157,15 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     //ADER predictor vector U(x,t) evaluated at boundary minus (-) b-
     amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_m;
 
+    //TODO: mybe nested functions ptr dont need to be shared
+    //      also mabye can use again CRTP and define them genrally inside Solver
+
     std::shared_ptr<BasisLegendre> basefunc;  //TODO:maybe doe snot need to be shared
+
+    std::shared_ptr<QuadratureGaussLegendre> quadrule;  //TODO:maybe doe snot need to be shared
 };
 
-
-/*
-///////////////////////////////////////////////////////////////////////
-DG/SOLVER
-  //Print(*ofs) <<"Solving system with:"<<"\n";
-  //Print(*ofs) <<"   total equations   "<<Q<<"\n";
-  //Print(*ofs) <<"   unique equations  "<<Q_unique<<"\n";
-
-  //Print(*ofs) <<"Np         : "<<Np<<"\n";
-  //Print(*ofs) <<"mNp        : "<<mNp<<"\n";
-  //Print(*ofs) <<"qMp        : "<<qMp<<"\n";
-  //Print(*ofs) <<"qMpbd      : "<<qMpbd<<"\n";
-  //Print(*ofs) <<"qMp_L2proj : "<<qMp_L2proj<<"\n";
-  
-  //Np    : number of modes
-  //mNp   : number of modes for modified basis function
-  //mMp   : number of interpolation nodes (equidistant) related to mNp
-  //qMp   : number of quadrature  points (Gauss-Lobatto distribution) 
-  //mMpbd  : number of interpolation nodes on a boundary (equidistant) related to mNp
-  //qMpbd : number of quadrature points on a boundary (Gauss-Lobatto distribution)
-
-  number_quadintpts();
-  
-  //Gaussian quadrature
-  xi_ref_GLquad_s.resize( (int)std::pow(qMp_1d,AMREX_SPACEDIM),
-                  amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
-                  
-  xi_ref_GLquad_t.resize(qMp_1d,amrex::Vector<amrex::Real> (1)); 
-  xi_ref_equidistant.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
-  xi_ref_GLquad.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
-  xi_ref_GLquad_L2proj.resize(qMp_L2proj,amrex::Vector<amrex::Real> (AMREX_SPACEDIM)); 
-  xi_ref_GLquad_bdm.resize(AMREX_SPACEDIM,
-                    amrex::Vector<amrex::Vector<amrex::Real>> (qMpbd,
-                    amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));                    
-  xi_ref_GLquad_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>> (qMpbd,
-                    amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
-  volquadmat.resize(Np,amrex::Vector<amrex::Real>(qMp));  
-  L2proj_quadmat.resize(Np,amrex::Vector<amrex::Real>(qMp_L2proj));  
-  GenerateQuadPts();
-
-  //Initialize generalized Vandermonde matrix (only volume, no boudnary version)
-  //and their inverse
-  V.resize(qMp,amrex::Vector<amrex::Real> (mNp)); 
-  Vinv.resize(mNp,amrex::Vector<amrex::Real> (qMp));
-  VandermondeMat();
-  InvVandermondeMat();
-
-
-    //Element matrices for ADER-DG corrector
-  Mk_corr.resize(Np,amrex::Vector<amrex::Real>(Np));
-  Sk_corr.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(Np,
-          amrex::Vector<amrex::Real>(qMp)));
-  Mkbd.resize((int)(2*AMREX_SPACEDIM), amrex::Vector<amrex::Vector<amrex::Real>>(Np,
-          amrex::Vector<amrex::Real>(qMpbd)));
-  
-  //Element matrices for predictor evolution
-  Mk_h_w.resize(mNp,amrex::Vector<amrex::Real>(mNp));
-  Mk_h_w_inv.resize(mNp,amrex::Vector<amrex::Real>(mNp));
-  Mk_pred.resize(mNp,amrex::Vector<amrex::Real>(Np));  
-  Sk_pred.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(mNp,
-            amrex::Vector<amrex::Real>(mNp)));
-  Mk_s.resize(mNp,amrex::Vector<amrex::Real>(mNp));
-  Sk_predVinv.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(mNp,
-            amrex::Vector<amrex::Real>(qMp)));
-  Mk_sVinv.resize(mNp,amrex::Vector<amrex::Real>(qMp));
-  MatrixGenerator();
-
-*/
-
-
+///////////////////////////////////////////////////////////////////////////
 /*
 void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
                                   const DistributionMapping& dm)
@@ -179,13 +181,6 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
   } 
 }
 */
-
-
-
-
-
-
-
 
 /*
 class AmrDG : public amrex::AmrCore, public NumericalMethod
@@ -234,57 +229,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
                         amrex::Vector<amrex::Array4< amrex::Real>>* u ,
                         amrex::Vector<amrex::Real> xi);      
   
-                                      
-///////////////////////////////////////////////////////////////////////////
-    //Element Matrix and Quadrature Matrix
-    amrex::Real RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
-    
-    amrex::Real RefBDMat_phiphi(int i,int j, int dim, int xi_bd) const;
-    
-    amrex::Real RefMat_phiDphi(int i,int j, int dim) const;   
-    
-    amrex::Real RefMat_tphitphi(int i,int j) const;
-    
-    amrex::Real RefMat_tphiDtphi(int i,int j) const;
-      
-    amrex::Real Coefficient_c(int k,int l) const;     
-    
-    
-    //Element Matrix and Quadrature Matrix
-    void MatrixGenerator();
-
-
-
-
-    
-    //Multifabs vectors (LxDxQ or LxQ)
-    //L:  max number of levels
-    //D:  dimensions
-    //Q:  number of solution components
-    
-
-        
-
-
-    //Element (analytical) Matrices and Quadrature matrices
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_corr;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbd;
-    
-
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w;
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w_inv;
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_pred;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_predVinv;
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_s;   
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_sVinv;
-
-      amrex::Vector<amrex::Vector<amrex::Real>> volquadmat;
-   
-
-  
-    
+                                    
 ///////////////////////////////////////////////////////////////////////////
 //BOUNDARY CODNITION
 

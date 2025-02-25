@@ -1,23 +1,20 @@
-#include <AMReX_ParallelDescriptor.H>
-#include <AMReX_ParmParse.H>
-#include <AMReX_MultiFab.H>
-#include <AMReX_MultiFabUtil.H>
-#include <AMReX_FillPatchUtil.H>
-#include <AMReX_PlotFileUtil.H>
-#include <AMReX_VisMF.H>
-#include <AMReX_PhysBCFunct.H>
-#include <AMReX_Print.H>
-#include <cmath>
-#include <math.h>
-#ifdef AMREX_MEM_PROFILING
-#include <AMReX_MemProfiler.H>
-#endif
-
 #include "AmrDG.h"
+
 #include <Eigen/Core>
 #include <Eigen/SVD>
 #include <Eigen/Eigenvalues>
 
+void AmrDG::set_vandermat()
+{}
+
+void AmrDG::set_inv_vandermat()
+{}
+
+void AmrDG::set_ref_element_matrix()
+{}
+
+
+/*
 void AmrDG::MatrixGenerator()
 {
   //Generate matrices used for predictor step
@@ -219,23 +216,23 @@ Real AmrDG::RefMat_tphitphi(int i,int j) const
 Real AmrDG::RefMat_tphiDtphi(int i,int j) const
 {
   //computes Sd_{ji}=\int_{[-1,1]^D} P_i(t)*d/dt P_j(t) dt
-  /*
-  //computes the integral using analytical form
-  amrex::Real m2= 0.0;
-  amrex::Real m3= 0.0;
   
-  int l = mat_idx_st[i][AMREX_SPACEDIM]+1;
-  for(int k=0; k<=l; ++k){
-    m2+=Coefficient_c(k,l)*(amrex::Real)KroneckerDelta(mat_idx_st[j][AMREX_SPACEDIM],k)
-        *(2.0/(2.0*(amrex::Real)k+1.0));
-  }
-  m2*=0.5;
+  ////computes the integral using analytical form
+  //amrex::Real m2= 0.0;
+  //amrex::Real m3= 0.0;
+  
+  //int l = mat_idx_st[i][AMREX_SPACEDIM]+1;
+  //for(int k=0; k<=l; ++k){
+  //  m2+=Coefficient_c(k,l)*(amrex::Real)KroneckerDelta(mat_idx_st[j][AMREX_SPACEDIM],k)
+  //      *(2.0/(2.0*(amrex::Real)k+1.0));
+  //}
+  //m2*=0.5;
 
-  m3 = 0.5*(amrex::Real)l*((amrex::Real)l-1.0)*(2.0/(2.0*(amrex::Real)l+1.0))
-      *(amrex::Real)KroneckerDelta(mat_idx_st[j][AMREX_SPACEDIM],l);
+  //m3 = 0.5*(amrex::Real)l*((amrex::Real)l-1.0)*(2.0/(2.0*(amrex::Real)l+1.0))
+  //    *(amrex::Real)KroneckerDelta(mat_idx_st[j][AMREX_SPACEDIM],l);
   
-  return (m2+m3);
-  */
+  //return (m2+m3);
+  
  
   //computes the integral using gaussian quadrature
   int N = qMp_1d;
@@ -252,33 +249,33 @@ Real AmrDG::RefMat_tphiDtphi(int i,int j) const
 Real AmrDG::RefMat_phiDphi(int i,int j, int dim) const
 { 
   //computes Sd_{ji}=\int_{[-1,1]^D} \phi_i*d/dx_d \phi_j dx
-  /*  
+  
   //computes the integral using analytical form
-  amrex::Real m1= 1.0;
-  amrex::Real m2= 0.0;
-  amrex::Real m3= 0.0;
+  //amrex::Real m1= 1.0;
+  //amrex::Real m2= 0.0;
+  //amrex::Real m3= 0.0;
 
-  for(int d=0; d<AMREX_SPACEDIM; ++d){
-    if(d != dim)
-    {
-      m1*=(amrex::Real)KroneckerDelta(mat_idx_st[j][d],mat_idx_st[i][d])
-        *(2.0/(2.0*(amrex::Real)mat_idx_st[i][d]+1.0));
-    }
-  }
+  //for(int d=0; d<AMREX_SPACEDIM; ++d){
+  //  if(d != dim)
+  //  {
+  //    m1*=(amrex::Real)KroneckerDelta(mat_idx_st[j][d],mat_idx_st[i][d])
+  //      *(2.0/(2.0*(amrex::Real)mat_idx_st[i][d]+1.0));
+  //  }
+  //}
   
-  int l = mat_idx_st[i][dim]+1;
-  for(int k=0; k<=l; ++k){
-    m2+=Coefficient_c(k,l)*(amrex::Real)KroneckerDelta(mat_idx_st[j][dim],k)
-      *(2.0/(2.0*(amrex::Real)k+1.0));
-  }
-  m2*=0.5;
+  //int l = mat_idx_st[i][dim]+1;
+  //for(int k=0; k<=l; ++k){
+  //  m2+=Coefficient_c(k,l)*(amrex::Real)KroneckerDelta(mat_idx_st[j][dim],k)
+  //    *(2.0/(2.0*(amrex::Real)k+1.0));
+  //}
+  //m2*=0.5;
 
-  m3 = 0.5*(amrex::Real)l*((amrex::Real)l-1.0)*(2.0/(2.0*(amrex::Real)l+1.0))
-      *(amrex::Real)KroneckerDelta(mat_idx_st[j][dim],l);
+  //m3 = 0.5*(amrex::Real)l*((amrex::Real)l-1.0)*(2.0/(2.0*(amrex::Real)l+1.0))
+  //    *(amrex::Real)KroneckerDelta(mat_idx_st[j][dim],l);
   
-  return m1*(m2+m3);
-  */
-  ///*
+  //return m1*(m2+m3);
+  
+  //
   //computes the integral using gaussian quadrature
   int N = qMp_1d;
   amrex::Real w;
@@ -310,7 +307,7 @@ Real AmrDG::RefMat_phiDphi(int i,int j, int dim) const
   }
 
   return sum; 
-  //*/
+  //
 }
 
 int AmrDG::KroneckerDelta(int a, int b) const
@@ -378,3 +375,4 @@ void AmrDG::InvVandermondeMat()
     }
   }
 }
+*/
