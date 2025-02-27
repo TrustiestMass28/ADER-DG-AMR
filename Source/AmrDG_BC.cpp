@@ -16,6 +16,140 @@
 #include "AmrDG.h"
 #include "ModelEquation.h"
 
+//BOUNDARY CODNITION
+
+              
+
+
+
+
+
+amrex::Vector<amrex::Vector<amrex::Real>> gDbc_lo;
+amrex::Vector<amrex::Vector<amrex::Real>> gDbc_hi;
+
+amrex::Vector<amrex::Vector<amrex::Real>> gNbc_lo;
+amrex::Vector<amrex::Vector<amrex::Real>> gNbc_hi;
+
+
+  
+//Boundary Conditions
+void FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev);
+
+amrex::Real gDirichlet_bc(int d, int side, int q) const;
+
+amrex::Real gNeumann_bc(int d, int side, int q) const;
+
+//Boundary Conditions
+amrex::Vector<amrex::Vector<amrex::BCRec>> bc_w; 
+amrex::Vector<amrex::Vector<int>> bc_lo_type;
+amrex::Vector<amrex::Vector<int>> bc_hi_type;
+ 
+class BoundaryCondition
+{
+  public: 
+    BoundaryCondition();
+
+    virtual ~BoundaryCondition();
+
+    void init(int _q, int _lev);
+    
+    void operator() (const IntVect& iv, Array4<Real> const& dest,
+                    const int dcomp, const int numcomp,
+                    GeometryData const& geom, const Real time,
+                    const BCRec* bcr, const int bcomp,
+                    const int orig_comp) const;
+
+    void setNumericalMethod(NumericalMethodType* _numme);
+
+  protected:
+    //Ptr used to access numerical method and solver data
+    NumericalMethodType* numme;
+
+    //Store type of BC in each dim
+    int boundary_lo_type[AMREX_SPACEDIM];
+    int boundary_hi_type[AMREX_SPACEDIM];¨
+
+    //int q;
+    //int lev;
+};
+
+/*
+FillBoundaryCells
+
+
+*/
+
+//SET THE BC
+AmrDG::BoundaryCondition::BoundaryCondition(AmrDG* _amrdg, int _q, int _lev)
+{
+  //construct AmrDG class boundary nested class object
+  amrdg= _amrdg;
+  q = _q;
+  lev = _lev; 
+  
+  for(int d=0; d<AMREX_SPACEDIM; ++d)
+  {
+    boundary_lo_type[d] = amrdg->bc_lo_type[q][d];
+    boundary_hi_type[d] = amrdg->bc_hi_type[q][d];
+  }
+}
+
+
+/*
+
+  amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo, 
+  amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
+  amrex::Vector<amrex::Vector<int>> _bc_lo_type, 
+  amrex::Vector<amrex::Vector<int>> _bc_hi_type,,
+
+
+  //Amrex boundary data
+  bc_w.resize(Q,amrex::Vector<amrex::BCRec>(Np));
+  for(int q=0; q<Q; ++q){
+    for (int n = 0; n < Np; ++n){
+      for (int d = 0; d < AMREX_SPACEDIM; ++d)
+      {   
+        bc_w[q][n].setLo(d,_bc_lo[q][d]);
+        bc_w[q][n].setHi(d,_bc_hi[q][d]);
+      }
+    }
+  }
+
+  //AmrDG boundary data
+  bc_lo_type.resize(Q);
+  bc_hi_type.resize(Q);
+
+  gDbc_lo.resize(Q);
+  gDbc_hi.resize(Q);
+
+  gNbc_lo.resize(Q);
+  gNbc_hi.resize(Q);
+
+  for(int q=0; q<Q; ++q){
+    bc_lo_type[q].resize(AMREX_SPACEDIM);
+    bc_hi_type[q].resize(AMREX_SPACEDIM);
+    
+    gDbc_lo[q].resize(AMREX_SPACEDIM);
+    gDbc_hi[q].resize(AMREX_SPACEDIM); 
+    
+    gNbc_lo[q].resize(AMREX_SPACEDIM);
+    gNbc_hi[q].resize(AMREX_SPACEDIM);  
+    
+    for(int d=0; d<AMREX_SPACEDIM; ++d){
+        bc_lo_type[q][d] = _bc_lo_type[q][d];
+        bc_hi_type[q][d] = _bc_hi_type[q][d];
+        
+        gDbc_lo[q][d] =gDirichlet_bc(d,-1,q);
+        gDbc_hi[q][d] =gDirichlet_bc(d,1,q);
+        
+        gNbc_lo[q][d] =gNeumann_bc(d,-1,q);
+        gNbc_hi[q][d] =gNeumann_bc(d,1,q);             
+    }
+  }
+
+*/
+
+
 void AmrDG::FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev)
 {
   //applies boundary conditions    
@@ -38,7 +172,7 @@ void AmrDG::FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev)
     }
   } 
 }
-    
+    /*
 AmrDG::BoundaryCondition::BoundaryCondition(AmrDG* _amrdg, int _q, int _lev)
 {
   //construct AmrDG class boundary nested class object
@@ -149,7 +283,7 @@ amrex::Real AmrDG::gNeumann_bc(int d, int side, int q) const
 { 
   return model_pde->pde_BC_gNeumann(d,side,q) ;
 }
-
+*/
 
 
     /*
