@@ -47,7 +47,8 @@ class Solver
         void init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
         //execute simulation (time-stepping and possible AMR operations)
-        void evolve();
+        template <typename EquationType>
+        void evolve(std::shared_ptr<EquationType> model_pde);
 
         //perform a time-step, advance solution by one time-step
         void time_integration();
@@ -66,7 +67,8 @@ class Solver
 
         //sometimes IC is for modes/weights, other for actual sol vector
         //depending on num method it will call 
-        void set_initial_condition();
+        template <typename EquationType>
+        void set_initial_condition(std::shared_ptr<EquationType> model_pde);
         
         //declare and init data structures holding system equation 
         void set_init_data_system(int lev,const BoxArray& ba,
@@ -318,7 +320,7 @@ void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, 
     static_cast<NumericalMethodType*>(this)->init();
 
     const Real time = 0.0;
-    //InitFromScratch(time);    
+    mesh->InitFromScratch(time);    //AmrCore
 }
 
 template <typename NumericalMethodType>
@@ -327,53 +329,33 @@ void Solver<NumericalMethodType>::setMesh(std::shared_ptr<Mesh<NumericalMethodTy
     mesh = _mesh;
 }
 
-
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::set_init_data_system(int lev,const BoxArray& ba,
                                                         const DistributionMapping& dm)
 {
-    
-    //Init data structures for level for all solution components of the system
-    U_w[lev].resize(Q); 
-    U[lev].resize(Q);
-    if(flag_source_term){S[lev].resize(Q);}
-    U_center[lev].resize(Q); 
-    F[lev].resize(AMREX_SPACEDIM);
-    Fm[lev].resize(AMREX_SPACEDIM);
-    Fp[lev].resize(AMREX_SPACEDIM);
-    DF[lev].resize(AMREX_SPACEDIM);
-    DFm[lev].resize(AMREX_SPACEDIM);
-    DFp[lev].resize(AMREX_SPACEDIM);
-  
-    Fnum[lev].resize(AMREX_SPACEDIM);
-    Fnumm_int[lev].resize(AMREX_SPACEDIM);
-    Fnump_int[lev].resize(AMREX_SPACEDIM);
-
-    for(int d=0; d<AMREX_SPACEDIM; ++d){
-      F[lev][d].resize(Q);
-      Fm[lev][d].resize(Q);
-      Fp[lev][d].resize(Q);
-      DF[lev][d].resize(Q);
-      DFm[lev][d].resize(Q);
-      DFp[lev][d].resize(Q);
-      Fnum[lev][d].resize(Q);
-      Fnumm_int[lev][d].resize(Q);
-      Fnump_int[lev][d].resize(Q);
-    }
-
     //NumericalMethod specific data structure initialization (e.g additional)
     //can also clear up Solver data members that arent needed for particular method
     //e.g the numerical fluxes
     static_cast<NumericalMethodType*>(this)->set_init_data_system(lev, ba, dm);
-    
 
+    //init data for each ocmponent of the equation
+    for(int q=0; q<Q; ++q){
+        set_init_data_component(lev,ba,dm, q);
+    }
 }
 
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::set_init_data_component(int lev,const BoxArray& ba, 
                                                         const DistributionMapping& dm, int q)
 {
+    static_cast<NumericalMethodType*>(this)->set_init_data_component(lev, ba, dm, q);
+}
 
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<EquationType> model_pde)
+{
+    
 }
 
 template <typename NumericalMethodType>
@@ -400,5 +382,11 @@ Solver<NumericalMethodType>::Quadrature::~Quadrature()
     delete numme;
 }
 
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::evolve(std::shared_ptr<EquationType> model_pde)
+{
+    static_cast<NumericalMethodType*>(this)->evolve(model_pde); 
+}
 
 #endif 

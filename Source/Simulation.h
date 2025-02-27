@@ -75,6 +75,13 @@ void Simulation<NumericalMethodType,EquationType>::run()
 {
   mesh->init(solver);
   solver->init(model,mesh);
+
+  //set initial conditions and average fine->coarse (after Initfromscartch should avg down)
+  solver->set_initial_condition(model);
+  //TODO:average
+
+  //evolve, pass Model as ptr so we can access its implementation of methods
+  solver->evolve(model);
 }
 
 template <typename NumericalMethodType,typename EquationType>

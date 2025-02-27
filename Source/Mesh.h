@@ -120,7 +120,10 @@ void Mesh<NumericalMethodType>::setSolver(std::shared_ptr<Solver<NumericalMethod
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::MakeNewLevelFromScratch(int lev, amrex::Real time, 
                                     const amrex::BoxArray& ba,
-                                    const amrex::DistributionMapping& dm) {}
+                                    const amrex::DistributionMapping& dm) 
+{
+    solver->set_init_data_system(lev, ba, dm);
+}
 
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::MakeNewLevelFromCoarse(int lev, amrex::Real time,

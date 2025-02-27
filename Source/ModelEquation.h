@@ -152,7 +152,6 @@ class ModelEquation
   protected:
 
     std::shared_ptr<std::ofstream> ofs;
-
 };
 
 #endif 

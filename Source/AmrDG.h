@@ -16,6 +16,7 @@
 #include "Solver.h"
 #include "Mesh.h"
 
+
 using namespace amrex;
 
 class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
@@ -32,8 +33,14 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     void init();
 
+    template <typename EquationType>
+    void evolve(std::shared_ptr<EquationType> model_pde);
+
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
+
+    void set_init_data_component(int lev,const BoxArray& ba,
+                                const DistributionMapping& dm, int q);
     
     class BasisLegendre : public Basis
     {
@@ -44,7 +51,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         void init();
         
-
         void set_number_basis() override;
 
         void set_idx_mapping_s() override;
@@ -161,22 +167,67 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     std::shared_ptr<QuadratureGaussLegendre> quadrule;  //TODO:maybe doe snot need to be shared
 };
 
-///////////////////////////////////////////////////////////////////////////
-/*
-void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
-                                  const DistributionMapping& dm)
-{
-  H_w[lev].resize(Q); 
-  H[lev].resize(Q);  
-  H_p[lev].resize(AMREX_SPACEDIM);
-  H_m[lev].resize(AMREX_SPACEDIM);
 
-  for(int d=0; d<AMREX_SPACEDIM; ++d){
-    H_p[lev][d].resize(Q);
-    H_m[lev][d].resize(Q);
-  } 
-}
+template <typename EquationType>
+void AmrDG::evolve(std::shared_ptr<EquationType> model_pde)
+{
+/*
+  
+  int n=0;
+  amrex::Real t= 0.0;  
+  if(t_outplt>0){PlotFile(0, t);}
+  NormDG();
+  
+  ComputeDt();
+  Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
+  Print(*ofs)<<"------------------------------------------------"<<"\n";
+  
+  //time stepping
+  while(t<T)
+  {  
+    if ((max_level > 0) && (n>0))
+    {
+      if((t_regrid > 0) && (n % t_regrid == 0)){
+        regrid(0, t);
+      }
+    }  
+    
+    Print(*ofs) << "ADER Time Integraton"<< "\n";
+    //advance solution by one time-step.
+    ADER();
+    //limit solution
+    if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
+    //gather valid fine cell solutions U_w into valid coarse cells
+    AverageFineToCoarse();   
+    
+    //prepare data for next time step
+    for(int l=0; l<=finest_level; ++l){
+      for(int q=0; q<Q; ++q){ 
+        //FillPatch(l, t, U_w[l][q], 0, Np,q); 
+        U_w[l][q].FillBoundary(geom[l].periodicity());
+        if(l>0){FillPatchGhostFC(l,0,q);}
+        //FillBoundary will be repeated also for FillPatchGHost, but there there
+        //is not info about periodic BC
+      }
+    }
+    
+    n+=1;
+    t+=dt;
+    Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
+    Print(*ofs)<<"------------------------------------------------"<<"\n";
+    
+    if((t_outplt>0) && (n%t_outplt==0)){PlotFile(n, t);} 
+    
+    ComputeDt();
+    if(T-t<dt){dt = T-t;}    
+    
+  }
+  
+  NormDG();
 */
+}
+///////////////////////////////////////////////////////////////////////////
+
 
 /*
 class AmrDG : public amrex::AmrCore, public NumericalMethod
@@ -227,49 +278,7 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
   
                                     
 ///////////////////////////////////////////////////////////////////////////
-//BOUNDARY CODNITION
 
-              
-    amrex::Vector<amrex::Vector<amrex::Real>> gDbc_lo;
-    amrex::Vector<amrex::Vector<amrex::Real>> gDbc_hi;
-
-    amrex::Vector<amrex::Vector<amrex::Real>> gNbc_lo;
-    amrex::Vector<amrex::Vector<amrex::Real>> gNbc_hi;
-
-
-      
-    //Boundary Conditions
-    void FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev);
-    
-    amrex::Real gDirichlet_bc(int d, int side, int q) const;
-    
-    amrex::Real gNeumann_bc(int d, int side, int q) const;
-
-//Boundary Conditions
-    amrex::Vector<amrex::Vector<amrex::BCRec>> bc_w; 
-    amrex::Vector<amrex::Vector<int>> bc_lo_type;
-    amrex::Vector<amrex::Vector<int>> bc_hi_type;
-     
-    class BoundaryCondition
-    {
-      public: 
-        BoundaryCondition(AmrDG* _amrdg, int _q, int _lev);
-                        
-        virtual ~BoundaryCondition();
-        
-        void operator() (const IntVect& iv, Array4<Real> const& dest,
-                        const int dcomp, const int numcomp,
-                        GeometryData const& geom, const Real time,
-                        const BCRec* bcr, const int bcomp,
-                        const int orig_comp) const;
-                       
-      private:
-        int boundary_lo_type[AMREX_SPACEDIM];
-        int boundary_hi_type[AMREX_SPACEDIM];
-        AmrDG* amrdg;
-        int q;
-        int lev;
-    };
 ///////////////////////////////////////////////////////////////////////////
 //LIMTIING/TAGGING
 

@@ -3,6 +3,7 @@
 #include <Eigen/SVD>
 
 #include "AmrDG.h"
+//#include "ModelEquation.h"
 
 using namespace amrex;
 
@@ -49,6 +50,8 @@ void AmrDG::init()
 
   //Set-up quadrature rule
   quadrule = std::make_shared<QuadratureGaussLegendre>();
+
+  quadrule->setNumericalMethod(this);
 
   //Number of quadrature pts
   quadrule->set_number_quadpoints();
@@ -101,12 +104,126 @@ void AmrDG::init()
   set_vandermat();
 
   set_ref_element_matrix();
+
+  //TODO:Set-up boundary conditions
+
+  //TODO:Set-up mesh interpolation
+
+  //TODO::Set-up limiting
 }
 
 AmrDG::~AmrDG(){
   //delete basefunc;
   //delete quadrule;
 }
+
+void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
+                                  const DistributionMapping& dm)
+{
+  //Init data structures for level for all solution components of the system
+  U_w[lev].resize(Q); 
+  U[lev].resize(Q);
+  if(flag_source_term){S[lev].resize(Q);}
+  U_center[lev].resize(Q); 
+
+  H_w[lev].resize(Q); 
+  H[lev].resize(Q);  
+  H_p[lev].resize(AMREX_SPACEDIM);
+  H_m[lev].resize(AMREX_SPACEDIM);
+
+  F[lev].resize(AMREX_SPACEDIM);
+  Fm[lev].resize(AMREX_SPACEDIM);
+  Fp[lev].resize(AMREX_SPACEDIM);
+  DF[lev].resize(AMREX_SPACEDIM);
+  DFm[lev].resize(AMREX_SPACEDIM);
+  DFp[lev].resize(AMREX_SPACEDIM);
+
+  Fnum[lev].resize(AMREX_SPACEDIM);
+  Fnumm_int[lev].resize(AMREX_SPACEDIM);
+  Fnump_int[lev].resize(AMREX_SPACEDIM);
+
+  for(int d=0; d<AMREX_SPACEDIM; ++d){
+    F[lev][d].resize(Q);
+    Fm[lev][d].resize(Q);
+    Fp[lev][d].resize(Q);
+    DF[lev][d].resize(Q);
+    DFm[lev][d].resize(Q);
+    DFp[lev][d].resize(Q);
+    Fnum[lev][d].resize(Q);
+    Fnumm_int[lev][d].resize(Q);
+    Fnump_int[lev][d].resize(Q);
+
+    H_p[lev][d].resize(Q);
+    H_m[lev][d].resize(Q);
+  }
+}
+
+//Init data for given level for specific solution component
+void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
+                                    const DistributionMapping& dm, int q)
+{
+  H_w[lev][q].define(ba, dm, basefunc->Np_st, mesh->nghost);
+  H_w[lev][q].setVal(0.0);
+  H[lev][q].define(ba, dm, quadrule->qMp_st, mesh->nghost);
+  H[lev][q].setVal(0.0);
+  
+  U_w[lev][q].define(ba, dm, basefunc->Np_s, mesh->nghost);
+  U_w[lev][q].setVal(0.0);
+
+  U[lev][q].define(ba, dm, quadrule->qMp_st, mesh->nghost);
+  U[lev][q].setVal(0.0);
+
+
+  U_center[lev][q].define(ba, dm, 1, mesh->nghost);
+  U_center[lev][q].setVal(0.0);
+
+  if(flag_source_term){S[lev][q].define(ba, dm, quadrule->qMp_st, mesh->nghost);
+  S[lev][q].setVal(0.0);}
+
+  //idc_curl_K[lev].define(ba, dm,1,0);
+  //idc_curl_K[lev].setVal(0.0);
+  //idc_div_K[lev].define(ba, dm,1,0);
+  //idc_div_K[lev].setVal(0.0);
+  //idc_grad_K[lev].define(ba, dm,1,0);
+  //idc_grad_K[lev].setVal(0.0);
+    
+  for(int d=0; d<AMREX_SPACEDIM; ++d){ 
+    H_p[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    H_p[lev][d][q].setVal(0.0);
+
+    H_m[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    H_m[lev][d][q].setVal(0.0);
+
+
+    F[lev][d][q].define(ba, dm,quadrule->qMp_st,mesh->nghost);
+    F[lev][d][q].setVal(0.0);
+
+    DF[lev][d][q].define(ba, dm,quadrule->qMp_st,mesh->nghost);
+    DF[lev][d][q].setVal(0.0);
+
+    Fm[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    Fm[lev][d][q].setVal(0.0);
+
+    Fp[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    Fp[lev][d][q].setVal(0.0);
+
+    DFm[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    DFm[lev][d][q].setVal(0.0);
+
+    DFp[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    DFp[lev][d][q].setVal(0.0);
+
+    Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
+    Fnum[lev][d][q].setVal(0.0);  
+
+    Fnumm_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
+    Fnumm_int[lev][d][q].setVal(0.0);
+
+    Fnump_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
+    Fnump_int[lev][d][q].setVal(0.0);     
+  }
+}
+
 
 /*
 
@@ -130,56 +247,6 @@ AmrDG::~AmrDG(){
 #include <AMReX_MemProfiler.H>
 #endif
 BOUNDARY CONDITIONS
-
-  amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo, 
-  amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
-  amrex::Vector<amrex::Vector<int>> _bc_lo_type, 
-  amrex::Vector<amrex::Vector<int>> _bc_hi_type,,
-
-
-  //Amrex boundary data
-  bc_w.resize(Q,amrex::Vector<amrex::BCRec>(Np));
-  for(int q=0; q<Q; ++q){
-    for (int n = 0; n < Np; ++n){
-      for (int d = 0; d < AMREX_SPACEDIM; ++d)
-      {   
-        bc_w[q][n].setLo(d,_bc_lo[q][d]);
-        bc_w[q][n].setHi(d,_bc_hi[q][d]);
-      }
-    }
-  }
-
-  //AmrDG boundary data
-  bc_lo_type.resize(Q);
-  bc_hi_type.resize(Q);
-
-  gDbc_lo.resize(Q);
-  gDbc_hi.resize(Q);
-
-  gNbc_lo.resize(Q);
-  gNbc_hi.resize(Q);
-
-  for(int q=0; q<Q; ++q){
-    bc_lo_type[q].resize(AMREX_SPACEDIM);
-    bc_hi_type[q].resize(AMREX_SPACEDIM);
-    
-    gDbc_lo[q].resize(AMREX_SPACEDIM);
-    gDbc_hi[q].resize(AMREX_SPACEDIM); 
-    
-    gNbc_lo[q].resize(AMREX_SPACEDIM);
-    gNbc_hi[q].resize(AMREX_SPACEDIM);  
-    
-    for(int d=0; d<AMREX_SPACEDIM; ++d){
-        bc_lo_type[q][d] = _bc_lo_type[q][d];
-        bc_hi_type[q][d] = _bc_hi_type[q][d];
-        
-        gDbc_lo[q][d] =gDirichlet_bc(d,-1,q);
-        gDbc_hi[q][d] =gDirichlet_bc(d,1,q);
-        
-        gNbc_lo[q][d] =gNeumann_bc(d,-1,q);
-        gNbc_hi[q][d] =gNeumann_bc(d,1,q);             
-    }
-  }
 
 ///////////////////////////////////////////////////////////////////////
 LIMITING AND REFINING ADVANCED
@@ -232,13 +299,9 @@ Mesh Interpolation
 
 
 /*
-//initialize multilevel mesh, geometry, Box array and DistributionMap
-void AmrDG::Init()
-{
-}
 
-// Make a new level from scratch using provided BoxArray and DistributionMapping.
-// Only used during initialization
+
+
 void AmrDG::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba, 
                                     const DistributionMapping& dm)
 { 
@@ -323,79 +386,7 @@ void AmrDG::InitData_system(int lev,const BoxArray& ba, const DistributionMappin
   } 
 }
 
-//Init data for given level for specific solution component
-void AmrDG::InitData_component(int lev,const BoxArray& ba,
-                              const DistributionMapping& dm, int q)
-{
-  
-  //Print(*ofs) <<"AmrDG::InitData_component() "<< q<<"\n";
-   
-  //ADER SPECIFIC
-  H_w[lev][q].define(ba, dm, mNp, nghost);
-  H_w[lev][q].setVal(0.0);
-  H[lev][q].define(ba, dm, qMp, nghost);
-  H[lev][q].setVal(0.0);
 
-  for(int d=0; d<AMREX_SPACEDIM; ++d){ 
-    H_p[lev][d][q].define(ba, dm,qMpbd,nghost);
-    H_p[lev][d][q].setVal(0.0);
-    
-    H_m[lev][d][q].define(ba, dm,qMpbd,nghost);
-    H_m[lev][d][q].setVal(0.0);
-  }
-  //SOLVER
-  U_w[lev][q].define(ba, dm, Np, nghost);
-  U_w[lev][q].setVal(0.0);
-
-
-  
-  U[lev][q].define(ba, dm, qMp, nghost);
-  U[lev][q].setVal(0.0);
-    
-
-  
-  U_center[lev][q].define(ba, dm, 1, nghost);
-  U_center[lev][q].setVal(0.0);
-       
-  if(model_pde->flag_source_term){S[lev][q].define(ba, dm, qMp, nghost);
-  S[lev][q].setVal(0.0);}
-    
-  idc_curl_K[lev].define(ba, dm,1,0);
-  idc_curl_K[lev].setVal(0.0);
-  idc_div_K[lev].define(ba, dm,1,0);
-  idc_div_K[lev].setVal(0.0);
-  idc_grad_K[lev].define(ba, dm,1,0);
-  idc_grad_K[lev].setVal(0.0);
-    
-  for(int d=0; d<AMREX_SPACEDIM; ++d){ 
-    F[lev][d][q].define(ba, dm,qMp,nghost);
-    F[lev][d][q].setVal(0.0);
-    
-    DF[lev][d][q].define(ba, dm,qMp,nghost);
-    DF[lev][d][q].setVal(0.0);
-  
-    Fm[lev][d][q].define(ba, dm,qMpbd,nghost);
-    Fm[lev][d][q].setVal(0.0);
-    
-    Fp[lev][d][q].define(ba, dm,qMpbd,nghost);
-    Fp[lev][d][q].setVal(0.0);
-    
-    DFm[lev][d][q].define(ba, dm,qMpbd,nghost);
-    DFm[lev][d][q].setVal(0.0);
-    
-    DFp[lev][d][q].define(ba, dm,qMpbd,nghost);
-    DFp[lev][d][q].setVal(0.0);
-
-    Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,qMpbd,0);    
-    Fnum[lev][d][q].setVal(0.0);  
-    
-    Fnumm_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,Np,0);    
-    Fnumm_int[lev][d][q].setVal(0.0);
-    
-    Fnump_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,Np,0);    
-    Fnump_int[lev][d][q].setVal(0.0);     
-  }
-}
 
 //Delete level data
 void AmrDG::ClearLevel(int lev) 
@@ -600,60 +591,17 @@ void AmrDG::AMR_settings_tune()
   /////////////////////////
 }
 
+void AmrDG::Init()
+{
+  //initialize multilevel mesh, geometry, Box array and DistributionMap
+  Print(Print(sim->ofs)) <<"AmrDG::Init()"<<"\n";  
+  const Real time = 0.0;
+  InitFromScratch(time);
+}
+
 void AmrDG::Evolve()
 {
-  
-  int n=0;
-  amrex::Real t= 0.0;  
-  if(t_outplt>0){PlotFile(0, t);}
-  NormDG();
-  
-  ComputeDt();
-  Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
-  Print(*ofs)<<"------------------------------------------------"<<"\n";
-  
-  //time stepping
-  while(t<T)
-  {  
-    if ((max_level > 0) && (n>0))
-    {
-      if((t_regrid > 0) && (n % t_regrid == 0)){
-        regrid(0, t);
-      }
-    }  
-    
-    Print(*ofs) << "ADER Time Integraton"<< "\n";
-    //advance solution by one time-step.
-    ADER();
-    //limit solution
-    if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
-    //gather valid fine cell solutions U_w into valid coarse cells
-    AverageFineToCoarse();   
-    
-    //prepare data for next time step
-    for(int l=0; l<=finest_level; ++l){
-      for(int q=0; q<Q; ++q){ 
-        //FillPatch(l, t, U_w[l][q], 0, Np,q); 
-        U_w[l][q].FillBoundary(geom[l].periodicity());
-        if(l>0){FillPatchGhostFC(l,0,q);}
-        //FillBoundary will be repeated also for FillPatchGHost, but there there
-        //is not info about periodic BC
-      }
-    }
-    
-    n+=1;
-    t+=dt;
-    Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
-    Print(*ofs)<<"------------------------------------------------"<<"\n";
-    
-    if((t_outplt>0) && (n%t_outplt==0)){PlotFile(n, t);} 
-    
-    ComputeDt();
-    if(T-t<dt){dt = T-t;}    
-    
-  }
-  
-  NormDG();
+
 }
 
 //Arbitrary DERivatives time stepping for DG
