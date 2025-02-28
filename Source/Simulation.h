@@ -67,7 +67,7 @@ Simulation<NumericalMethodType,EquationType>::Simulation()
 
 template <typename NumericalMethodType,typename EquationType>
 Simulation<NumericalMethodType,EquationType>::~Simulation() {
-  //ofs->close();
+  ofs->close();
 }
 
 template <typename NumericalMethodType,typename EquationType>

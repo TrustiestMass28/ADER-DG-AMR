@@ -36,11 +36,24 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     template <typename EquationType>
     void evolve(std::shared_ptr<EquationType> model_pde);
 
+    template <typename EquationType>
+    void time_integration(std::shared_ptr<EquationType> model_pde);
+
+    template <typename EquationType>
+    void ADER(std::shared_ptr<EquationType> model_pde);
+
+    template <typename EquationType>
+    void set_Dt(std::shared_ptr<EquationType> model_pde);
+
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
 
     void set_init_data_component(int lev,const BoxArray& ba,
                                 const DistributionMapping& dm, int q);
+
+    void get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
+                        amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                        const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
     
     class BasisLegendre : public Basis
     {
@@ -113,6 +126,16 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     int kroneckerDelta(int a, int b) const;
 
+    /*
+    template <typename EquationType>
+    void set_predictor(std::shared_ptr<EquationType> model_pde,
+                      const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                      amrex::Vector<amrex::MultiFab>* H_w_ptr);
+    */
+
+    void get_H_from_H_w(amrex::Vector<amrex::MultiFab>* H_ptr,
+                        amrex::Vector<amrex::MultiFab>* H_w_ptr, 
+                        const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
     
     //Vandermonde matrix
     amrex::Vector<amrex::Vector<amrex::Real>> V;
@@ -167,6 +190,9 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     std::shared_ptr<QuadratureGaussLegendre> quadrule;  //TODO:maybe doe snot need to be shared
 };
 
+//templated methods
+
+//  ComputeDt, time_integration
 
 template <typename EquationType>
 void AmrDG::evolve(std::shared_ptr<EquationType> model_pde)
@@ -226,6 +252,328 @@ void AmrDG::evolve(std::shared_ptr<EquationType> model_pde)
   NormDG();
 */
 }
+
+template <typename EquationType>
+void AmrDG::time_integration(std::shared_ptr<EquationType> model_pde)
+{
+  ADER(model_pde);
+}
+
+template <typename EquationType>
+void AmrDG::ADER(std::shared_ptr<EquationType> model_pde)
+{
+  /*
+    for (int l = finest_level; l >= 0; --l){
+      //apply BC
+      FillBoundaryCells(&(U_w[l]), l);
+      
+      //set predictor initial guess
+      set_predictor(&(U_w[l]), &(H_w[l]));  
+      //iteratively find predictor
+      int iter=0;    
+      while(iter<p)
+      {
+        if(model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}  
+        for(int d = 0; d<AMREX_SPACEDIM; ++d){
+          Flux(l,d,qMp,&(H_w[l]),&(H[l]),&(F[l][d]),&(DF[l][d]),xi_ref_GLquad, false, true);
+        }   
+        for(int q=0; q<Q; ++q){
+          //update predictor
+          Update_H_w(l, q);
+        }
+        iter+=1;
+      }
+      
+      //use found predictor to compute corrector
+      if(model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}     
+      for(int d = 0; d<AMREX_SPACEDIM; ++d){
+        Flux(l,d,qMp,&(H_w[l]),&(H[l]),&(F[l][d]),&(DF[l][d]),xi_ref_GLquad, false, true);
+        Flux(l,d,qMpbd,&(H_w[l]),&(H_m[l][d]),&(Fm[l][d]),&(DFm[l][d]),xi_ref_GLquad_bdm[d], true, true);
+        Flux(l,d,qMpbd,&(H_w[l]),&(H_p[l][d]),&(Fp[l][d]),&(DFp[l][d]),xi_ref_GLquad_bdp[d], true, true);         
+        InterfaceNumFlux(l,d,qMpbd,&(H_m[l][d]),&(H_p[l][d]));
+      } 
+        
+      //average fine to coarse interface integral numerical flux for conservation
+      AverageFineToCoarseFlux(l);
+      
+      for(int q=0; q<Q; ++q){
+        //update corrector
+        Update_U_w(l,q);    
+      } 
+    }
+  */
+}
+
+/*
+        void AmrDG::InterfaceNumFlux(int lev,int d,int M, 
+            amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+            amrex::Vector<amrex::MultiFab>* U_ptr_p)
+
+            void AmrDG::Flux(int lev,int d, int M, 
+                amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                amrex::Vector<amrex::MultiFab>* U_ptr,
+                amrex::Vector<amrex::MultiFab>* F_ptr,
+                amrex::Vector<amrex::MultiFab>* DF_ptr,
+                amrex::Vector<amrex::Vector<amrex::Real>> xi,
+                bool flag_bd, bool is_predictor)
+*/
+
+/*
+template <typename EquationType>
+void AmrDG::set_predictor(std::shared_ptr<EquationType> model_pde,
+                  const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                  amrex::Vector<amrex::MultiFab>* H_w_ptr)
+{*/
+  /*
+  amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
+  amrex::Vector<amrex::MultiFab *> state_h_w(Q); 
+
+  for(int q=0; q<Q; ++q){
+    state_u_w[q]=&((*U_w_ptr)[q]);
+    state_h_w[q]=&((*H_w_ptr)[q]); 
+  } 
+
+  #ifdef AMREX_USE_OMP
+  #pragma omp parallel
+  #endif
+  { 
+    amrex::Vector<amrex::FArrayBox *> fab_h_w(Q);
+    amrex::Vector<amrex::Array4<amrex::Real>> hw(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_u_w(Q);
+    amrex::Vector<amrex::Array4<const amrex::Real>> uw(Q);   
+
+    #ifdef AMREX_USE_OMP  
+    for (MFIter mfi(*(state_h_w[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+    #else
+    for (MFIter mfi(*(state_h_w[0]),true); mfi.isValid(); ++mfi)
+    #endif
+    {
+      const amrex::Box& bx = mfi.growntilebox();
+
+      for(int q=0 ; q<Q; ++q){      
+      fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
+      fab_h_w[q]= &((*(state_h_w[q]))[mfi]);
+
+      uw[q] = fab_u_w[q]->const_array();
+      hw[q]=(*(fab_h_w[q])).array();
+      }
+
+      for(int q=0 ; q<Q; ++q){
+        amrex::ParallelFor(bx, mNp,[&] (int i, int j, int k, int n) noexcept
+        {   
+          if(n<Np)
+          {
+          amrex::Real tmp = (uw[q])(i,j,k,n); 
+            (hw[q])(i,j,k,n)=tmp;  
+          } 
+
+          else
+          {
+            (hw[q])(i,j,k,n)=0.0;
+          }                
+        }); 
+      }      
+    }  
+  }  
+  */
+//}
+
+
+/*
+void AmrDG::get_H_from_H_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                          amrex::Vector<amrex::MultiFab>* U_ptr,
+                          amrex::Vector<amrex::Real> xi)
+{}
+                          */
+
+/*
+void AmrDG::source(int lev,int M,
+  amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+  amrex::Vector<amrex::MultiFab>* U_ptr,
+  amrex::Vector<amrex::MultiFab>* S_ptr,
+  amrex::Vector<amrex::Vector<amrex::Real>> xi, 
+  bool is_predictor)
+{
+  for(int m = 0; m<M ; ++m){
+  get_U_from_U_w(m,U_w_ptr, U_ptr, xi[m],is_predictor);
+  }
+
+  amrex::Vector<amrex::MultiFab *> state_source(Q);
+  amrex::Vector<const amrex::MultiFab *> state_u(Q);
+
+  for(int q=0 ; q<Q; ++q){
+  state_u[q] = &((*U_ptr)[q]); 
+  state_source[q] = &((*S_ptr)[q]); 
+  }
+
+  #ifdef AMREX_USE_OMP
+  #pragma omp parallel 
+  #endif
+  { 
+    amrex::Vector<amrex::FArrayBox *> fab_source(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > source(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_u(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > u(Q);
+
+    #ifdef AMREX_USE_OMP  
+    for (MFIter mfi(*(state_source[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+    #else
+    for (MFIter mfi(*(state_source[0]),true); mfi.isValid(); ++mfi)
+    #endif
+    {
+      const amrex::Box& bx = mfi.growntilebox();
+
+      for(int q=0 ; q<Q; ++q){
+        fab_u[q] = state_u[q]->fabPtr(mfi);
+        fab_source[q]=&((*(state_source[q]))[mfi]);
+
+        u[q] = fab_u[q]->const_array();
+        source[q]=(*(fab_source[q])).array();
+      } 
+
+      for(int q=0 ; q<Q; ++q){
+        amrex::ParallelFor(bx,M,[&] (int i, int j, int k, int m) noexcept
+        {
+          (source[q])(i,j,k,m) = PhysicalSource(lev,q,m,i,j,k,&u,xi[m]);                  
+        });
+      }
+    }
+  } 
+}
+*/
+
+
+//compute minimum time step size s.t CFL condition is met
+template <typename EquationType>
+void set_Dt(std::shared_ptr<EquationType> model_pde)
+{
+  /*
+  //construt a center point
+  amrex::Vector<amrex::Real> xi_ref_center(AMREX_SPACEDIM);
+  for  (int d = 0; d < AMREX_SPACEDIM; ++d){
+    xi_ref_center[d]=0.0;
+  }
+
+  amrex::Vector<amrex::Real> dt_tmp(finest_level+1);//TODO:proper access to finest_level (in Mesh)
+
+  for (int l = 0; l <= finest_level; ++l)
+  {
+    auto const dx = geom[l].CellSizeArray();
+    //compute average mesh size
+    amrex::Real dx_avg = 0.0;
+    for(int d = 0; d < AMREX_SPACEDIM; ++d){
+      dx_avg+=((amrex::Real)dx[d]/(amrex::Real)AMREX_SPACEDIM);
+    }
+      
+    //evaluate modes at cell center pt
+    get_U_from_U_w(0,&(U_w[l]),&(U_center[l]), xi_ref_center,false);
+           
+    //vector to accumulate all the min dt computed by this rank
+    amrex::Vector<amrex::Real> rank_min_dt;
+
+    amrex::Vector<const amrex::MultiFab *> state_uc(Q);
+
+    for(int q=0; q<Q; ++q){
+      state_uc[q]= &(U_center[l][q]);
+    } 
+    
+#ifdef AMREX_USE_OMP
+#pragma omp parallel 
+#endif
+  {
+      amrex::Vector<const amrex::FArrayBox *> fab_uc(Q);
+      amrex::Vector<amrex::Array4<const amrex::Real>> uc(Q);
+    
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(U_center[l][0],MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+      #else
+      for (MFIter mfi(U_center[l][0],true); mfi.isValid(); ++mfi)
+      #endif 
+      {
+        const amrex::Box& bx = mfi.tilebox();
+        
+        for(int q=0; q<Q; ++q){
+          fab_uc[q] = state_uc[q]->fabPtr(mfi);
+          uc[q] =fab_uc[q]->const_array();
+        }              
+        amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
+        {
+          //compute max signal velocity lambda_max(for scalar case is derivative 
+          //of flux, for system case is eigenvalue of flux jacobian
+          amrex::Real lambda_max = 0.0;
+
+          amrex::Vector<amrex::Real> lambda_d(AMREX_SPACEDIM);
+          for(int d = 0; d < AMREX_SPACEDIM; ++d){  
+            //compute at cell center so m==0
+            lambda_d.push_back(model_pde->pde_CFL(d,0,i,j,k,&uc));//TODO: pde_cfl_characteristic_speed //i.e lambda, or pde_cfl_lambda
+          }
+          //find max signal speed across the dimensions
+          auto lambda_max_  = std::max_element(lambda_d.begin(),lambda_d.end());
+          lambda_max = static_cast<amrex::Real>(*lambda_max_);         
+
+          //general CFL formulation
+          amrex::Real real_p = static_cast<amrex::Real>(basefunc->p);
+          amrex::Real CFL = (1.0/(2.0*real_p+1.0))*(1.0/(amrex::Real)AMREX_SPACEDIM)
+          amrex::Real dt_cfl = CFL*(dx_avg/lambda_max);
+                        
+          #pragma omp critical
+          {
+            rank_min_dt.push_back(dt_cfl);
+          }
+        });         
+      }
+    }   
+    amrex::Real rank_lev_dt_min= 1.0;
+    if (!rank_min_dt.empty()) {
+      //compute the min in this rank for this level   
+      auto rank_lev_dt_min_ = std::min_element(rank_min_dt.begin(), rank_min_dt.end());
+
+      if (rank_lev_dt_min_ != rank_min_dt.end()) {
+        rank_lev_dt_min = static_cast<amrex::Real>(*rank_lev_dt_min_);
+      }
+    }
+    ParallelDescriptor::ReduceRealMin(rank_lev_dt_min);//, dt_tmp.size());
+    dt_tmp[l] = rank_lev_dt_min;
+    
+  }
+  amrex::Real dt_min = 1.0;
+  if (!dt_tmp.empty()) {
+    //min across levels
+    auto dt_min_  = std::min_element(dt_tmp.begin(),dt_tmp.end());
+    
+    if (dt_min_ != dt_tmp.end()) {
+      dt_min = (amrex::Real)(*dt_min_);//static_cast<amrex::Real>(*dt_min_); 
+    }
+  }
+  ParallelDescriptor::ReduceRealMin(dt_min);
+  Dt = dt_min; 
+  */
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ///////////////////////////////////////////////////////////////////////////
 
 
