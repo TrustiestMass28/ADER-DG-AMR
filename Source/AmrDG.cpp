@@ -32,7 +32,6 @@ void AmrDG::init()
   H_p.resize(mesh->L);
   H_m.resize(mesh->L);
 
-
   //Basis function
   basefunc = std::make_shared<BasisLegendre>();
 
@@ -221,6 +220,113 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
 
     Fnump_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
     Fnump_int[lev][d][q].setVal(0.0);     
+  }
+}
+
+void AmrDG::get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
+                          amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                          const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
+  int qM = xi.size();
+
+  for(int m = 0; m<qM ; ++m){
+    amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
+    amrex::Vector<amrex::MultiFab *> state_u(Q); 
+
+    for(int q=0; q<Q; ++q){
+      state_u_w[q]=&((*U_w_ptr)[q]);    
+      state_u[q]=&((*U_ptr)[q]);  
+    } 
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel
+#endif
+    {
+      amrex::Vector<const amrex::FArrayBox *> fab_u_w(Q);
+      amrex::Vector< amrex::Array4<const amrex::Real>> uw(Q);  
+      amrex::Vector<amrex::FArrayBox *> fab_u(Q);
+      amrex::Vector<amrex::Array4<amrex::Real>> u(Q);  
+    
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(*(state_u_w[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+      #else
+      for (MFIter mfi(*(state_u_w[0]),true); mfi.isValid(); ++mfi)
+      #endif
+      {
+        const amrex::Box& bx = mfi.growntilebox();
+
+        for(int q=0 ; q<Q; ++q){
+          fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
+          uw[q] = fab_u_w[q]->const_array();
+              
+          fab_u[q]=&((*(state_u[q]))[mfi]);
+          u[q]=(*(fab_u[q])).array();
+        } 
+        for(int q=0 ; q<Q; ++q){
+          amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
+          {(u[q])(i,j,k,m)=0.0;}); 
+
+          amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k,int n) noexcept
+          { 
+            (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_s(n,basefunc->basis_idx_s,xi[m])); 
+          });  
+                
+        }      
+      }  
+    }
+  }
+}
+
+void AmrDG::get_H_from_H_w(amrex::Vector<amrex::MultiFab>* H_ptr,
+                          amrex::Vector<amrex::MultiFab>* H_w_ptr, 
+                          const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
+  int qM = xi.size();
+
+  for(int m = 0; m<qM ; ++m){
+    amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
+    amrex::Vector<amrex::MultiFab *> state_u(Q); 
+
+    for(int q=0; q<Q; ++q){
+      state_u_w[q]=&((*H_w_ptr)[q]);    
+      state_u[q]=&((*H_ptr)[q]);  
+    } 
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel
+#endif
+    {
+      amrex::Vector<const amrex::FArrayBox *> fab_u_w(Q);
+      amrex::Vector< amrex::Array4<const amrex::Real>> uw(Q);  
+      amrex::Vector<amrex::FArrayBox *> fab_u(Q);
+      amrex::Vector<amrex::Array4<amrex::Real>> u(Q);  
+
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(*(state_u_w[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+      #else
+      for (MFIter mfi(*(state_u_w[0]),true); mfi.isValid(); ++mfi)
+      #endif
+      {
+        const amrex::Box& bx = mfi.growntilebox();
+
+        for(int q=0 ; q<Q; ++q){
+          fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
+          uw[q] = fab_u_w[q]->const_array();
+
+          fab_u[q]=&((*(state_u[q]))[mfi]);
+          u[q]=(*(fab_u[q])).array();
+        } 
+        for(int q=0 ; q<Q; ++q){
+          amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
+          {(u[q])(i,j,k,m)=0.0;}); 
+    
+          amrex::ParallelFor(bx,basefunc->Np_st,[&] (int i, int j, int k,int n) noexcept
+          { 
+            (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_st(n,basefunc->basis_idx_st,xi[m])); 
+          });            
+        }      
+      }  
+    }
   }
 }
 
@@ -604,48 +710,7 @@ void AmrDG::Evolve()
 
 }
 
-//Arbitrary DERivatives time stepping for DG
-void AmrDG::ADER()
-{ 
-  for (int l = finest_level; l >= 0; --l){
-    //apply BC
-    FillBoundaryCells(&(U_w[l]), l);
-    
-    //set predictor initial guess
-    Predictor_set(&(U_w[l]), &(H_w[l]));  
-    //iteratively find predictor
-    int iter=0;    
-    while(iter<p)
-    {
-      if(model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}  
-      for(int d = 0; d<AMREX_SPACEDIM; ++d){
-        Flux(l,d,qMp,&(H_w[l]),&(H[l]),&(F[l][d]),&(DF[l][d]),xi_ref_GLquad, false, true);
-      }   
-      for(int q=0; q<Q; ++q){
-        //update predictor
-        Update_H_w(l, q);
-      }
-      iter+=1;
-    }
-    
-    //use found predictor to compute corrector
-    if(model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}     
-    for(int d = 0; d<AMREX_SPACEDIM; ++d){
-      Flux(l,d,qMp,&(H_w[l]),&(H[l]),&(F[l][d]),&(DF[l][d]),xi_ref_GLquad, false, true);
-      Flux(l,d,qMpbd,&(H_w[l]),&(H_m[l][d]),&(Fm[l][d]),&(DFm[l][d]),xi_ref_GLquad_bdm[d], true, true);
-      Flux(l,d,qMpbd,&(H_w[l]),&(H_p[l][d]),&(Fp[l][d]),&(DFp[l][d]),xi_ref_GLquad_bdp[d], true, true);         
-      InterfaceNumFlux(l,d,qMpbd,&(H_m[l][d]),&(H_p[l][d]));
-    } 
-       
-    //average fine to coarse interface integral numerical flux for conservation
-    AverageFineToCoarseFlux(l);
-     
-    for(int q=0; q<Q; ++q){
-      //update corrector
-      Update_U_w(l,q);    
-    } 
-  }
-}
+
 
 //updates predictor on valid+ghost cells
 void AmrDG::Update_H_w(int lev, int q)
@@ -1047,114 +1112,7 @@ void AmrDG::Update_U_w(int lev, int q)
     }    
   }
 }
- 
 
-//TODO: better define Dt=CFL Dx/lambda  
-//compute minimum time step size s.t CFL condition is met
-void AmrDG::ComputeDt()
-{
-  amrex::Real safety_factor = CFL;
-  
-  //construt a center point
-  amrex::Vector<amrex::Real> xi_ref_center(AMREX_SPACEDIM);
-  for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-    xi_ref_center[d]=0.0;
-  }
-
-  amrex::Vector<amrex::Real> dt_tmp(finest_level+1);
-
-  for (int l = 0; l <= finest_level; ++l)
-  {
-    auto const dx = geom[l].CellSizeArray();
-    //compute average mesh size
-    amrex::Real dx_avg = 0.0;
-    for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      dx_avg+=((amrex::Real)dx[d]/(amrex::Real)AMREX_SPACEDIM);
-    }
-      
-    //evaluate modes at cell center pt
-    get_U_from_U_w(0,&(U_w[l]),&(U_center[l]), xi_ref_center,false);
-           
-    //vector to accumulate all the min dt computed by this rank
-    amrex::Vector<amrex::Real> rank_min_dt;
-
-    amrex::Vector<const amrex::MultiFab *> state_uc(Q);
-
-    for(int q=0; q<Q; ++q){
-      state_uc[q]= &(U_center[l][q]);
-    } 
-    
-#ifdef AMREX_USE_OMP
-#pragma omp parallel 
-#endif
-  {
-      amrex::Vector<const amrex::FArrayBox *> fab_uc(Q);
-      amrex::Vector<amrex::Array4<const amrex::Real>> uc(Q);
-    
-      #ifdef AMREX_USE_OMP  
-      for (MFIter mfi(U_center[l][0],MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-      #else
-      for (MFIter mfi(U_center[l][0],true); mfi.isValid(); ++mfi)
-      #endif 
-      {
-        const amrex::Box& bx = mfi.tilebox();
-        
-        for(int q=0; q<Q; ++q){
-          fab_uc[q] = state_uc[q]->fabPtr(mfi);
-          uc[q] =fab_uc[q]->const_array();
-        }              
-        amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
-        {
-          //compute max signal velocity lambda_max(for scalar case is derivative 
-          //of flux, for system case is eigenvalue of flux jacobian
-          amrex::Real lambda_max = 0.0;
-
-          amrex::Vector<amrex::Real> lambda_d(AMREX_SPACEDIM);
-          for(int d = 0; d < AMREX_SPACEDIM; ++d){  
-            //compute at cell center so m==0
-            lambda_d.push_back(model_pde->pde_CFL(d,0,i,j,k,&uc));
-          }
-          //find max signal speed across the dimensions
-          auto lambda_max_  = std::max_element(lambda_d.begin(),lambda_d.end());
-          lambda_max = static_cast<amrex::Real>(*lambda_max_);         
-
-          //general CFL formulation
-          amrex::Real dt_cfl = (1.0/(2.0*(amrex::Real)p+1.0))
-                        *(1.0/(amrex::Real)AMREX_SPACEDIM)*(dx_avg/lambda_max);
-                        
-          #pragma omp critical
-          {
-            rank_min_dt.push_back(safety_factor*dt_cfl);
-          }
-        });         
-      }
-    }   
-    amrex::Real rank_lev_dt_min= 1.0;
-    if (!rank_min_dt.empty()) {
-      //compute the min in this rank for this level   
-      auto rank_lev_dt_min_ = std::min_element(rank_min_dt.begin(), rank_min_dt.end());
-
-      if (rank_lev_dt_min_ != rank_min_dt.end()) {
-        rank_lev_dt_min = static_cast<amrex::Real>(*rank_lev_dt_min_);
-      }
-    }
-    ParallelDescriptor::ReduceRealMin(rank_lev_dt_min);//, dt_tmp.size());
-    dt_tmp[l] = rank_lev_dt_min;
-    
-  }
-  amrex::Real dt_min = 1.0;
-  if (!dt_tmp.empty()) {
-    //min across levels
-    auto dt_min_  = std::min_element(dt_tmp.begin(),dt_tmp.end());
-    
-    if (dt_min_ != dt_tmp.end()) {
-      dt_min = (amrex::Real)(*dt_min_);//static_cast<amrex::Real>(*dt_min_); 
-    }
-  }
-  ParallelDescriptor::ReduceRealMin(dt_min);
-  dt = dt_min; 
-}
-*/
 
 //std::swap(U_w[lev][q],new_mf);    
 

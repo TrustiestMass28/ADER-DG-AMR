@@ -51,19 +51,25 @@ class Solver
         void evolve(std::shared_ptr<EquationType> model_pde);
 
         //perform a time-step, advance solution by one time-step
-        void time_integration();
+        template <typename EquationType>
+        void time_integration(std::shared_ptr<EquationType> model_pde);
 
         //compute and set time-step size
-        void set_Dt();
+        template <typename EquationType>
+        void set_Dt(std::shared_ptr<EquationType> model_pde);
 
         //get solution vector evaluation
         void get_U();
 
-        //get solution vector evaluation based on its decomposition
-        void get_U_from_U_w();
+        //reconstruct solution vector evaluation based on its decomposition
+        //and quadrature
+        void get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
+                            amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                            const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
         //get solution vector derivative
-        void get_dU();
+        template <typename EquationType>
+        void get_dU(std::shared_ptr<EquationType> model_pde);
 
         //sometimes IC is for modes/weights, other for actual sol vector
         //depending on num method it will call 
@@ -387,6 +393,28 @@ template <typename EquationType>
 void Solver<NumericalMethodType>::evolve(std::shared_ptr<EquationType> model_pde)
 {
     static_cast<NumericalMethodType*>(this)->evolve(model_pde); 
+}
+
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::time_integration(std::shared_ptr<EquationType> model_pde)
+{
+    static_cast<NumericalMethodType*>(this)->time_integration(model_pde); 
+}
+
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::set_Dt(std::shared_ptr<EquationType> model_pde)
+{
+    static_cast<NumericalMethodType*>(this)->set_Dt(model_pde);     
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
+                                                amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                                                const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
+    static_cast<NumericalMethodType*>(this)->get_U_from_U_w(U_ptr,U_w_ptr,xi);    
 }
 
 #endif 
