@@ -73,6 +73,14 @@ class Mesh : public amrex::AmrCore
         //  Delete level data
         virtual void ClearLevel (int lev) override;
 
+        int get_finest_lev();
+
+        GpuArray<Real, AMREX_SPACEDIM> get_dx(int lev);
+
+        amrex::Real get_dvol(int lev, int d);
+
+        amrex::Real get_dvol(int lev);
+
         //Max number of levels
         int L = 1;
 
@@ -140,6 +148,46 @@ void Mesh<NumericalMethodType>::ErrorEst (int lev, amrex::TagBoxArray& tags,
 
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::ClearLevel (int lev) {}
+
+template <typename NumericalMethodType>
+int Mesh<NumericalMethodType>::get_finest_lev()
+{
+    return finest_level;
+}
+
+template <typename NumericalMethodType>
+GpuArray<Real, AMREX_SPACEDIM> Mesh<NumericalMethodType>::get_dx(int lev)
+{
+    return geom[lev].CellSizeArray();  
+}
+
+template <typename NumericalMethodType>
+amrex::Real Mesh<NumericalMethodType>::get_dvol(int lev, int d)
+{
+    const auto dx = get_dx(lev);
+
+    amrex::Real dvol = 1.0;
+    for(int _d = 0; _d < AMREX_SPACEDIM; ++_d){
+      if(_d!=d){dvol*=dx[_d];}
+    }
+
+    return dvol;
+}
+
+template <typename NumericalMethodType>
+amrex::Real Mesh<NumericalMethodType>::get_dvol(int lev)
+{
+    const auto dx = get_dx(lev);
+
+    amrex::Real dvol = 1.0;
+    for(int _d = 0; _d < AMREX_SPACEDIM; ++_d){
+      dvol*=dx[_d];
+    }
+
+    return dvol;
+} 
+
+
 
 /*
 

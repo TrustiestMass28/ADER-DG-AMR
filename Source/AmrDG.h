@@ -65,7 +65,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     template <typename EquationType>
     void flux(int lev,int d, int M, 
               std::shared_ptr<EquationType> model_pde,
-              amrex::Vector<amrex::MultiFab>* U_w_ptr, 
               amrex::Vector<amrex::MultiFab>* U_ptr,
               amrex::Vector<amrex::MultiFab>* F_ptr,
               const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
@@ -73,13 +72,12 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     template <typename EquationType>
     void flux_bd(int lev,int d, int M, 
                 std::shared_ptr<EquationType> model_pde,
-                amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                 amrex::Vector<amrex::MultiFab>* U_ptr,
                 amrex::Vector<amrex::MultiFab>* F_ptr,
                 amrex::Vector<amrex::MultiFab>* DF_ptr,
                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
   
-    void numflux_integral(int lev,int d,int M, 
+    void numflux_integral(int lev,int d,int M, int N,
                           amrex::Vector<amrex::MultiFab>* U_ptr_m, 
                           amrex::Vector<amrex::MultiFab>* U_ptr_p,
                           amrex::Vector<amrex::MultiFab>* F_ptr_m,
@@ -87,7 +85,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                           amrex::Vector<amrex::MultiFab>* DF_ptr_m,
                           amrex::Vector<amrex::MultiFab>* DF_ptr_p);
 
-    void numflux(int d, int m,int i, int j, int k, 
+    amrex::Real numflux(int d, int m,int i, int j, int k, 
                 amrex::Array4<const amrex::Real> up, 
                 amrex::Array4<const amrex::Real> um, 
                 amrex::Array4<const amrex::Real> fp,
@@ -233,35 +231,38 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 template <typename EquationType>
 void AmrDG::evolve(std::shared_ptr<EquationType> model_pde)
 {
-/*
+
   
   int n=0;
   amrex::Real t= 0.0;  
-  if(t_outplt>0){PlotFile(0, t);}
-  NormDG();
+  //if(t_outplt>0){PlotFile(0, t);}
+  //NormDG();
   
-  ComputeDt();
-  Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
-  Print(*ofs)<<"------------------------------------------------"<<"\n";
+  set_Dt(model_pde);
+  //Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
+  //Print(*ofs)<<"------------------------------------------------"<<"\n";
   
   //time stepping
   while(t<T)
   {  
+    /*
     if ((max_level > 0) && (n>0))
     {
       if((t_regrid > 0) && (n % t_regrid == 0)){
         regrid(0, t);
       }
     }  
-    
-    Print(*ofs) << "ADER Time Integraton"<< "\n";
+    */
+    //Print(*ofs) << "ADER Time Integraton"<< "\n";
     //advance solution by one time-step.
-    ADER();
+    time_integration(model_pde);
+
     //limit solution
-    if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
+    //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
     //gather valid fine cell solutions U_w into valid coarse cells
-    AverageFineToCoarse();   
+    //AverageFineToCoarse();   
     
+    /*
     //prepare data for next time step
     for(int l=0; l<=finest_level; ++l){
       for(int q=0; q<Q; ++q){ 
@@ -272,21 +273,20 @@ void AmrDG::evolve(std::shared_ptr<EquationType> model_pde)
         //is not info about periodic BC
       }
     }
-    
+    */
     n+=1;
-    t+=dt;
-    Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
-    Print(*ofs)<<"------------------------------------------------"<<"\n";
+    t+=Dt;
+    //Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
+    //Print(*ofs)<<"------------------------------------------------"<<"\n";
     
-    if((t_outplt>0) && (n%t_outplt==0)){PlotFile(n, t);} 
+    //if((t_outplt>0) && (n%t_outplt==0)){PlotFile(n, t);} 
     
-    ComputeDt();
-    if(T-t<dt){dt = T-t;}    
-    
+    set_Dt(model_pde);
+    if(T-t<Dt){Dt = T-t;}    
   }
   
-  NormDG();
-*/
+  //NormDG();
+
 }
 
 template <typename EquationType>
@@ -298,71 +298,66 @@ void AmrDG::time_integration(std::shared_ptr<EquationType> model_pde)
 template <typename EquationType>
 void AmrDG::ADER(std::shared_ptr<EquationType> model_pde)
 {
-  /*
-    for (int l = finest_level; l >= 0; --l){
-      //apply BC
-      FillBoundaryCells(&(U_w[l]), l);
-      
-      //set predictor initial guess
-      set_predictor(&(U_w[l]), &(H_w[l]));  
-      //iteratively find predictor
-      int iter=0;    
-      while(iter<p)
-      { 
-        if(model_pde->flag_source_term){ //TODO: call approprite get_U_from_U_w/get_H_from_H_w 
-          Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}  
-        for(int d = 0; d<AMREX_SPACEDIM; ++d){
-          //TODO: call approprite get_U_from_U_w/get_H_from_H_w
-          Flux(l,d,qMp,&(H_w[l]),&(H[l]),&(F[l][d]),&(DF[l][d]),xi_ref_GLquad, false, true);
-        }   
-        for(int q=0; q<Q; ++q){
-          //update predictor
-          Update_H_w(l, q);
-        }
-        iter+=1;
-      }
-      
-      //use found predictor to compute corrector
-      if(model_pde->flag_source_term){Source(l, qMp, &(H_w[l]), &(H[l]),&(S[l]),xi_ref_GLquad,true);}     
+  for (int l = mesh->get_finest_lev(); l >= 0; --l){
+    //apply BC
+    //FillBoundaryCells(&(U_w[l]), l);
+    
+    //set predictor initial guess
+    set_predictor(&(U_w[l]), &(H_w[l]));  
+
+    //iteratively find predictor
+    int iter=0;    
+    while(iter<p)
+    { 
+      if(model_pde->flag_source_term){
+        get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
+        source(l,quadrule->qMp_st,model_pde,&(H[l]),&(S[l]),quadrule->xi_ref_quad_st);
+      }  
       for(int d = 0; d<AMREX_SPACEDIM; ++d){
-        //TODO: call approprite get_U_from_U_w/get_H_from_H_w
-        Flux(l,d,qMp,&(H_w[l]),&(H[l]),&(F[l][d]),&(DF[l][d]),xi_ref_GLquad, false, true);
-        //TODO: call approprite get_U_from_U_w/get_H_from_H_w
-        Flux(l,d,qMpbd,&(H_w[l]),&(H_m[l][d]),&(Fm[l][d]),&(DFm[l][d]),xi_ref_GLquad_bdm[d], true, true);
-        //TODO: call approprite get_U_from_U_w/get_H_from_H_w
-        Flux(l,d,qMpbd,&(H_w[l]),&(H_p[l][d]),&(Fp[l][d]),&(DFp[l][d]),xi_ref_GLquad_bdp[d], true, true);      
-        //TODO: call approprite get_U_from_U_w/get_H_from_H_w   
-        InterfaceNumFlux(l,d,qMpbd,&(H_m[l][d]),&(H_p[l][d]));
-      } 
-        
-      //average fine to coarse interface integral numerical flux for conservation
-      AverageFineToCoarseFlux(l);
-      
+        //if source ===True, this is duplicate, could avoid redoit
+        get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
+        flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
+      }   
       for(int q=0; q<Q; ++q){
-        //update corrector
-        Update_U_w(l,q);    
-      } 
+        //update predictor
+        //Update_H_w(l, q);
+      }
+      iter+=1;
     }
-  */
+    
+    //use found predictor to compute corrector
+    if(model_pde->flag_source_term){
+      get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
+      source(l,quadrule->qMp_st,model_pde,&(H[l]),&(S[l]),quadrule->xi_ref_quad_st);
+    }    
+    
+    for(int d = 0; d<AMREX_SPACEDIM; ++d){
+      get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
+      flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
+
+      get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st,&(H_m[l][d]),&(H_w[l]),quadrule->xi_ref_quad_st_bdm[d]);
+      flux_bd(l,d,quadrule->qMp_st_bd,model_pde,&(H_m[l][d]),&(Fm[l][d]),&(DFm[l][d]),quadrule->xi_ref_quad_st_bdm[d]);
+
+      get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st,&(H_p[l][d]),&(H_w[l]),quadrule->xi_ref_quad_st_bdp[d]);
+      flux_bd(l,d,quadrule->qMp_st_bd,model_pde,&(H_p[l][d]),&(Fp[l][d]),&(DFp[l][d]),quadrule->xi_ref_quad_st_bdp[d]);
+
+      numflux_integral(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
+    } 
+      
+    //average fine to coarse interface integral numerical flux for conservation
+    //AverageFineToCoarseFlux(l);
+    
+    for(int q=0; q<Q; ++q){
+      //update corrector
+      //Update_U_w(l,q);    
+    } 
+  }
+  
 }
-
-/*
-        void AmrDG::InterfaceNumFlux(int lev,int d,int M, 
-            amrex::Vector<amrex::MultiFab>* U_ptr_m, 
-            amrex::Vector<amrex::MultiFab>* U_ptr_p)
-
-            void AmrDG::Flux(int lev,int d, int M, 
-                amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-                amrex::Vector<amrex::MultiFab>* U_ptr,
-                amrex::Vector<amrex::MultiFab>* F_ptr,
-                amrex::Vector<amrex::MultiFab>* DF_ptr,
-                amrex::Vector<amrex::Vector<amrex::Real>> xi,
-                bool flag_bd, bool is_predictor)
-*/
 
 //compute minimum time step size s.t CFL condition is met
 template <typename EquationType>
-void set_Dt(std::shared_ptr<EquationType> model_pde)
+void AmrDG::set_Dt(std::shared_ptr<EquationType> model_pde)
 {
   /*
   //construt a center point
@@ -520,7 +515,6 @@ void AmrDG::source(int lev,int M,
 template <typename EquationType>
 void AmrDG::flux(int lev,int d, int M, 
                 std::shared_ptr<EquationType> model_pde,
-                amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                 amrex::Vector<amrex::MultiFab>* U_ptr,
                 amrex::Vector<amrex::MultiFab>* F_ptr,
                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
@@ -577,7 +571,6 @@ void AmrDG::flux(int lev,int d, int M,
 template <typename EquationType>
 void AmrDG::flux_bd(int lev,int d, int M, 
                     std::shared_ptr<EquationType> model_pde,
-                    amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                     amrex::Vector<amrex::MultiFab>* U_ptr,
                     amrex::Vector<amrex::MultiFab>* F_ptr,
                     amrex::Vector<amrex::MultiFab>* DF_ptr,
