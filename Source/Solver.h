@@ -78,21 +78,19 @@ class Solver
         template <typename EquationType>                
         void flux(int lev,int d, int M, 
                     std::shared_ptr<EquationType> model_pde,
-                    amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                     amrex::Vector<amrex::MultiFab>* U_ptr,
                     amrex::Vector<amrex::MultiFab>* F_ptr,
                     const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
         template <typename EquationType>
-        void flux_bd(int lev,int d, int M, 
+        void flux_bd(int lev,int d, int M,
                     std::shared_ptr<EquationType> model_pde,
-                    amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                     amrex::Vector<amrex::MultiFab>* U_ptr,
                     amrex::Vector<amrex::MultiFab>* F_ptr,
                     amrex::Vector<amrex::MultiFab>* DF_ptr,
                     const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
-        void numflux(int d, int m,int i, int j, int k, 
+        amrex::Real numflux(int d, int m,int i, int j, int k, 
                     amrex::Array4<const amrex::Real> up, 
                     amrex::Array4<const amrex::Real> um, 
                     amrex::Array4<const amrex::Real> fp,
@@ -100,7 +98,7 @@ class Solver
                     amrex::Array4<const amrex::Real> dfp,
                     amrex::Array4<const amrex::Real> dfm);
 
-        void numflux_integral(int lev,int d,int M, 
+        void numflux_integral(int lev,int d,int M, int N,
                             amrex::Vector<amrex::MultiFab>* U_ptr_m, 
                             amrex::Vector<amrex::MultiFab>* U_ptr_p,
                             amrex::Vector<amrex::MultiFab>* F_ptr_m,
@@ -473,29 +471,27 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::flux(int lev,int d, int M, 
                                         std::shared_ptr<EquationType> model_pde,
-                                        amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                                         amrex::Vector<amrex::MultiFab>* U_ptr,
                                         amrex::Vector<amrex::MultiFab>* F_ptr,
                                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-    static_cast<NumericalMethodType*>(this)->flux(lev,d,M,U_w_ptr,U_ptr,F_ptr,xi); 
+    static_cast<NumericalMethodType*>(this)->flux(lev,d,M,U_ptr,F_ptr,xi); 
 }
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::flux_bd(int lev,int d, int M, 
+void Solver<NumericalMethodType>::flux_bd(int lev,int d, int M,
                                         std::shared_ptr<EquationType> model_pde,
-                                        amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                                         amrex::Vector<amrex::MultiFab>* U_ptr,
                                         amrex::Vector<amrex::MultiFab>* F_ptr,
                                         amrex::Vector<amrex::MultiFab>* DF_ptr,
                                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-    static_cast<NumericalMethodType*>(this)->flux_bd(lev,d,M,U_w_ptr,U_ptr,F_ptr,DF_ptr,xi); 
+    static_cast<NumericalMethodType*>(this)->flux_bd(lev,d,M,U_ptr,F_ptr,DF_ptr,xi); 
 }
 
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::numflux(int d, int m,int i, int j, int k, 
+amrex::Real Solver<NumericalMethodType>::numflux(int d, int m,int i, int j, int k, 
                                         amrex::Array4<const amrex::Real> up, 
                                         amrex::Array4<const amrex::Real> um, 
                                         amrex::Array4<const amrex::Real> fp,
@@ -503,11 +499,11 @@ void Solver<NumericalMethodType>::numflux(int d, int m,int i, int j, int k,
                                         amrex::Array4<const amrex::Real> dfp,
                                         amrex::Array4<const amrex::Real> dfm)
 {
-    static_cast<NumericalMethodType*>(this)->numflux(d,m,i,j,k,up,um,fp,fm,dfp,dfm); 
+    return static_cast<NumericalMethodType*>(this)->numflux(d,m,i,j,k,up,um,fp,fm,dfp,dfm); 
 }
 
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::numflux_integral(int lev,int d, int M,
+void Solver<NumericalMethodType>::numflux_integral(int lev,int d, int M, int N,
                                                     amrex::Vector<amrex::MultiFab>* U_ptr_m, 
                                                     amrex::Vector<amrex::MultiFab>* U_ptr_p,
                                                     amrex::Vector<amrex::MultiFab>* F_ptr_m,
@@ -515,7 +511,7 @@ void Solver<NumericalMethodType>::numflux_integral(int lev,int d, int M,
                                                     amrex::Vector<amrex::MultiFab>* DF_ptr_m,
                                                     amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
-    static_cast<NumericalMethodType*>(this)->numflux_integral(lev,d,M,U_ptr_m,U_ptr_p,F_ptr_m,
+    static_cast<NumericalMethodType*>(this)->numflux_integral(lev,d,M,N,U_ptr_m,U_ptr_p,F_ptr_m,
                                                             F_ptr_p,DF_ptr_m,DF_ptr_p); 
 }
 

@@ -395,24 +395,16 @@ void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr,
   }  
 }
 
-void numflux_integral(int lev,int d,int M, 
-  amrex::Vector<amrex::MultiFab>* U_ptr_m, 
-  amrex::Vector<amrex::MultiFab>* U_ptr_p,
-  amrex::Vector<amrex::MultiFab>* F_ptr_m,
-  amrex::Vector<amrex::MultiFab>* F_ptr_p,
-  amrex::Vector<amrex::MultiFab>* DF_ptr_m,
-  amrex::Vector<amrex::MultiFab>* DF_ptr_p)
+void AmrDG::numflux_integral(int lev,int d,int M, int N,
+                            amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+                            amrex::Vector<amrex::MultiFab>* U_ptr_p,
+                            amrex::Vector<amrex::MultiFab>* F_ptr_m,
+                            amrex::Vector<amrex::MultiFab>* F_ptr_p,
+                            amrex::Vector<amrex::MultiFab>* DF_ptr_m,
+                            amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
-  /*
-  //U_ptr_m, U_ptr_p passed as arguments because if use ADERwe pass predictor
-  //if use RK methods pass the solution.
+  amrex::Real dvol = mesh->get_dvol(lev,d);
   
-  auto const dx = geom[lev].CellSizeArray(); 
-  amrex::Real dvol = 1.0;
-  for(int _d = 0; _d < AMREX_SPACEDIM; ++_d){
-    if(_d!=d){dvol*=dx[_d];}
-  }
-
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
   amrex::Vector<amrex::MultiFab *> state_fnumm_int(Q);
@@ -426,15 +418,18 @@ void numflux_integral(int lev,int d,int M,
   amrex::Vector<const amrex::MultiFab *> state_up(Q);
 
   for(int q=0 ; q<Q; ++q){
+    state_um[q] = &((*U_ptr_m)[q]); 
+    state_up[q] = &((*U_ptr_p)[q]); 
+
+    state_fm[q] = &((*F_ptr_m)[q]);
+    state_fp[q] = &((*F_ptr_p)[q]);
+
+    state_dfm[q] = &((*DF_ptr_m)[q]);
+    state_dfp[q] = &((*DF_ptr_p)[q]);
+
     state_fnum[q] = &(Fnum[lev][d][q]); 
     state_fnumm_int[q] = &(Fnumm_int[lev][d][q]); 
     state_fnump_int[q] = &(Fnump_int[lev][d][q]); 
-    state_fm[q] = &(Fm[lev][d][q]); 
-    state_fp[q] = &(Fp[lev][d][q]); 
-    state_dfm[q] = &(DFm[lev][d][q]); 
-    state_dfp[q] = &(DFp[lev][d][q]);     
-    state_um[q] = &((*U_ptr_m)[q]); 
-    state_up[q] = &((*U_ptr_p)[q]); 
   }
     
 #ifdef AMREX_USE_OMP
@@ -497,27 +492,26 @@ void numflux_integral(int lev,int d,int M,
         amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
         {
           //check which indices it iterate across, i.e if last one is reachd
-          fnum[q](i,j,k,m) = NumericalFlux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
+          fnum[q](i,j,k,m) = numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
         });          
-        amrex::ParallelFor(bx, Np,[&] (int i, int j, int k, int n) noexcept
+        amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
         {
             (fnumm_int[q])(i,j,k,n) = 0.0;
             (fnump_int[q])(i,j,k,n) = 0.0;        
         }); 
         for(int m = 0; m < M; ++m){ 
-          amrex::ParallelFor(bx, Np,[&] (int i, int j, int k, int n) noexcept
+          amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
           {
-            (fnumm_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d][n][m])*dvol*dt);
-            (fnump_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d+1][n][m])*dvol*dt);     
+            (fnumm_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d][n][m])*dvol*Dt);
+            (fnump_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d+1][n][m])*dvol*Dt);     
           });
         }
       }
     }
   }
-    */
 }
 
-void numflux(int d, int m,int i, int j, int k, 
+amrex::Real AmrDG::numflux(int d, int m,int i, int j, int k, 
   amrex::Array4<const amrex::Real> up, 
   amrex::Array4<const amrex::Real> um, 
   amrex::Array4<const amrex::Real> fp,
@@ -525,7 +519,7 @@ void numflux(int d, int m,int i, int j, int k,
   amrex::Array4<const amrex::Real> dfp,
   amrex::Array4<const amrex::Real> dfm)
 {
-  /*
+  
   //implementation of the numerical flux across interface
   //---------
   //    |        
@@ -549,7 +543,7 @@ void numflux(int d, int m,int i, int j, int k,
   C = (amrex::Real)std::max((amrex::Real)std::abs(DfL),(amrex::Real)std::abs(DfR));
 
   return 0.5*(fL+fR)-0.5*C*(uR-uL);
-  */
+  
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /*
