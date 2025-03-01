@@ -67,6 +67,46 @@ class Solver
                             amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                             const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
+        template <typename EquationType>
+        void source(int lev,int M, 
+                    std::shared_ptr<EquationType> model_pde,
+                    amrex::Vector<amrex::MultiFab>* U_ptr,
+                    amrex::Vector<amrex::MultiFab>* S_ptr,
+                    const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
+
+        template <typename EquationType>                
+        void flux(int lev,int d, int M, 
+                    std::shared_ptr<EquationType> model_pde,
+                    amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                    amrex::Vector<amrex::MultiFab>* U_ptr,
+                    amrex::Vector<amrex::MultiFab>* F_ptr,
+                    const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
+
+        template <typename EquationType>
+        void flux_bd(int lev,int d, int M, 
+                    std::shared_ptr<EquationType> model_pde,
+                    amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                    amrex::Vector<amrex::MultiFab>* U_ptr,
+                    amrex::Vector<amrex::MultiFab>* F_ptr,
+                    amrex::Vector<amrex::MultiFab>* DF_ptr,
+                    const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
+
+        void numflux(int d, int m,int i, int j, int k, 
+                    amrex::Array4<const amrex::Real> up, 
+                    amrex::Array4<const amrex::Real> um, 
+                    amrex::Array4<const amrex::Real> fp,
+                    amrex::Array4<const amrex::Real> fm,  
+                    amrex::Array4<const amrex::Real> dfp,
+                    amrex::Array4<const amrex::Real> dfm);
+
+        void numflux_integral(int lev,int d,int M, 
+                            amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+                            amrex::Vector<amrex::MultiFab>* U_ptr_p,
+                            amrex::Vector<amrex::MultiFab>* F_ptr_m,
+                            amrex::Vector<amrex::MultiFab>* F_ptr_p,
+                            amrex::Vector<amrex::MultiFab>* DF_ptr_m,
+                            amrex::Vector<amrex::MultiFab>* DF_ptr_p);
+
         //get solution vector derivative
         template <typename EquationType>
         void get_dU(std::shared_ptr<EquationType> model_pde);
@@ -416,5 +456,67 @@ void Solver<NumericalMethodType>::get_U_from_U_w(amrex::Vector<amrex::MultiFab>*
 {
     static_cast<NumericalMethodType*>(this)->get_U_from_U_w(U_ptr,U_w_ptr,xi);    
 }
+
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::source(int lev,int M, 
+                                        std::shared_ptr<EquationType> model_pde,
+                                        amrex::Vector<amrex::MultiFab>* U_ptr,
+                                        amrex::Vector<amrex::MultiFab>* S_ptr,
+                                        const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
+    static_cast<NumericalMethodType*>(this)->source(lev,M,U_ptr,S_ptr,xi); 
+}
+
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::flux(int lev,int d, int M, 
+                                        std::shared_ptr<EquationType> model_pde,
+                                        amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                                        amrex::Vector<amrex::MultiFab>* U_ptr,
+                                        amrex::Vector<amrex::MultiFab>* F_ptr,
+                                        const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
+    static_cast<NumericalMethodType*>(this)->flux(lev,d,M,U_w_ptr,U_ptr,F_ptr,xi); 
+}
+
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::flux_bd(int lev,int d, int M, 
+                                        std::shared_ptr<EquationType> model_pde,
+                                        amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                                        amrex::Vector<amrex::MultiFab>* U_ptr,
+                                        amrex::Vector<amrex::MultiFab>* F_ptr,
+                                        amrex::Vector<amrex::MultiFab>* DF_ptr,
+                                        const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
+    static_cast<NumericalMethodType*>(this)->flux_bd(lev,d,M,U_w_ptr,U_ptr,F_ptr,DF_ptr,xi); 
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::numflux(int d, int m,int i, int j, int k, 
+                                        amrex::Array4<const amrex::Real> up, 
+                                        amrex::Array4<const amrex::Real> um, 
+                                        amrex::Array4<const amrex::Real> fp,
+                                        amrex::Array4<const amrex::Real> fm,  
+                                        amrex::Array4<const amrex::Real> dfp,
+                                        amrex::Array4<const amrex::Real> dfm)
+{
+    static_cast<NumericalMethodType*>(this)->numflux(d,m,i,j,k,up,um,fp,fm,dfp,dfm); 
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::numflux_integral(int lev,int d,int M, 
+                                                    amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+                                                    amrex::Vector<amrex::MultiFab>* U_ptr_p,
+                                                    amrex::Vector<amrex::MultiFab>* F_ptr_m,
+                                                    amrex::Vector<amrex::MultiFab>* F_ptr_p,
+                                                    amrex::Vector<amrex::MultiFab>* DF_ptr_m,
+                                                    amrex::Vector<amrex::MultiFab>* DF_ptr_p)
+{
+    static_cast<NumericalMethodType*>(this)->numflux_integral(lev,d,M,U_ptr_m,U_ptr_p,F_ptr_m,
+                                                            F_ptr_p,DF_ptr_m,DF_ptr_p); 
+}
+
 
 #endif 
