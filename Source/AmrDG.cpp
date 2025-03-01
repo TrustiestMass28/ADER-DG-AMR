@@ -223,13 +223,20 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
   }
 }
 
-void AmrDG::get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
+//N=
+//M=qM = xi.size();
+void AmrDG::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
                           amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-  int qM = xi.size();
+  //Can evalaute U_w (Np_s) at boundary using bd quadrature pts qM_s_bd or 
+  //for the entire cell using qM_s
+  //M=quadrule->qM_s;
+  //N=basefunc->qM_s
 
-  for(int m = 0; m<qM ; ++m){
+  //int qM = xi.size();
+
+  for(int m = 0; m<M ; ++m){
     amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
     amrex::Vector<amrex::MultiFab *> state_u(Q); 
 
@@ -266,7 +273,7 @@ void AmrDG::get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
           amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
           {(u[q])(i,j,k,m)=0.0;}); 
 
-          amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k,int n) noexcept
+          amrex::ParallelFor(bx,N,[&] (int i, int j, int k,int n) noexcept
           { 
             (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_s(n,basefunc->basis_idx_s,xi[m])); 
           });  
@@ -277,15 +284,16 @@ void AmrDG::get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
   }
 }
 
-//TODO:pass N as argument toghether with M, in this way methos cna work both for ADER but also normal approaches
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void AmrDG::get_H_from_H_w(amrex::Vector<amrex::MultiFab>* H_ptr,
+void AmrDG::get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
                           amrex::Vector<amrex::MultiFab>* H_w_ptr, 
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-  int qM = xi.size();
+  //int qM = xi.size();
 
-  for(int m = 0; m<qM ; ++m){
+  //Can evalaute H_w (Np_st) at boundary using bd quadrature pts qM_st_bd or 
+  //for the entire cell using qM_st
+
+  for(int m = 0; m<M ; ++m){
     amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
     amrex::Vector<amrex::MultiFab *> state_u(Q); 
 
@@ -322,7 +330,7 @@ void AmrDG::get_H_from_H_w(amrex::Vector<amrex::MultiFab>* H_ptr,
           amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
           {(u[q])(i,j,k,m)=0.0;}); 
     
-          amrex::ParallelFor(bx,basefunc->Np_st,[&] (int i, int j, int k,int n) noexcept
+          amrex::ParallelFor(bx,N,[&] (int i, int j, int k,int n) noexcept
           { 
             (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_st(n,basefunc->basis_idx_st,xi[m])); 
           });            

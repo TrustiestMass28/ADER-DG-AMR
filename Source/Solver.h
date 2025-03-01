@@ -62,8 +62,9 @@ class Solver
         void get_U();
 
         //reconstruct solution vector evaluation based on its decomposition
-        //and quadrature
-        void get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
+        //and quadrature. M,N to be specified s.t we cna choose
+        //to evaluate at boundary or in cell
+        void get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
                             amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                             const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
@@ -450,11 +451,11 @@ void Solver<NumericalMethodType>::set_Dt(std::shared_ptr<EquationType> model_pde
 }
 
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
+void Solver<NumericalMethodType>::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
                                                 amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                                                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-    static_cast<NumericalMethodType*>(this)->get_U_from_U_w(U_ptr,U_w_ptr,xi);    
+    static_cast<NumericalMethodType*>(this)->get_U_from_U_w(M,N,U_ptr,U_w_ptr,xi);    
 }
 
 template <typename NumericalMethodType>
@@ -506,7 +507,7 @@ void Solver<NumericalMethodType>::numflux(int d, int m,int i, int j, int k,
 }
 
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::numflux_integral(int lev,int d,int M, 
+void Solver<NumericalMethodType>::numflux_integral(int lev,int d, int M,
                                                     amrex::Vector<amrex::MultiFab>* U_ptr_m, 
                                                     amrex::Vector<amrex::MultiFab>* U_ptr_p,
                                                     amrex::Vector<amrex::MultiFab>* F_ptr_m,
