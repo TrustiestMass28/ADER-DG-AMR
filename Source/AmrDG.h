@@ -51,7 +51,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void set_init_data_component(int lev,const BoxArray& ba,
                                 const DistributionMapping& dm, int q);
 
-    void get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
+    void get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
                         amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
     
@@ -169,7 +169,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                       amrex::Vector<amrex::MultiFab>* H_w_ptr);
     
-    void get_H_from_H_w(amrex::Vector<amrex::MultiFab>* H_ptr,
+    void get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
                         amrex::Vector<amrex::MultiFab>* H_w_ptr, 
                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
     
