@@ -31,6 +31,22 @@ class ModelEquation
         static_cast<EquationType*>(this)->init();
     }
 
+    //implementation of the physical flux present in the hyperbolic PDE
+    virtual amrex::Real pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
+                                amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                const amrex::Vector<amrex::Real>& xi) const =0;
+
+    //derivative of the physical flux of the hyperbolic PDE
+    //if we are solving a system, then we have to specify here 
+    //the unique eigenvalues of Jacobian of the flux
+    virtual amrex::Real pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
+                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                  const amrex::Vector<amrex::Real>& xi) const =0;
+            
+    virtual amrex::Real pde_source(int lev,int q, int m, int i, int j, int k, 
+                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                  const amrex::Vector<amrex::Real>& xi) const =0;
+
     //Number of model equations in the system
     int Q_model;
 
@@ -71,19 +87,7 @@ class ModelEquation
     void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
       ofs = _ofs;
     }
-       
-    virtual amrex::Real pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
-                                amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                amrex::Vector<amrex::Real> xi) const =0;
-                          
-    virtual amrex::Real pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
-                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                  amrex::Vector<amrex::Real> xi) const =0;
-                                  
-    virtual amrex::Real pde_source(int lev,int q, int m, int i, int j, int k, 
-                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                  amrex::Vector<amrex::Real> xi) const =0;
-                                                                    
+                                                            
     virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k,
                               amrex::Vector<amrex::Real> xi) = 0;
 

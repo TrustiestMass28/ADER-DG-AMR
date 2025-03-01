@@ -277,6 +277,8 @@ void AmrDG::get_U_from_U_w(amrex::Vector<amrex::MultiFab>* U_ptr,
   }
 }
 
+//TODO:pass N as argument toghether with M, in this way methos cna work both for ADER but also normal approaches
+///////////////////////////////////////////////////////////////////////////////////////////////////
 void AmrDG::get_H_from_H_w(amrex::Vector<amrex::MultiFab>* H_ptr,
                           amrex::Vector<amrex::MultiFab>* H_w_ptr, 
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
@@ -330,7 +332,218 @@ void AmrDG::get_H_from_H_w(amrex::Vector<amrex::MultiFab>* H_ptr,
   }
 }
 
+void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                          amrex::Vector<amrex::MultiFab>* H_w_ptr)
+{
 
+  amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
+  amrex::Vector<amrex::MultiFab *> state_h_w(Q); 
+
+  for(int q=0; q<Q; ++q){
+    state_u_w[q]=&((*U_w_ptr)[q]);
+    state_h_w[q]=&((*H_w_ptr)[q]); 
+  } 
+
+  #ifdef AMREX_USE_OMP
+  #pragma omp parallel
+  #endif
+  { 
+    amrex::Vector<amrex::FArrayBox *> fab_h_w(Q);
+    amrex::Vector<amrex::Array4<amrex::Real>> hw(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_u_w(Q);
+    amrex::Vector<amrex::Array4<const amrex::Real>> uw(Q);   
+
+    #ifdef AMREX_USE_OMP  
+    for (MFIter mfi(*(state_h_w[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+    #else
+    for (MFIter mfi(*(state_h_w[0]),true); mfi.isValid(); ++mfi)
+    #endif
+    {
+      const amrex::Box& bx = mfi.growntilebox();
+
+      for(int q=0 ; q<Q; ++q){      
+        fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
+        fab_h_w[q]= &((*(state_h_w[q]))[mfi]);
+
+        uw[q] = fab_u_w[q]->const_array();
+        hw[q]=(*(fab_h_w[q])).array();
+      }
+
+      for(int q=0 ; q<Q; ++q){
+        amrex::ParallelFor(bx, basefunc->Np_st,[&] (int i, int j, int k, int n) noexcept
+        {   
+          if(n<basefunc->Np_s)
+          {
+            amrex::Real tmp = (uw[q])(i,j,k,n); 
+            (hw[q])(i,j,k,n)=tmp;  
+          } 
+          else
+          {
+            (hw[q])(i,j,k,n)=0.0;
+          }                
+        }); 
+      }      
+    }  
+  }  
+}
+
+void numflux_integral(int lev,int d,int M, 
+  amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+  amrex::Vector<amrex::MultiFab>* U_ptr_p,
+  amrex::Vector<amrex::MultiFab>* F_ptr_m,
+  amrex::Vector<amrex::MultiFab>* F_ptr_p,
+  amrex::Vector<amrex::MultiFab>* DF_ptr_m,
+  amrex::Vector<amrex::MultiFab>* DF_ptr_p)
+{
+  /*
+  //U_ptr_m, U_ptr_p passed as arguments because if use ADERwe pass predictor
+  //if use RK methods pass the solution.
+  
+  auto const dx = geom[lev].CellSizeArray(); 
+  amrex::Real dvol = 1.0;
+  for(int _d = 0; _d < AMREX_SPACEDIM; ++_d){
+    if(_d!=d){dvol*=dx[_d];}
+  }
+
+  //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
+  amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
+  amrex::Vector<amrex::MultiFab *> state_fnumm_int(Q);
+  amrex::Vector<amrex::MultiFab *> state_fnump_int(Q);
+  
+  amrex::Vector<const amrex::MultiFab *> state_fm(Q);
+  amrex::Vector<const amrex::MultiFab *> state_fp(Q); 
+  amrex::Vector<const amrex::MultiFab *> state_dfm(Q);
+  amrex::Vector<const amrex::MultiFab *> state_dfp(Q);
+  amrex::Vector<const amrex::MultiFab *> state_um(Q);
+  amrex::Vector<const amrex::MultiFab *> state_up(Q);
+
+  for(int q=0 ; q<Q; ++q){
+    state_fnum[q] = &(Fnum[lev][d][q]); 
+    state_fnumm_int[q] = &(Fnumm_int[lev][d][q]); 
+    state_fnump_int[q] = &(Fnump_int[lev][d][q]); 
+    state_fm[q] = &(Fm[lev][d][q]); 
+    state_fp[q] = &(Fp[lev][d][q]); 
+    state_dfm[q] = &(DFm[lev][d][q]); 
+    state_dfp[q] = &(DFp[lev][d][q]);     
+    state_um[q] = &((*U_ptr_m)[q]); 
+    state_up[q] = &((*U_ptr_p)[q]); 
+  }
+    
+#ifdef AMREX_USE_OMP
+#pragma omp parallel 
+#endif
+  {
+    amrex::Vector<amrex::FArrayBox *> fab_fnum(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnum(Q);
+    amrex::Vector<amrex::FArrayBox *> fab_fnumm_int(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnumm_int(Q);
+    amrex::Vector<amrex::FArrayBox *> fab_fnump_int(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnump_int(Q);
+    
+    amrex::Vector<const amrex::FArrayBox *> fab_fm(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > fm(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_fp(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > fp(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_dfm(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > dfm(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_dfp(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > dfp(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_um(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > um(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_up(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > up(Q);
+    
+    #ifdef AMREX_USE_OMP  
+    for (MFIter mfi(*(state_fnum[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+    #else
+    for (MFIter mfi(*(state_fnum[0]),true); mfi.isValid(); ++mfi)
+    #endif    
+    {
+      //externally grown tilebox
+      const amrex::Box& bx = mfi.tilebox();
+      
+      for(int q=0 ; q<Q; ++q){
+        fab_fnum[q]=&((*(state_fnum[q]))[mfi]);
+        fab_fnumm_int[q]=&((*(state_fnumm_int[q]))[mfi]);
+        fab_fnump_int[q]=&((*(state_fnump_int[q]))[mfi]);        
+        fab_fm[q] = state_fm[q]->fabPtr(mfi);
+        fab_fp[q] = state_fp[q]->fabPtr(mfi);
+        fab_dfm[q] = state_dfm[q]->fabPtr(mfi);
+        fab_dfp[q] = state_dfp[q]->fabPtr(mfi);
+        fab_um[q] = state_um[q]->fabPtr(mfi);
+        fab_up[q] = state_up[q]->fabPtr(mfi);
+        
+        fnum[q]=(*(fab_fnum[q])).array();
+        fnumm_int[q]=(*(fab_fnumm_int[q])).array();
+        fnump_int[q]=(*(fab_fnump_int[q])).array(); 
+        fm[q] = fab_fm[q]->const_array();
+        fp[q] = fab_fp[q]->const_array();
+        dfm[q] = fab_dfm[q]->const_array();
+        dfp[q] = fab_dfp[q]->const_array();
+        um[q] = fab_um[q]->const_array();
+        up[q] = fab_up[q]->const_array();
+      }
+            
+      for(int q=0 ; q<Q; ++q){
+        //compute the pointwise evaluations of the numerical flux
+        amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
+        {
+          //check which indices it iterate across, i.e if last one is reachd
+          fnum[q](i,j,k,m) = NumericalFlux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
+        });          
+        amrex::ParallelFor(bx, Np,[&] (int i, int j, int k, int n) noexcept
+        {
+            (fnumm_int[q])(i,j,k,n) = 0.0;
+            (fnump_int[q])(i,j,k,n) = 0.0;        
+        }); 
+        for(int m = 0; m < M; ++m){ 
+          amrex::ParallelFor(bx, Np,[&] (int i, int j, int k, int n) noexcept
+          {
+            (fnumm_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d][n][m])*dvol*dt);
+            (fnump_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d+1][n][m])*dvol*dt);     
+          });
+        }
+      }
+    }
+  }
+    */
+}
+
+void numflux(int d, int m,int i, int j, int k, 
+  amrex::Array4<const amrex::Real> up, 
+  amrex::Array4<const amrex::Real> um, 
+  amrex::Array4<const amrex::Real> fp,
+  amrex::Array4<const amrex::Real> fm,  
+  amrex::Array4<const amrex::Real> dfp,
+  amrex::Array4<const amrex::Real> dfm)
+{
+  /*
+  //implementation of the numerical flux across interface
+  //---------
+  //    |        
+  //  L | R      
+  //    |
+  //---------
+
+  amrex::Real C;
+  int shift[] = {0,0,0};
+  amrex::Real uR,uL,fR,fL,DfR,DfL;
+
+  shift[d] = -1;
+  
+  //L,R w.r.t boundary plus L==idx, R==idx+1
+  uL  = up(i+shift[0],j+shift[1],k+shift[2],m);
+  uR  = um(i,j,k,m);   
+  fL  = fp(i+shift[0],j+shift[1],k+shift[2],m);
+  fR  = fm(i,j,k,m);     
+  DfL = dfp(i+shift[0],j+shift[1],k+shift[2],m);
+  DfR = dfm(i,j,k,m);     
+  C = (amrex::Real)std::max((amrex::Real)std::abs(DfL),(amrex::Real)std::abs(DfR));
+
+  return 0.5*(fL+fR)-0.5*C*(uR-uL);
+  */
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
 /*
 
 #include <AMReX_AmrCore.H>

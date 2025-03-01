@@ -14,6 +14,18 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
 
     void settings(std::string _euler_case);
 
+    virtual amrex::Real pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
+                                amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                const amrex::Vector<amrex::Real>& xi) const override {return 0.0;};
+
+    virtual amrex::Real pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
+                                amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                const amrex::Vector<amrex::Real>& xi) const override {return 0.0;};
+            
+    virtual amrex::Real pde_source(int lev, int q, int m, int i, int j, int k, 
+                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                  const amrex::Vector<amrex::Real>& xi) const override {return 0.0;}; 
+
   private:
 
       //Flag to indicate if angular momentum is on/off
@@ -30,17 +42,7 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
     ~Compressible_Euler() override {};
     
     
-    virtual amrex::Real pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
-                                amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                amrex::Vector<amrex::Real> xi) const override;
 
-    virtual amrex::Real pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
-                                 amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                 amrex::Vector<amrex::Real> xi) const override;
-                                  
-    virtual amrex::Real pde_source(int lev, int q, int m, int i, int j, int k, 
-                                      amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                      amrex::Vector<amrex::Real> xi) const override; 
                                   
     virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k,
                                amrex::Vector<amrex::Real> xi) override;
