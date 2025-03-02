@@ -230,6 +230,9 @@ class Solver
                 amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdm;
 
                 amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdp;
+
+                //  for single cell center evaluation , to be sued e.g for Dt computation
+                amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_s_center;
                    
                 //  for temporal basis functions
                 amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_t;

@@ -26,6 +26,9 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
                                   amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                   const amrex::Vector<amrex::Real>& xi) const override {return 0.0;}; 
 
+    virtual amrex::Real pde_cfl_lambda(int d,int m,int i, int j, int k,
+                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u) const override {return 0.0;};
+
   private:
 
       //Flag to indicate if angular momentum is on/off

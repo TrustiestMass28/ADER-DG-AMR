@@ -47,6 +47,10 @@ class ModelEquation
                                   amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                   const amrex::Vector<amrex::Real>& xi) const =0;
 
+    //return characteristic speed used for CFL number and Dt computation
+    virtual amrex::Real pde_cfl_lambda(int d,int m,int i, int j, int k,
+                                amrex::Vector<amrex::Array4<const amrex::Real>>* u) const = 0;
+
     //Number of model equations in the system
     int Q_model;
 
@@ -91,8 +95,7 @@ class ModelEquation
     virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k,
                               amrex::Vector<amrex::Real> xi) = 0;
 
-    virtual amrex::Real pde_CFL(int d,int m,int i, int j, int k,
-                                amrex::Vector<amrex::Array4<const amrex::Real>>* u) const = 0;
+
 
     virtual void pde_derived_qty(int lev, int q, int m, int i, int j, int k, 
                               amrex::Vector<amrex::Array4<amrex::Real>>* u,

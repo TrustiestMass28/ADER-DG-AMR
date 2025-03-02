@@ -66,6 +66,9 @@ void AmrDG::init()
                             amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_st_bd,
                             amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
 
+  //construt a center point of a [1,1]^D cell
+  quadrule->xi_ref_quad_s_center.resize(1,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
+
   //xi_ref_equidistant.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)); 
 
   //Generation of quadrature pts
@@ -674,6 +677,101 @@ void AmrDG::update_U_w(int lev)
   }
 }
 
+void AmrDG::update_H_w(int lev)
+{ 
+  for(int q=0; q<Q; ++q)
+  {
+    const auto dx = mesh->get_dx(lev);
+    
+    amrex::MultiFab& state_h_w = H_w[lev][q];
+    amrex::MultiFab& state_u_w = U_w[lev][q];
+    
+    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM);  
+
+    for(int d = 0; d < AMREX_SPACEDIM; ++d){
+      state_f[d]=&(F[lev][d][q]); 
+    }
+    
+    amrex::MultiFab state_rhs;
+    state_rhs.define(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), basefunc->Np_st, mesh->nghost); 
+    state_rhs.setVal(0.0); 
+    
+#ifdef AMREX_USE_OMP
+#pragma omp parallel 
+#endif
+    {
+      amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
+      amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);  
+    
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(state_h_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+      #else
+      for (MFIter mfi(state_h_w,true); mfi.isValid(); ++mfi)
+      #endif  
+      {
+        const amrex::Box& bx = mfi.growntilebox();
+        
+        amrex::FArrayBox& fab_h_w = state_h_w[mfi];
+        amrex::Array4<amrex::Real> const& hw = fab_h_w.array();
+
+        amrex::FArrayBox& fab_u_w = state_u_w[mfi];
+        amrex::Array4<amrex::Real> const& uw = fab_u_w.array();
+        
+        amrex::FArrayBox& fab_rhs = state_rhs[mfi];
+        amrex::Array4<amrex::Real> const& rhs = fab_rhs.array();
+        
+        for(int d = 0; d < AMREX_SPACEDIM; ++d){
+          fab_f[d]=state_f[d]->fabPtr(mfi);
+          f[d]= fab_f[d]->const_array();
+        } 
+        
+        
+        for(int m =0; m<basefunc->Np_s; ++m)
+        { 
+          amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
+          {
+            rhs(i,j,k,n) += Mk_pred[n][m]*uw(i,j,k,m);       
+            
+            hw(i,j,k,n) = 0.0;
+          });
+        }
+        
+        for(int d=0; d<AMREX_SPACEDIM; ++d)
+        {
+          for(int m =0; m<quadrule->qMp_st; ++m)
+          {
+            amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
+            {  
+              rhs(i,j,k,n) -= ((Dt/(amrex::Real)dx[d])*Sk_predVinv[d][n][m]*f[d](i,j,k,m));
+            });
+          }
+        }
+      
+        if(flag_source_term){
+          amrex::MultiFab& state_source = S[lev][q];
+          amrex::FArrayBox& fab_source = state_source[mfi];
+          amrex::Array4<amrex::Real> const& source = fab_source.array();
+        
+          for(int m =0; m<quadrule->qMp_st; ++m)
+          {
+            amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
+            {        
+              rhs(i,j,k,n)+=(Dt/2.0)*Mk_pred_srcVinv[n][m]*source(i,j,k,m);
+            });
+          }
+        }
+        
+        for(int m =0; m<basefunc->Np_st; ++m){  
+          amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
+          {
+            hw(i,j,k,n) += Mk_h_w_inv[n][m]*rhs(i,j,k,m); 
+          });       
+        }
+      }
+    }     
+  }
+}
+
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1057,169 +1155,6 @@ void AmrDG::Evolve()
 }
 
 
-
-//updates predictor on valid+ghost cells
-void AmrDG::Update_H_w(int lev, int q)
-{ 
-  if(model_pde->flag_source_term){
-
-    auto const dx = geom[lev].CellSizeArray();
-    
-    amrex::MultiFab& state_h_w = H_w[lev][q];
-    amrex::MultiFab& state_u_w = U_w[lev][q];
-    amrex::MultiFab& state_source = S[lev][q];
-
-    amrex::MultiFab state_rhs;
-    state_rhs.define(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), mNp, nghost); 
-    state_rhs.setVal(0.0);
-    
-    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
-    
-    for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      state_f[d]=&(F[lev][d][q]); 
-    }
-    
-#ifdef AMREX_USE_OMP
-#pragma omp parallel 
-#endif
-  {
-      amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
-      amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);  
-    
-      #ifdef AMREX_USE_OMP  
-      for (MFIter mfi(state_h_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-      #else
-      for (MFIter mfi(state_h_w,true); mfi.isValid(); ++mfi)
-      #endif  
-      {
-        const amrex::Box& bx = mfi.growntilebox();
-        
-        amrex::FArrayBox& fab_h_w = state_h_w[mfi];
-        amrex::Array4<amrex::Real> const& hw = fab_h_w.array();
-
-        amrex::FArrayBox& fab_u_w = state_u_w[mfi];
-        amrex::Array4<amrex::Real> const& uw = fab_u_w.array();
-        
-        amrex::FArrayBox& fab_source = state_source[mfi];
-        amrex::Array4<amrex::Real> const& source = fab_source.array();
-
-        amrex::FArrayBox& fab_rhs = state_rhs[mfi];
-        amrex::Array4<amrex::Real> const& rhs = fab_rhs.array();
-        
-        for(int d = 0; d < AMREX_SPACEDIM; ++d){
-          fab_f[d]=state_f[d]->fabPtr(mfi);
-          f[d]= fab_f[d]->const_array();
-        } 
- 
-        for(int m =0; m<Np; ++m)
-        { 
-          amrex::ParallelFor(bx, mNp, [&] (int i, int j, int k, int n) noexcept
-          {
-            rhs(i,j,k,n) += Mk_pred[n][m]*uw(i,j,k,m);       
-            
-            hw(i,j,k,n) = 0.0;
-          });
-        }
-
-        for(int d=0; d<AMREX_SPACEDIM; ++d)
-        {
-          for(int m =0; m<qMp; ++m)
-          {
-            amrex::ParallelFor(bx, mNp, [&] (int i, int j, int k, int n) noexcept
-            {  
-              rhs(i,j,k,n) -= ((dt/(amrex::Real)dx[d])*Sk_predVinv[d][n][m]*f[d](i,j,k,m));
-              
-              rhs(i,j,k,n)+=(dt/2.0)*Mk_sVinv[n][m]*source(i,j,k,m);
-            });
-          }
-        }
-        
-        for(int m =0; m<mNp; ++m){  
-          amrex::ParallelFor(bx, mNp, [&] (int i, int j, int k, int n) noexcept
-          {
-            hw(i,j,k,n) += Mk_h_w_inv[n][m]*rhs(i,j,k,m);
-          });       
-        }          
-      }
-    }    
-  }
-  else
-  {
-    auto const dx = geom[lev].CellSizeArray();
-    
-    amrex::MultiFab& state_h_w = H_w[lev][q];
-    amrex::MultiFab& state_u_w = U_w[lev][q];
-    
-    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM);  
-
-    for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      state_f[d]=&(F[lev][d][q]); 
-    }
-    
-    amrex::MultiFab state_rhs;
-    state_rhs.define(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), mNp, nghost); 
-    state_rhs.setVal(0.0);
-    
-#ifdef AMREX_USE_OMP
-#pragma omp parallel 
-#endif
-    {
-      amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
-      amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);  
-    
-      #ifdef AMREX_USE_OMP  
-      for (MFIter mfi(state_h_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-      #else
-      for (MFIter mfi(state_h_w,true); mfi.isValid(); ++mfi)
-      #endif  
-      {
-        const amrex::Box& bx = mfi.growntilebox();
-        
-        amrex::FArrayBox& fab_h_w = state_h_w[mfi];
-        amrex::Array4<amrex::Real> const& hw = fab_h_w.array();
-
-        amrex::FArrayBox& fab_u_w = state_u_w[mfi];
-        amrex::Array4<amrex::Real> const& uw = fab_u_w.array();
-        
-        amrex::FArrayBox& fab_rhs = state_rhs[mfi];
-        amrex::Array4<amrex::Real> const& rhs = fab_rhs.array();
-        
-        for(int d = 0; d < AMREX_SPACEDIM; ++d){
-          fab_f[d]=state_f[d]->fabPtr(mfi);
-          f[d]= fab_f[d]->const_array();
-        } 
-
-        for(int m =0; m<Np; ++m)
-        { 
-          amrex::ParallelFor(bx, mNp, [&] (int i, int j, int k, int n) noexcept
-          {
-            rhs(i,j,k,n) += Mk_pred[n][m]*uw(i,j,k,m);       
-            
-            hw(i,j,k,n) = 0.0;
-          });
-        }
-
-        for(int d=0; d<AMREX_SPACEDIM; ++d)
-        {
-          for(int m =0; m<qMp; ++m)
-          {
-            amrex::ParallelFor(bx, mNp, [&] (int i, int j, int k, int n) noexcept
-            {  
-              rhs(i,j,k,n) -= ((dt/(amrex::Real)dx[d])*Sk_predVinv[d][n][m]*f[d](i,j,k,m));
-            });
-          }
-        }
-        
-        for(int m =0; m<mNp; ++m){  
-          amrex::ParallelFor(bx, mNp, [&] (int i, int j, int k, int n) noexcept
-          {
-            hw(i,j,k,n) += Mk_h_w_inv[n][m]*rhs(i,j,k,m);
-          });       
-        }
-      }
-    }     
-  }
-}
 
 
 
