@@ -542,9 +542,140 @@ amrex::Real AmrDG::numflux(int d, int m,int i, int j, int k,
   DfR = dfm(i,j,k,m);     
   C = (amrex::Real)std::max((amrex::Real)std::abs(DfL),(amrex::Real)std::abs(DfR));
 
-  return 0.5*(fL+fR)-0.5*C*(uR-uL);
-  
+  return 0.5*(fL+fR)-0.5*C*(uR-uL);  
 }
+
+//updates solution on valid cells
+void AmrDG::update_U_w(int lev)
+{
+  const auto dx = mesh->get_dx(lev);
+  amrex::Real vol = mesh->get_dvol(lev);
+
+  for(int q=0; q<Q; ++q){
+    amrex::MultiFab& state_u_w = U_w[lev][q];
+
+    amrex::MultiFab state_rhs;
+    state_rhs.define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), basefunc->Np_s, mesh->nghost); 
+    state_rhs.setVal(0.0);
+    
+    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
+    amrex::Vector<const amrex::MultiFab *> state_fnum(AMREX_SPACEDIM); 
+    amrex::Vector<const amrex::MultiFab *> state_fnumm_int(AMREX_SPACEDIM); 
+    amrex::Vector<const amrex::MultiFab *> state_fnump_int(AMREX_SPACEDIM); 
+    
+    for(int d = 0; d < AMREX_SPACEDIM; ++d){
+      state_f[d]=&(F[lev][d][q]); 
+      state_fnum[d]=&(Fnum[lev][d][q]); 
+      state_fnumm_int[d]=&(Fnumm_int[lev][d][q]); 
+      state_fnump_int[d]=&(Fnump_int[lev][d][q]); 
+    }
+    
+#ifdef AMREX_USE_OMP
+#pragma omp parallel 
+#endif
+    {
+      amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
+      amrex::Vector<const amrex::FArrayBox *> fab_fnum(AMREX_SPACEDIM);
+      amrex::Vector<const amrex::FArrayBox *> fab_fnumm_int(AMREX_SPACEDIM);
+      amrex::Vector<const amrex::FArrayBox *> fab_fnump_int(AMREX_SPACEDIM);
+      amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);   
+      amrex::Vector<amrex::Array4<const amrex::Real> > fnum(AMREX_SPACEDIM); 
+      amrex::Vector<amrex::Array4<const amrex::Real> > fnumm_int(AMREX_SPACEDIM); 
+      amrex::Vector<amrex::Array4<const amrex::Real> > fnump_int(AMREX_SPACEDIM); 
+      
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(state_u_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+      #else
+      for (MFIter mfi(state_u_w,true); mfi.isValid(); ++mfi)
+      #endif 
+      {
+        const amrex::Box& bx = mfi.tilebox();
+        
+        amrex::FArrayBox& fab_u_w = state_u_w[mfi];
+        amrex::Array4<amrex::Real> const& uw = fab_u_w.array();
+  
+        amrex::FArrayBox& fab_rhs = state_rhs[mfi];
+        amrex::Array4<amrex::Real> const& rhs = fab_rhs.array();
+        
+        for(int d = 0; d < AMREX_SPACEDIM; ++d){
+          fab_f[d]=state_f[d]->fabPtr(mfi);
+          fab_fnum[d]=state_fnum[d]->fabPtr(mfi);
+          fab_fnumm_int[d]=state_fnumm_int[d]->fabPtr(mfi);
+          fab_fnump_int[d]=state_fnump_int[d]->fabPtr(mfi);
+          
+          f[d]= fab_f[d]->const_array();
+          fnum[d]= fab_fnum[d]->const_array();
+          fnumm_int[d]= fab_fnumm_int[d]->const_array();
+          fnump_int[d]= fab_fnump_int[d]->const_array();
+        } 
+
+        amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+        {
+          rhs(i,j,k,n)+=(Mk_corr[n][n]*uw(i,j,k,n));      
+        });
+
+        amrex::Real S_norm; 
+        amrex::Real Mbd_norm;  
+        int shift[] = {0,0,0};
+        for  (int d = 0; d < AMREX_SPACEDIM; ++d){
+          S_norm= (Dt/(amrex::Real)dx[d]);    
+          for  (int m = 0; m < quadrule->qMp_st; ++m){ 
+            amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+            {
+              rhs(i,j,k,n)+=S_norm*(Sk_corr[d][n][m]*((f)[d])(i,j,k,m));
+            });
+          }
+          //
+          //Mbd_norm =  (dt/(amrex::Real)dx[d]);//TODO: check this. is it aprt of deprecated or not?
+          shift[d] = 1;           
+          Mbd_norm =  1.0/vol;
+          amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+          {
+            rhs(i,j,k,n)-=(Mbd_norm*((fnump_int)[d])(i+shift[0],j+shift[1],k+shift[2],n));
+            rhs(i,j,k,n)-=(-Mbd_norm*((fnumm_int)[d])(i,j,k,n));          
+          });          
+          shift[d] = 0;    
+
+          //Deprecated, ths step now its done already in the numflux_integral function
+          /*
+          shift[d] = 1;
+          Mbd_norm =  (dt/(amrex::Real)dx[d]);
+          for  (int m = 0; m < qMpbd; ++m){ 
+            amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
+            {
+              rhs(i,j,k,n)-=(Mbd_norm*(Mkbd[2*d+1][n][m]*((fnum)[d])(i+shift[0],j+shift[1],
+                      k+shift[2],m)-Mkbd[2*d][n][m]*((fnum)[d])(i,j,k,m)));   
+            });
+          }
+          shift[d] = 0;
+          */
+        }
+
+        if(flag_source_term)
+        { 
+          amrex::MultiFab& state_source = S[lev][q];
+          amrex::FArrayBox& fab_source = state_source[mfi];
+          amrex::Array4<amrex::Real> const& source = fab_source.array();
+          for  (int m = 0; m < quadrule->qMp_st; ++m){
+            amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+            {
+              rhs(i,j,k,n)+=((Dt/2.0)*Mk_corr_src[n][m]*source(i,j,k,m));
+            });
+          }
+        }
+
+        amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+        {
+          rhs(i,j,k,n)/=Mk_corr[n][n];
+          uw(i,j,k,n) = rhs(i,j,k,n);       
+        });
+      }
+    }    
+  }
+}
+
+
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /*
 
@@ -1090,243 +1221,6 @@ void AmrDG::Update_H_w(int lev, int q)
   }
 }
 
-//updates solution on valid cells
-void AmrDG::Update_U_w(int lev, int q)
-{ 
-  if(model_pde->flag_source_term)
-  {  
-    auto const dx = geom[lev].CellSizeArray(); 
-
-    amrex::Real vol = 1.0;
-    for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      vol*=dx[d];
-    }
-  
-    amrex::MultiFab& state_u_w = U_w[lev][q];
-    amrex::MultiFab& state_source = S[lev][q];
-
-    amrex::MultiFab state_rhs;
-    state_rhs.define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), Np, nghost); 
-    state_rhs.setVal(0.0);
-    
-    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnum(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnumm_int(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnump_int(AMREX_SPACEDIM);
-    
-    for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      state_f[d]=&(F[lev][d][q]); 
-      state_fnum[d]=&(Fnum[lev][d][q]); 
-      state_fnumm_int[d]=&(Fnumm_int[lev][d][q]); 
-      state_fnump_int[d]=&(Fnump_int[lev][d][q]);
-    }
-    
-#ifdef AMREX_USE_OMP
-#pragma omp parallel 
-#endif
-    { 
-      amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
-      amrex::Vector<const amrex::FArrayBox *> fab_fnum(AMREX_SPACEDIM);  
-      amrex::Vector<const amrex::FArrayBox *> fab_fnumm_int(AMREX_SPACEDIM);
-      amrex::Vector<const amrex::FArrayBox *> fab_fnump_int(AMREX_SPACEDIM);
-      
-      amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);   
-      amrex::Vector<amrex::Array4<const amrex::Real> > fnum(AMREX_SPACEDIM); 
-      amrex::Vector<amrex::Array4<const amrex::Real> > fnumm_int(AMREX_SPACEDIM); 
-      amrex::Vector<amrex::Array4<const amrex::Real> > fnump_int(AMREX_SPACEDIM); 
-      
-      #ifdef AMREX_USE_OMP  
-      for (MFIter mfi(state_u_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-      #else
-      for (MFIter mfi(state_u_w,true); mfi.isValid(); ++mfi)
-      #endif  
-      {
-        const amrex::Box& bx = mfi.tilebox();
-        
-        amrex::FArrayBox& fab_u_w = state_u_w[mfi];
-        amrex::Array4<amrex::Real> const& uw = fab_u_w.array();
-        
-        amrex::FArrayBox& fab_source = state_source[mfi];
-        amrex::Array4<amrex::Real> const& source = fab_source.array();
-        
-        amrex::FArrayBox& fab_rhs = state_rhs[mfi];
-        amrex::Array4<amrex::Real> const& rhs = fab_rhs.array();
-        
-        for(int d = 0; d < AMREX_SPACEDIM; ++d){
-          fab_f[d]=state_f[d]->fabPtr(mfi);
-          fab_fnum[d]=state_fnum[d]->fabPtr(mfi);
-          fab_fnumm_int[d]=state_fnumm_int[d]->fabPtr(mfi);
-          fab_fnump_int[d]=state_fnump_int[d]->fabPtr(mfi);
-          
-          f[d]= fab_f[d]->const_array();
-          fnum[d]= fab_fnum[d]->const_array();
-          fnumm_int[d]= fab_fnumm_int[d]->const_array();
-          fnump_int[d]= fab_fnump_int[d]->const_array();
-        } 
-
-        amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-        {
-          rhs(i,j,k,n)+=(Mk_corr[n][n]*uw(i,j,k,n));      
-        });
-
-        amrex::Real S_norm; 
-        amrex::Real Mbd_norm;  
-        int shift[] = {0,0,0};
-        for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-          S_norm= (dt/(amrex::Real)dx[d]);    
-          for  (int m = 0; m < qMp; ++m){ 
-            amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-            {
-              rhs(i,j,k,n)+=S_norm*(Sk_corr[d][n][m]*((f)[d])(i,j,k,m));
-            });
-          }
-          
-          //Mbd_norm =  (dt/(amrex::Real)dx[d]);
-          shift[d] = 1;           
-          //Mbd_norm =  dt/vol;
-          Mbd_norm =  1.0/vol;
-          amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-          {
-            rhs(i,j,k,n)-=(Mbd_norm*((fnump_int)[d])(i+shift[0],j+shift[1],k+shift[2],n));
-            rhs(i,j,k,n)-=(-Mbd_norm*((fnumm_int)[d])(i,j,k,n));          
-          });          
-          shift[d] = 0;    
-        }
-        
-        for  (int m = 0; m < qMp; ++m){
-          amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-          {
-            rhs(i,j,k,n)+=((dt/2.0)*volquadmat[n][m]*source(i,j,k,m));
-          });
-        }
-                      
-        amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-        {
-          rhs(i,j,k,n)/=Mk_corr[n][n];
-          uw(i,j,k,n) = rhs(i,j,k,n);       
-        });
-      }
-    }  
-  }
-  else
-  {
-    auto const dx = geom[lev].CellSizeArray(); 
- 
-    amrex::Real vol = 1.0;
-    for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      vol*=dx[d];
-    }
-    
-    amrex::MultiFab& state_u_w = U_w[lev][q];
-
-    amrex::MultiFab state_rhs;
-    state_rhs.define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), Np, nghost); 
-    state_rhs.setVal(0.0);
-    
-    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnum(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnumm_int(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnump_int(AMREX_SPACEDIM); 
-    
-    for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      state_f[d]=&(F[lev][d][q]); 
-      state_fnum[d]=&(Fnum[lev][d][q]); 
-      state_fnumm_int[d]=&(Fnumm_int[lev][d][q]); 
-      state_fnump_int[d]=&(Fnump_int[lev][d][q]); 
-    }
-    
-
-#ifdef AMREX_USE_OMP
-#pragma omp parallel 
-#endif
-    {
-      amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
-      amrex::Vector<const amrex::FArrayBox *> fab_fnum(AMREX_SPACEDIM);
-      amrex::Vector<const amrex::FArrayBox *> fab_fnumm_int(AMREX_SPACEDIM);
-      amrex::Vector<const amrex::FArrayBox *> fab_fnump_int(AMREX_SPACEDIM);
-      amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);   
-      amrex::Vector<amrex::Array4<const amrex::Real> > fnum(AMREX_SPACEDIM); 
-      amrex::Vector<amrex::Array4<const amrex::Real> > fnumm_int(AMREX_SPACEDIM); 
-      amrex::Vector<amrex::Array4<const amrex::Real> > fnump_int(AMREX_SPACEDIM); 
-      
-      #ifdef AMREX_USE_OMP  
-      for (MFIter mfi(state_u_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-      #else
-      for (MFIter mfi(state_u_w,true); mfi.isValid(); ++mfi)
-      #endif 
-      {
-        const amrex::Box& bx = mfi.tilebox();
-        
-        amrex::FArrayBox& fab_u_w = state_u_w[mfi];
-        amrex::Array4<amrex::Real> const& uw = fab_u_w.array();
-  
-        amrex::FArrayBox& fab_rhs = state_rhs[mfi];
-        amrex::Array4<amrex::Real> const& rhs = fab_rhs.array();
-        
-        for(int d = 0; d < AMREX_SPACEDIM; ++d){
-          fab_f[d]=state_f[d]->fabPtr(mfi);
-          fab_fnum[d]=state_fnum[d]->fabPtr(mfi);
-          fab_fnumm_int[d]=state_fnumm_int[d]->fabPtr(mfi);
-          fab_fnump_int[d]=state_fnump_int[d]->fabPtr(mfi);
-          
-          f[d]= fab_f[d]->const_array();
-          fnum[d]= fab_fnum[d]->const_array();
-          fnumm_int[d]= fab_fnumm_int[d]->const_array();
-          fnump_int[d]= fab_fnump_int[d]->const_array();
-        } 
-
-        amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-        {
-          rhs(i,j,k,n)+=(Mk_corr[n][n]*uw(i,j,k,n));      
-        });
-
-        amrex::Real S_norm; 
-        amrex::Real Mbd_norm;  
-        int shift[] = {0,0,0};
-        for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-          S_norm= (dt/(amrex::Real)dx[d]);    
-          for  (int m = 0; m < qMp; ++m){ 
-            amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-            {
-              rhs(i,j,k,n)+=S_norm*(Sk_corr[d][n][m]*((f)[d])(i,j,k,m));
-            });
-          }
-          //
-          //Mbd_norm =  (dt/(amrex::Real)dx[d]);
-          shift[d] = 1;           
-          Mbd_norm =  1.0/vol;
-          amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-          {
-            rhs(i,j,k,n)-=(Mbd_norm*((fnump_int)[d])(i+shift[0],j+shift[1],k+shift[2],n));
-            rhs(i,j,k,n)-=(-Mbd_norm*((fnumm_int)[d])(i,j,k,n));          
-          });          
-          shift[d] = 0;    
-          //
-          
-
-          //shift[d] = 1;
-          //Mbd_norm =  (dt/(amrex::Real)dx[d]);
-          //for  (int m = 0; m < qMpbd; ++m){ 
-          //  amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-          //  {
-          //    rhs(i,j,k,n)-=(Mbd_norm*(Mkbd[2*d+1][n][m]*((fnum)[d])(i+shift[0],j+shift[1],
-          //            k+shift[2],m)-Mkbd[2*d][n][m]*((fnum)[d])(i,j,k,m)));   
-          //  });
-          //}
-          //shift[d] = 0;
-          
-          
-        }
-        
-        amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
-        {
-          rhs(i,j,k,n)/=Mk_corr[n][n];
-          uw(i,j,k,n) = rhs(i,j,k,n);       
-        });
-      }
-    }    
-  }
-}
 
 
 //std::swap(U_w[lev][q],new_mf);    
