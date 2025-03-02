@@ -170,6 +170,10 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
                         amrex::Vector<amrex::MultiFab>* H_w_ptr, 
                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
+
+    void update_U_w(int lev);
+
+    void update_H_w(int lev, int q);
     
     //Vandermonde matrix
     amrex::Vector<amrex::Vector<amrex::Real>> V;

@@ -98,6 +98,7 @@ class Solver
                     amrex::Array4<const amrex::Real> dfp,
                     amrex::Array4<const amrex::Real> dfm);
 
+        //computes the integral of the numerical flux across interface
         void numflux_integral(int lev,int d,int M, int N,
                             amrex::Vector<amrex::MultiFab>* U_ptr_m, 
                             amrex::Vector<amrex::MultiFab>* U_ptr_p,
