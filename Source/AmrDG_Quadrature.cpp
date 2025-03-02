@@ -178,7 +178,12 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
         }
       }
     }
-#endif  
+#endif 
+
+  for  (int d = 0; d < AMREX_SPACEDIM; ++d){
+    xi_ref_quad_s_center[0][d]=0.0;
+  }
+  
 }
 
 void AmrDG::QuadratureGaussLegendre::NewtonRhapson(amrex::Real& x, int n)

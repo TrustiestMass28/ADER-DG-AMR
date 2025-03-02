@@ -173,7 +173,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     void update_U_w(int lev);
 
-    void update_H_w(int lev, int q);
+    void update_H_w(int lev);
     
     //Vandermonde matrix
     amrex::Vector<amrex::Vector<amrex::Real>> V;
@@ -202,7 +202,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     //Stiffness element matrix for ADER predictor
     amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_pred;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_predVinv;
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_predVinv; 
 
     //Mass element matrix for source term (predictor step)
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred_src;   
@@ -322,10 +322,10 @@ void AmrDG::ADER(std::shared_ptr<EquationType> model_pde)
         get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
         flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
       }   
-      for(int q=0; q<Q; ++q){
-        //update predictor
-        //Update_H_w(l, q);
-      }
+
+      //update predictor
+      update_H_w(l);
+
       iter+=1;
     }
     
@@ -351,10 +351,8 @@ void AmrDG::ADER(std::shared_ptr<EquationType> model_pde)
     //average fine to coarse interface integral numerical flux for conservation
     //AverageFineToCoarseFlux(l);
     
-    for(int q=0; q<Q; ++q){
-      //update corrector
-      //Update_U_w(l,q);    
-    } 
+    //update corrector
+    update_U_w(l);    
   }
   
 }
@@ -363,18 +361,12 @@ void AmrDG::ADER(std::shared_ptr<EquationType> model_pde)
 template <typename EquationType>
 void AmrDG::set_Dt(std::shared_ptr<EquationType> model_pde)
 {
-  /*
-  //construt a center point
-  amrex::Vector<amrex::Real> xi_ref_center(AMREX_SPACEDIM);
-  for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-    xi_ref_center[d]=0.0;
-  }
+  
+  amrex::Vector<amrex::Real> dt_tmp(mesh->get_finest_lev()+1);//TODO:proper access to finest_level (in Mesh)
 
-  amrex::Vector<amrex::Real> dt_tmp(finest_level+1);//TODO:proper access to finest_level (in Mesh)
-
-  for (int l = 0; l <= finest_level; ++l)
+  for (int l = 0; l <= mesh->get_finest_lev(); ++l)
   {
-    auto const dx = geom[l].CellSizeArray();
+    const auto dx = mesh->get_dx(l);
     //compute average mesh size
     amrex::Real dx_avg = 0.0;
     for(int d = 0; d < AMREX_SPACEDIM; ++d){
@@ -382,7 +374,8 @@ void AmrDG::set_Dt(std::shared_ptr<EquationType> model_pde)
     }
       
     //evaluate modes at cell center pt
-    get_U_from_U_w(0,&(U_w[l]),&(U_center[l]), xi_ref_center,false);
+    //1 quadrature poitn to use for evaluation
+    get_U_from_U_w(1, basefunc->Np_s,&(U_center[l]),&(U_w[l]), quadrule->xi_ref_quad_s_center);
            
     //vector to accumulate all the min dt computed by this rank
     amrex::Vector<amrex::Real> rank_min_dt;
@@ -421,15 +414,14 @@ void AmrDG::set_Dt(std::shared_ptr<EquationType> model_pde)
           amrex::Vector<amrex::Real> lambda_d(AMREX_SPACEDIM);
           for(int d = 0; d < AMREX_SPACEDIM; ++d){  
             //compute at cell center so m==0
-            lambda_d.push_back(model_pde->pde_CFL(d,0,i,j,k,&uc));//TODO: pde_cfl_characteristic_speed //i.e lambda, or pde_cfl_lambda
+            lambda_d.push_back(model_pde->pde_cfl_lambda(d,0,i,j,k,&uc));
           }
           //find max signal speed across the dimensions
           auto lambda_max_  = std::max_element(lambda_d.begin(),lambda_d.end());
           lambda_max = static_cast<amrex::Real>(*lambda_max_);         
 
           //general CFL formulation
-          amrex::Real real_p = static_cast<amrex::Real>(basefunc->p);
-          amrex::Real CFL = (1.0/(2.0*real_p+1.0))*(1.0/(amrex::Real)AMREX_SPACEDIM)
+          amrex::Real CFL = (1.0/(2.0*(amrex::Real)p+1.0))*(1.0/(amrex::Real)AMREX_SPACEDIM);
           amrex::Real dt_cfl = CFL*(dx_avg/lambda_max);
                         
           #pragma omp critical
@@ -463,7 +455,7 @@ void AmrDG::set_Dt(std::shared_ptr<EquationType> model_pde)
   }
   ParallelDescriptor::ReduceRealMin(dt_min);
   Dt = dt_min; 
-  */
+  
 }
 
 template <typename EquationType>
