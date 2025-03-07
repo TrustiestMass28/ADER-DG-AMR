@@ -364,9 +364,7 @@
       //but I did my own 
       //  implementation so that we can apply it to the modes and its easier 
       //to apply to our equations
-      //  Differenciate w.r.t bc types using bc_lo/hi_type
-      //    "dirichlet" == 0
-      //    "neumann"   == 1
+
       /*
       sim.settings_numerical(real_box,max_level,n_cell, refinement,
                     is_periodic,bc_lo,bc_hi,bc_lo_type,bc_hi_type,T,CFL,p,

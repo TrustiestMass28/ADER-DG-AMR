@@ -24,6 +24,7 @@ int main(int argc, char* argv[])
 
       sim.setNumericalSettings(p,T);
       sim.setModelSettings(simulation_case);
+      //sim.setBoundaryConditions(4);
       
       /*-------------------------------------------*/
       //Run simulation
