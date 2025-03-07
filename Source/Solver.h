@@ -46,9 +46,12 @@ class Solver
         template <typename EquationType>
         void init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
+        //reshape bc vector depending on solver used (e.g if use modal or not)
+        void init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp);
+
         //execute simulation (time-stepping and possible AMR operations)
-        template <typename EquationType>
-        void evolve(std::shared_ptr<EquationType> model_pde);
+        template <typename EquationType, typename BoundaryConditionType>
+        void evolve(std::shared_ptr<EquationType> model_pde, std::shared_ptr<BoundaryConditionType> bdcond);
 
         //perform a time-step, advance solution by one time-step
         template <typename EquationType>
@@ -368,9 +371,19 @@ void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, 
     //Numerical method specific initialization
     static_cast<NumericalMethodType*>(this)->init();
 
+
+    //TODO: here construct Boundary Object
+
+
     const Real time = 0.0;
     mesh->InitFromScratch(time);    //AmrCore
 }
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
+{   
+    static_cast<NumericalMethodType*>(this)->init_bc(bc, n_comp); 
+}
+
 
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh)
@@ -432,10 +445,10 @@ Solver<NumericalMethodType>::Quadrature::~Quadrature()
 }
 
 template <typename NumericalMethodType>
-template <typename EquationType>
-void Solver<NumericalMethodType>::evolve(std::shared_ptr<EquationType> model_pde)
+template <typename EquationType, typename BoundaryConditionType>
+void Solver<NumericalMethodType>::evolve(std::shared_ptr<EquationType> model_pde,std::shared_ptr<BoundaryConditionType> bdcond)
 {
-    static_cast<NumericalMethodType*>(this)->evolve(model_pde); 
+    static_cast<NumericalMethodType*>(this)->evolve(model_pde,bdcond); 
 }
 
 template <typename NumericalMethodType>

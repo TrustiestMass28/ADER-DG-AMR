@@ -16,6 +16,7 @@
 
 #include "Solver.h"
 #include "ModelEquation.h"
+#include "BoundaryCondition.h"
 #include "Mesh.h"
 
 using namespace amrex;
@@ -36,6 +37,9 @@ class Simulation
     template <typename... Args>
     void setModelSettings(Args... args);
 
+    template <typename... Args>
+    void setBoundaryConditions(Args... args);
+
     void setGeometrySettings(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
                     int _coord, Vector<IntVect> const& _ref_ratios,  
                     Array<int,AMREX_SPACEDIM> const& _is_per, int dtn_regrid = 0, 
@@ -53,6 +57,8 @@ class Simulation
     std::shared_ptr<Solver<NumericalMethodType>> solver;
 
     std::shared_ptr<Mesh<NumericalMethodType>> mesh;
+
+    std::shared_ptr<BoundaryCondition<EquationType>> bdcond;
 
     //I/O 
     int dtn_outplt;   //data output time-steps interval
@@ -75,13 +81,14 @@ void Simulation<NumericalMethodType,EquationType>::run()
 {
   mesh->init(solver);
   solver->init(model,mesh);
+  bdcond->init(model,solver);
 
   //set initial conditions and average fine->coarse (after Initfromscartch should avg down)
   solver->set_initial_condition(model);
   //TODO:average
 
   //evolve, pass Model as ptr so we can access its implementation of methods
-  solver->evolve(model);
+  solver->evolve(model,bdcond);
 }
 
 template <typename NumericalMethodType,typename EquationType>
@@ -96,6 +103,13 @@ template <typename... Args>
 void Simulation<NumericalMethodType,EquationType>::setModelSettings(Args... args) {
   model = std::make_shared<EquationType>();
   model->settings(args...);
+}
+
+template <typename NumericalMethodType,typename EquationType>
+template <typename... Args>
+void Simulation<NumericalMethodType,EquationType>::setBoundaryConditions(Args... args) {
+  bdcond = std::make_shared<BoundaryCondition<EquationType>>();
+  bdcond->settings(args...);
 }
 
 template <typename NumericalMethodType,typename EquationType>

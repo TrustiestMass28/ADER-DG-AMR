@@ -33,8 +33,10 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     void init();
 
-    template <typename EquationType>
-    void evolve(std::shared_ptr<EquationType> model_pde);
+    void init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp);
+
+    template <typename EquationType, typename BoundaryConditionType>
+    void evolve(std::shared_ptr<EquationType> model_pde,std::shared_ptr<BoundaryConditionType> bdcond);
 
     template <typename EquationType>
     void time_integration(std::shared_ptr<EquationType> model_pde);
@@ -231,9 +233,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 //templated methods
 
 //  ComputeDt, time_integration
-
-template <typename EquationType>
-void AmrDG::evolve(std::shared_ptr<EquationType> model_pde)
+template <typename EquationType,typename BoundaryConditionType>
+void AmrDG::evolve(std::shared_ptr<EquationType> model_pde,std::shared_ptr<BoundaryConditionType> bdcond)
 {
 
   
