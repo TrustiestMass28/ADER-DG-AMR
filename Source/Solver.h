@@ -24,6 +24,12 @@
 template <typename NumericalMethodType>
 class Mesh;
 
+template <typename EquationType>
+class BoundaryCondition;
+
+template <typename EquationType>
+class ModelEquation;
+
 using namespace amrex;
 
 template <typename NumericalMethodType>
@@ -44,22 +50,22 @@ class Solver
         //TODO: pass all tempaltes of other classes from which Solver might need data to init
         //like stuff from geometry for number of levels,...
         template <typename EquationType>
-        void init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
+        void init(std::shared_ptr<ModelEquation<EquationType>> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
         //reshape bc vector depending on solver used (e.g if use modal or not)
         void init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp);
 
         //execute simulation (time-stepping and possible AMR operations)
-        template <typename EquationType, typename BoundaryConditionType>
-        void evolve(std::shared_ptr<EquationType> model_pde, std::shared_ptr<BoundaryConditionType> bdcond);
+        template <typename EquationType>
+        void evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde, std::shared_ptr<BoundaryCondition<EquationType>> bdcond);
 
         //perform a time-step, advance solution by one time-step
         template <typename EquationType>
-        void time_integration(std::shared_ptr<EquationType> model_pde);
+        void time_integration(std::shared_ptr<ModelEquation<EquationType>> model_pde);
 
         //compute and set time-step size
         template <typename EquationType>
-        void set_Dt(std::shared_ptr<EquationType> model_pde);
+        void set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde);
 
         //get solution vector evaluation
         void get_U();
@@ -73,21 +79,21 @@ class Solver
 
         template <typename EquationType>
         void source(int lev,int M, 
-                    std::shared_ptr<EquationType> model_pde,
+                    std::shared_ptr<ModelEquation<EquationType>> model_pde,
                     amrex::Vector<amrex::MultiFab>* U_ptr,
                     amrex::Vector<amrex::MultiFab>* S_ptr,
                     const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
         template <typename EquationType>                
         void flux(int lev,int d, int M, 
-                    std::shared_ptr<EquationType> model_pde,
+                    std::shared_ptr<ModelEquation<EquationType>> model_pde,
                     amrex::Vector<amrex::MultiFab>* U_ptr,
                     amrex::Vector<amrex::MultiFab>* F_ptr,
                     const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
         template <typename EquationType>
         void flux_bd(int lev,int d, int M,
-                    std::shared_ptr<EquationType> model_pde,
+                    std::shared_ptr<ModelEquation<EquationType>> model_pde,
                     amrex::Vector<amrex::MultiFab>* U_ptr,
                     amrex::Vector<amrex::MultiFab>* F_ptr,
                     amrex::Vector<amrex::MultiFab>* DF_ptr,
@@ -112,12 +118,12 @@ class Solver
 
         //get solution vector derivative
         template <typename EquationType>
-        void get_dU(std::shared_ptr<EquationType> model_pde);
+        void get_dU(std::shared_ptr<ModelEquation<EquationType>> model_pde);
 
         //sometimes IC is for modes/weights, other for actual sol vector
         //depending on num method it will call 
         template <typename EquationType>
-        void set_initial_condition(std::shared_ptr<EquationType> model_pde);
+        void set_initial_condition(std::shared_ptr<ModelEquation<EquationType>> model_pde);
         
         //declare and init data structures holding system equation 
         void set_init_data_system(int lev,const BoxArray& ba,
@@ -130,6 +136,13 @@ class Solver
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
         }
+
+        //Apply boundary conditions by calling BC methods
+        template <typename EquationType>
+        void FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
+                                std::shared_ptr<BoundaryCondition<EquationType>> bdcond,
+                                amrex::Vector<amrex::MultiFab>* U_ptr, 
+                                int lev, amrex::Real time);
 
         //General class for numerical methods that use basis decomposition of the solution
         //can maange spatial,temporal and mixed basis functions
@@ -359,7 +372,7 @@ class Solver
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::init(std::shared_ptr<EquationType> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh) 
+void Solver<NumericalMethodType>::init(std::shared_ptr<ModelEquation<EquationType>> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh) 
 {
     setMesh(_mesh);
 
@@ -415,7 +428,7 @@ void Solver<NumericalMethodType>::set_init_data_component(int lev,const BoxArray
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<EquationType> model_pde)
+void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
     
 }
@@ -445,22 +458,35 @@ Solver<NumericalMethodType>::Quadrature::~Quadrature()
 }
 
 template <typename NumericalMethodType>
-template <typename EquationType, typename BoundaryConditionType>
-void Solver<NumericalMethodType>::evolve(std::shared_ptr<EquationType> model_pde,std::shared_ptr<BoundaryConditionType> bdcond)
+template <typename EquationType>
+void Solver<NumericalMethodType>::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,std::shared_ptr<BoundaryCondition<EquationType>> bdcond)
 {
     static_cast<NumericalMethodType*>(this)->evolve(model_pde,bdcond); 
 }
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::time_integration(std::shared_ptr<EquationType> model_pde)
+void Solver<NumericalMethodType>::FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
+                                        std::shared_ptr<BoundaryCondition<EquationType>> bdcond,
+                                        amrex::Vector<amrex::MultiFab>* U_ptr, 
+                                        int lev, amrex::Real time)
+
+{
+    //static_cast<NumericalMethodType*>(this)->FillBoundaryCells(mesh,bdcond,U_ptr,lev,time); 
+    //TODO: in case AmrDG should prvide some specialized functionalities to BC maybe then static_cast is needed
+    bdcond->FillBoundaryCells(mesh, U_ptr, lev, time);
+}
+
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::time_integration(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
     static_cast<NumericalMethodType*>(this)->time_integration(model_pde); 
 }
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::set_Dt(std::shared_ptr<EquationType> model_pde)
+void Solver<NumericalMethodType>::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
     static_cast<NumericalMethodType*>(this)->set_Dt(model_pde);     
 }
@@ -476,7 +502,7 @@ void Solver<NumericalMethodType>::get_U_from_U_w(int M, int N,amrex::Vector<amre
 template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::source(int lev,int M, 
-                                        std::shared_ptr<EquationType> model_pde,
+                                        std::shared_ptr<ModelEquation<EquationType>> model_pde,
                                         amrex::Vector<amrex::MultiFab>* U_ptr,
                                         amrex::Vector<amrex::MultiFab>* S_ptr,
                                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
@@ -487,7 +513,7 @@ void Solver<NumericalMethodType>::source(int lev,int M,
 template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::flux(int lev,int d, int M, 
-                                        std::shared_ptr<EquationType> model_pde,
+                                        std::shared_ptr<ModelEquation<EquationType>> model_pde,
                                         amrex::Vector<amrex::MultiFab>* U_ptr,
                                         amrex::Vector<amrex::MultiFab>* F_ptr,
                                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
@@ -498,7 +524,7 @@ void Solver<NumericalMethodType>::flux(int lev,int d, int M,
 template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::flux_bd(int lev,int d, int M,
-                                        std::shared_ptr<EquationType> model_pde,
+                                        std::shared_ptr<ModelEquation<EquationType>> model_pde,
                                         amrex::Vector<amrex::MultiFab>* U_ptr,
                                         amrex::Vector<amrex::MultiFab>* F_ptr,
                                         amrex::Vector<amrex::MultiFab>* DF_ptr,

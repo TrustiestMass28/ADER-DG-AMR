@@ -35,17 +35,17 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     void init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp);
 
-    template <typename EquationType, typename BoundaryConditionType>
-    void evolve(std::shared_ptr<EquationType> model_pde,std::shared_ptr<BoundaryConditionType> bdcond);
+    template <typename EquationType>
+    void evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,std::shared_ptr<BoundaryCondition<EquationType>> bdcond);
 
     template <typename EquationType>
-    void time_integration(std::shared_ptr<EquationType> model_pde);
+    void time_integration(std::shared_ptr<ModelEquation<EquationType>> model_pde);
 
     template <typename EquationType>
-    void ADER(std::shared_ptr<EquationType> model_pde);
+    void ADER(std::shared_ptr<ModelEquation<EquationType>> model_pde);
 
     template <typename EquationType>
-    void set_Dt(std::shared_ptr<EquationType> model_pde);
+    void set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde);
 
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
@@ -59,21 +59,21 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     
     template <typename EquationType>                    
     void source(int lev,int M, 
-                std::shared_ptr<EquationType> model_pde,
+                std::shared_ptr<ModelEquation<EquationType>> model_pde,
                 amrex::Vector<amrex::MultiFab>* U_ptr,
                 amrex::Vector<amrex::MultiFab>* S_ptr,
                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
     template <typename EquationType>
     void flux(int lev,int d, int M, 
-              std::shared_ptr<EquationType> model_pde,
+              std::shared_ptr<ModelEquation<EquationType>> model_pde,
               amrex::Vector<amrex::MultiFab>* U_ptr,
               amrex::Vector<amrex::MultiFab>* F_ptr,
               const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
     template <typename EquationType>
     void flux_bd(int lev,int d, int M, 
-                std::shared_ptr<EquationType> model_pde,
+                std::shared_ptr<ModelEquation<EquationType>> model_pde,
                 amrex::Vector<amrex::MultiFab>* U_ptr,
                 amrex::Vector<amrex::MultiFab>* F_ptr,
                 amrex::Vector<amrex::MultiFab>* DF_ptr,
@@ -233,8 +233,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 //templated methods
 
 //  ComputeDt, time_integration
-template <typename EquationType,typename BoundaryConditionType>
-void AmrDG::evolve(std::shared_ptr<EquationType> model_pde,std::shared_ptr<BoundaryConditionType> bdcond)
+template <typename EquationType>
+void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,std::shared_ptr<BoundaryCondition<EquationType>> bdcond)
 {
 
   
@@ -295,13 +295,13 @@ void AmrDG::evolve(std::shared_ptr<EquationType> model_pde,std::shared_ptr<Bound
 }
 
 template <typename EquationType>
-void AmrDG::time_integration(std::shared_ptr<EquationType> model_pde)
+void AmrDG::time_integration(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
   ADER(model_pde);
 }
 
 template <typename EquationType>
-void AmrDG::ADER(std::shared_ptr<EquationType> model_pde)
+void AmrDG::ADER(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
   for (int l = mesh->get_finest_lev(); l >= 0; --l){
     //apply BC
@@ -360,7 +360,7 @@ void AmrDG::ADER(std::shared_ptr<EquationType> model_pde)
 
 //compute minimum time step size s.t CFL condition is met
 template <typename EquationType>
-void AmrDG::set_Dt(std::shared_ptr<EquationType> model_pde)
+void AmrDG::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
   
   amrex::Vector<amrex::Real> dt_tmp(mesh->get_finest_lev()+1);//TODO:proper access to finest_level (in Mesh)
@@ -461,7 +461,7 @@ void AmrDG::set_Dt(std::shared_ptr<EquationType> model_pde)
 
 template <typename EquationType>
 void AmrDG::source(int lev,int M, 
-                    std::shared_ptr<EquationType> model_pde,
+                    std::shared_ptr<ModelEquation<EquationType>> model_pde,
                     amrex::Vector<amrex::MultiFab>* U_ptr,
                     amrex::Vector<amrex::MultiFab>* S_ptr,
                     const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
@@ -511,7 +511,7 @@ void AmrDG::source(int lev,int M,
 
 template <typename EquationType>
 void AmrDG::flux(int lev,int d, int M, 
-                std::shared_ptr<EquationType> model_pde,
+                std::shared_ptr<ModelEquation<EquationType>> model_pde,
                 amrex::Vector<amrex::MultiFab>* U_ptr,
                 amrex::Vector<amrex::MultiFab>* F_ptr,
                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
@@ -567,7 +567,7 @@ void AmrDG::flux(int lev,int d, int M,
 
 template <typename EquationType>
 void AmrDG::flux_bd(int lev,int d, int M, 
-                    std::shared_ptr<EquationType> model_pde,
+                    std::shared_ptr<ModelEquation<EquationType>> model_pde,
                     amrex::Vector<amrex::MultiFab>* U_ptr,
                     amrex::Vector<amrex::MultiFab>* F_ptr,
                     amrex::Vector<amrex::MultiFab>* DF_ptr,
