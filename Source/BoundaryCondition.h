@@ -27,6 +27,9 @@ class ModelEquation;
 template <typename NumericalMethodType>
 class Solver;
 
+template <typename NumericalMethodType>
+class Mesh;
+
 using namespace amrex;
 
 
@@ -61,6 +64,16 @@ class BoundaryCondition
     void setBCtype(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
                   amrex::Vector<amrex::Vector<int>> _bc_hi_type);
 
+    void setBCAMREXtype(amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
+                        amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi);
+
+    void set_system_curr_component(int _q, int _lev);
+
+    template<typename NumericalMethodType>
+    void FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
+                          amrex::Vector<amrex::MultiFab>* U_ptr, 
+                          int lev, amrex::Real time);
+
   protected:
     //Ptr used to access numerical method and solver data
     std::shared_ptr<ModelEquation<EquationType>> model_pde;
@@ -88,14 +101,38 @@ class BoundaryCondition
 
   private:
       void _settings(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
-                    amrex::Vector<amrex::Vector<int>> _bc_hi_type);
+                    amrex::Vector<amrex::Vector<int>> _bc_hi_type,
+                    amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
+                    amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi);
+
+      //store the current pde system component (i.e which equation) we are applying bc to
+      int curr_q;
+
+      //store current level to which we are applying BCs to
+      int curr_lev;
 };
+
+template <typename EquationType>    
+void BoundaryCondition<EquationType>::setModelEquation(std::shared_ptr<ModelEquation<EquationType>> _model_pde)
+{
+  model_pde = _model_pde;
+}
+
+template <typename EquationType>    
+void BoundaryCondition<EquationType>::set_system_curr_component(int _q, int _lev)
+{
+  curr_q = _q;
+  curr_lev = _lev;
+}
 
 template <typename EquationType>       
 void BoundaryCondition<EquationType>::_settings(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
-                                                amrex::Vector<amrex::Vector<int>> _bc_hi_type)
+                                                amrex::Vector<amrex::Vector<int>> _bc_hi_type,
+                                                amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
+                                                amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi)
 {
   setBCtype(_bc_lo_type,_bc_hi_type);
+  setBCAMREXtype(_bc_lo,_bc_hi);                                               
 }
 
 template <typename EquationType>       
@@ -150,50 +187,7 @@ void BoundaryCondition<EquationType>::init(std::shared_ptr<ModelEquation<Equatio
       }
     }
   }
-  
-  
-  //TODO: if there is no Dirichlet in bc_lo_type, then should not call gDbc_lo
-  //but if there is at least one dirichelt in bc_hi_type then should call gDbc_hi
-
-  //should loop over the bc_hi_type and have only a single gbc_lo and gbc_hi vectors (i.e no difference between BCs types)
-  //then depending on bc_hi_type the appropriate function is called to populate  gbc_lo,gbc_hi
-
-  //get unique bc types
-  //std::vector<int> tmp(bc_lo_type.begin(), bc_lo_type.end());
-  //TODO: get number of components
-
   //TODO:maybe use solver to also pass some quadrature or basis info
-}
-
-
-/*
-run() //in Simulation
-  initialize BC (by Passing NumericalSolver s.t it can access p,...)
-
-  pass bc object to evolve()
-
-//calling BC inside evolve()
-  call solver bc method that accept as argument the templated BC object
-  this calls bc object methods, pass solver data
-
-//now inside BC object method we have full access to model_pde and can modify the solver passed data
-
-
-
-
-the ::operator() of BC class needs access to modelequaton
-if this oeprator cna be modified than chill, just pass model_pde
-
-one solution is to create every time since in eovlve we have model_pde knowledge
-so we can instantiate it
-
-otherwise 
-*/
-
-template <typename EquationType>    
-void BoundaryCondition<EquationType>::setModelEquation(std::shared_ptr<ModelEquation<EquationType>> _model_pde)
-{
-  model_pde = _model_pde;
 }
 
 template <typename EquationType>    
@@ -213,6 +207,80 @@ void BoundaryCondition<EquationType>::setBCtype(amrex::Vector<amrex::Vector<int>
     }
   }
 }
+
+template <typename EquationType>    
+void BoundaryCondition<EquationType>::setBCAMREXtype(amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
+                                                    amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi)
+{
+  bc_lo.resize(model_pde->Q_model);
+  bc_hi.resize(model_pde->Q_model);
+  
+  for(int q=0; q<model_pde->Q_model; ++q){
+    for(int d=0; d<AMREX_SPACEDIM; ++d){
+      bc_lo[q][d] = _bc_lo[q][d];
+      bc_hi[q][d] = _bc_hi[q][d];
+    }
+  }
+}
+
+//TODO: pass mesh
+//Creat BC object at startup, in which bc are stored
+//then every time we want to apply bc, the object is apessed
+template <typename EquationType>    
+template<typename NumericalMethodType>
+void BoundaryCondition<EquationType>::FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
+                                                        amrex::Vector<amrex::MultiFab>* U_ptr, 
+                                                        int lev, amrex::Real time)
+{
+  amrex::Geometry geom_l = mesh->get_Geom(lev);
+  
+  //applies boundary conditions    
+  for(int q=0; q<(*U_ptr).size(); ++q){
+    //sync MFab internl MFab ghost cells
+    //and for external ghost apply Periodic BC if needed/if periodic BC present
+    (*U_ptr)[q].FillBoundary(geom_l.periodicity()); 
+    
+    //if we had all periodic then we pretty much already applied BC and can thus exit
+    //if domain isnt all periodic, now apply non-periodic BCs
+    if (!(geom_l.isAllPeriodic())){  
+
+      //update in BC object the value of q,lev s.t it knows over which component of datastructures
+      //we are applying BCs to
+      set_system_curr_component(q,lev);
+
+      amrex::GpuBndryFuncFab<BoundaryCondition> bcf(this);
+      amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BoundaryCondition>> physbcf_bd(geom_l,bc[q],bcf);  
+      
+      physbcf_bd((*U_ptr)[q], 0, (*U_ptr)[q].nComp(), (*U_ptr)[q].nGrowVect(), time,0);    
+      //(MultiFab& mf, int icomp, int ncomp, IntVect const& nghost,real time, int bccomp)
+    }
+  } 
+    
+    
+}
+/*
+run() //in Simulation
+  initialize BC (by Passing NumericalSolver s.t it can access p,...)
+
+  pass bc object to evolve()
+
+//calling BC inside evolve()
+  call solver bc method that accept as argument the templated BC object
+  this calls bc object methods, pass solver data
+
+//now inside BC object method we have full access to model_pde and can modify the solver passed data
+
+
+the ::operator() of BC class needs access to modelequaton
+if this oeprator cna be modified than chill, just pass model_pde
+
+one solution is to create every time since in eovlve we have model_pde knowledge
+so we can instantiate it
+
+otherwise 
+*/
+
+
 
   /*
 //Boundary Conditions
@@ -248,30 +316,7 @@ FillBoundaryCells
 
 */
 /*
-//Creat BC object at startup, in which bc are stored
-//then every time we want to apply bc, the object is apessed
-void AmrDG::FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, int lev)
-{
-  //applies boundary conditions    
-  for(int q=0; q<Q; ++q){
-    //sync MFab internl MFab ghost cells
-    //and for external ghost apply Periodic BC if needed/if periodic BC present
-    (*U_ptr)[q].FillBoundary(geom[lev].periodicity()); 
-    
-    //if we had all periodic then we pretty much already applied BC and can thus exit
-    //if domain isnt all periodic, now apply non-periodic BCs
-    if (!(geom[lev].isAllPeriodic())){  
-      //apply our own boundary conditions
-      BoundaryCondition custom_bc(this, q, lev);
-          
-      amrex::GpuBndryFuncFab<BoundaryCondition> bcf(custom_bc);
-      
-      amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BoundaryCondition>> physbcf_bd(geom[lev],bc_w[q],bcf);  
-      
-      physbcf_bd((*U_ptr)[q], 0, (*U_ptr)[q].nComp(), (*U_ptr)[q].nGrowVect(), 0.0,0);    
-    }
-  } 
-}*/
+*/
     /*
 AmrDG::BoundaryCondition::BoundaryCondition(AmrDG* _amrdg, int _q, int _lev)
 {

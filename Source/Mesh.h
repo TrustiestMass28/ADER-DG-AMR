@@ -81,6 +81,10 @@ class Mesh : public amrex::AmrCore
 
         amrex::Real get_dvol(int lev);
 
+        const Vector<Geometry>& get_Geom();// return Geom ();
+
+        const Geometry& get_Geom(int lev);// return Geom (lev);
+
         //Max number of levels
         int L = 1;
 
@@ -188,9 +192,20 @@ amrex::Real Mesh<NumericalMethodType>::get_dvol(int lev)
 } 
 
 
+template <typename NumericalMethodType>
+const Vector<Geometry>& Mesh<NumericalMethodType>::get_Geom()
+{
+    return Geom();
+}
+ 
+template <typename NumericalMethodType>
+const Geometry& Mesh<NumericalMethodType>::get_Geom(int lev)
+{
+    return Geom(lev);
+}
+
 
 /*
-
 ADAPTIVE MESH REFINEMENT (GEOMETRY BASED OPERATIONS)
     //AMR settings 
 
