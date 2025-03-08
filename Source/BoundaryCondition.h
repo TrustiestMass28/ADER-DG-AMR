@@ -223,9 +223,6 @@ void BoundaryCondition<EquationType>::setBCAMREXtype(amrex::Vector<amrex::Array<
   }
 }
 
-//TODO: pass mesh
-//Creat BC object at startup, in which bc are stored
-//then every time we want to apply bc, the object is apessed
 template <typename EquationType>    
 template<typename NumericalMethodType>
 void BoundaryCondition<EquationType>::FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
@@ -255,8 +252,6 @@ void BoundaryCondition<EquationType>::FillBoundaryCells(std::shared_ptr<Mesh<Num
       //(MultiFab& mf, int icomp, int ncomp, IntVect const& nghost,real time, int bccomp)
     }
   } 
-    
-    
 }
 /*
 run() //in Simulation
@@ -318,21 +313,7 @@ FillBoundaryCells
 /*
 */
     /*
-AmrDG::BoundaryCondition::BoundaryCondition(AmrDG* _amrdg, int _q, int _lev)
-{
-  //construct AmrDG class boundary nested class object
-  amrdg= _amrdg;
-  q = _q;
-  lev = _lev; 
-  
-  for(int d=0; d<AMREX_SPACEDIM; ++d)
-  {
-    boundary_lo_type[d] = amrdg->bc_lo_type[q][d];
-    boundary_hi_type[d] = amrdg->bc_hi_type[q][d];
-  }
-}
 
-AmrDG::BoundaryCondition::~BoundaryCondition(){}
                     
 void AmrDG::BoundaryCondition::operator() (const IntVect& iv, Array4<Real> const& dest,
                                            const int dcomp, const int numcomp,
