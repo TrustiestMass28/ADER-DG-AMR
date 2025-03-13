@@ -1,3 +1,10 @@
+# -------------------------
+CURRENTLY UNDER MAINTENANCE.
+I'M RESTRUCTURING THE CODE 
+CHECK FIRST COMMIT IF YOU WANT WORKING
+CODE
+# -------------------------
+
 # ADER-DG-AMR  
 
 This thesis introduces a block-structured Adaptive Mesh Refinement (AMR) software framework designed for solving general multi-dimensional systems of hyperbolic partial differential equations (PDEs) with high accuracy in both space and time. The framework employs a modal Discontinuous Galerkin (DG) method combined with Arbitrary Derivative (ADER) time integration, enabling efficient and precise numerical solutions.
