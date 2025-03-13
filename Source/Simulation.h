@@ -58,7 +58,7 @@ class Simulation
 
     std::shared_ptr<Mesh<NumericalMethodType>> mesh;
 
-    std::shared_ptr<BoundaryCondition<EquationType>> bdcond;
+    std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond;
 
     //I/O 
     int dtn_outplt;   //data output time-steps interval
@@ -81,7 +81,7 @@ void Simulation<NumericalMethodType,EquationType>::run()
 {
   mesh->init(solver);
   solver->init(model,mesh);
-  bdcond->init(model,solver);
+  bdcond->init(model,solver,mesh);
 
   //set initial conditions and average fine->coarse (after Initfromscartch should avg down)
   solver->set_initial_condition(model);
@@ -108,7 +108,7 @@ void Simulation<NumericalMethodType,EquationType>::setModelSettings(Args... args
 template <typename NumericalMethodType,typename EquationType>
 template <typename... Args>
 void Simulation<NumericalMethodType,EquationType>::setBoundaryConditions(Args... args) {
-  bdcond = std::make_shared<BoundaryCondition<EquationType>>();
+  bdcond = std::make_shared<BoundaryCondition<EquationType,NumericalMethodType>>();
   bdcond->settings(args...);
 }
 
