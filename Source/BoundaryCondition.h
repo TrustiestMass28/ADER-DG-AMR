@@ -263,7 +263,7 @@ void BoundaryCondition<EquationType,NumericalMethodType>::setBCAMREXtype(amrex::
 
 template <typename EquationType, typename NumericalMethodType>
 void BoundaryCondition<EquationType,NumericalMethodType>::FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, 
-                                                        int lev, amrex::Real time)
+                                                                            int lev, amrex::Real time)
 {
   amrex::Geometry geom_l = mesh->get_Geom(lev);
   
@@ -303,6 +303,11 @@ void BoundaryCondition<EquationType,NumericalMethodType>::operator() (const IntV
 
   const auto lo = geom.Domain().smallEnd();
   const auto hi = geom.Domain().bigEnd();
+
+  //used to hold tmp bc value
+  //e.g in case we first evaluate at poitns and then
+  //ptorject to modes.
+  amrex::Vector<amrex::Real> _bc(solver->n_pt_bc);//(amrdg->qMp_L2proj)
 
   //model_pde->
 
