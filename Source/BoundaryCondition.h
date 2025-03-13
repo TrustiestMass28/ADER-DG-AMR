@@ -145,6 +145,14 @@ void BoundaryCondition<EquationType>::init(std::shared_ptr<ModelEquation<Equatio
   //TODO: use solver ptr to pass reference of bc, bc_w
   _solver->init_bc(bc,n_comp);
 
+  //gbc_lo,gbc_lo accessed inside ModelEquation
+  //since we have static BCs, no need to call
+  //implemented pde_BC_gDirichlet,pde_BC_gNeumann
+  //every time, just do at beginning
+
+  //for each component of the PDE system
+  //gbc_lo stores the BC value as defined
+  //in the implemented ModelEquation derived
   gbc_lo.resize(model_pde->Q_model);
   gbc_hi.resize(model_pde->Q_model);
 
@@ -253,6 +261,94 @@ void BoundaryCondition<EquationType>::FillBoundaryCells(std::shared_ptr<Mesh<Num
     }
   } 
 }
+
+template <typename EquationType>    
+void BoundaryCondition<EquationType>::operator() (const IntVect& iv, Array4<Real> const& dest,
+                                                  const int dcomp, const int numcomp,
+                                                  GeometryData const& geom, const Real time,
+                                                  const BCRec* bcr, const int bcomp,
+                                                  const int orig_comp) const
+{  
+  //NB: in case we want to apply different BCs to specific modes, need to pass (in components loop)
+  //the comp number to pde_BC_gDirichlet,pde_BC_gNeumann (they need to be modified accordingly)
+  //for (int comp = 0; comp < numcomp; ++comp) { ..bc_w[q][comp] and pass comp to functions
+
+  const auto lo = geom.Domain().smallEnd();
+  const auto hi = geom.Domain().bigEnd();
+
+  /*
+  amrex::Vector<amrex::Real> bc_val(amrdg->qMp_L2proj);
+
+  for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
+
+    bool bc_found=false;
+
+    if(boundary_lo_type[dim] == 0 || boundary_hi_type[dim] == 0)//Dirichlet
+    {   
+      if ((amrdg->bc_w[q][0].lo(dim) == amrex::BCType::ext_dir) && iv[dim] < lo[dim]){
+        for(int m=0; m<amrdg->qMp_L2proj; ++m){
+          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gDirichlet(q,dim,iv,m,dcomp,numcomp,dest,geom,-1,lev);
+        }
+        bc_found = true;
+      }
+      else if ((amrdg->bc_w[q][0].hi(dim) == amrex::BCType::ext_dir) && iv[dim] > hi[dim]) {
+        for(int m=0; m<amrdg->qMp_L2proj; ++m){
+          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gDirichlet(q,dim,iv,m,dcomp,numcomp,dest,geom,1,lev);   
+        }          
+        bc_found = true;
+      }
+
+      if(bc_found)
+      {
+        for (int comp = 0; comp < numcomp; ++comp){ 
+          //BC projection u|bc->u_w|bc
+          amrex::Real sum = 0.0;
+          for(int m=0; m<amrdg->qMp_L2proj; ++m)
+          {
+            sum+= amrdg->L2proj_quadmat[dcomp +comp][m]*bc_val[m];
+          }
+
+          sum /=amrdg->RefMat_phiphi(dcomp + comp,dcomp + comp, false, false);
+          dest(iv, dcomp + comp) = sum;
+        }           
+      }           
+    }
+    else if(boundary_lo_type[dim] == 1 || boundary_hi_type[dim] == 1)//Neumann
+    {    
+      if ((amrdg->bc_w[q][0].lo(dim) == amrex::BCType::ext_dir) && iv[dim] < lo[dim]){
+        for(int m=0; m<amrdg->qMp_L2proj; ++m){
+          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gNeumann(q, dim,iv,m,dcomp,numcomp,dest,geom,-1,lev);  
+        }       
+        bc_found = true;
+      }      
+      else if ((amrdg->bc_w[q][0].hi(dim) == amrex::BCType::ext_dir) && iv[dim] > hi[dim]) {
+        for(int m=0; m<amrdg->qMp_L2proj; ++m){
+          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gNeumann(q, dim,iv,m,dcomp,numcomp,dest,geom,1,lev);   
+        }        
+        bc_found = true;
+      } 
+
+      if(bc_found)
+      {
+        for (int comp = 0; comp < numcomp; ++comp){ 
+          //BC projection u|bc->u_w|bc
+          amrex::Real sum = 0.0;
+          for(int m=0; m<amrdg->qMp_L2proj; ++m)
+          {
+            sum+= amrdg->L2proj_quadmat[dcomp +comp][m]*bc_val[m];
+          }
+
+          sum /=amrdg->RefMat_phiphi(dcomp + comp,dcomp + comp, false, false);
+
+          dest(iv, dcomp + comp) = sum;     
+
+          //IntVect::TheDimensionVector(dim))[1]
+        }           
+      }
+    }
+  }
+    */
+}
 /*
 run() //in Simulation
   initialize BC (by Passing NumericalSolver s.t it can access p,...)
@@ -315,90 +411,7 @@ FillBoundaryCells
     /*
 
                     
-void AmrDG::BoundaryCondition::operator() (const IntVect& iv, Array4<Real> const& dest,
-                                           const int dcomp, const int numcomp,
-                                           GeometryData const& geom, const Real time,
-                                           const BCRec* bcr, const int bcomp,
-                                           const int orig_comp) const
-{  
-  //NB: in case we want to apply different BCs to specific modes, need to pass (in components loop)
-  //the comp number to pde_BC_gDirichlet,pde_BC_gNeumann (they need to be modified accordingly)
-  //for (int comp = 0; comp < numcomp; ++comp) { ..bc_w[q][comp] and pass comp to functions
-  
-  const auto lo = geom.Domain().smallEnd();
-  const auto hi = geom.Domain().bigEnd();
-  
-  amrex::Vector<amrex::Real> bc_val(amrdg->qMp_L2proj);
-  
-  for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
 
-    bool bc_found=false;
-    
-    if(boundary_lo_type[dim] == 0 || boundary_hi_type[dim] == 0)//Dirichlet
-    {   
-      if ((amrdg->bc_w[q][0].lo(dim) == amrex::BCType::ext_dir) && iv[dim] < lo[dim]){
-        for(int m=0; m<amrdg->qMp_L2proj; ++m){
-          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gDirichlet(q,dim,iv,m,dcomp,numcomp,dest,geom,-1,lev);
-        }
-        bc_found = true;
-      }
-      else if ((amrdg->bc_w[q][0].hi(dim) == amrex::BCType::ext_dir) && iv[dim] > hi[dim]) {
-        for(int m=0; m<amrdg->qMp_L2proj; ++m){
-          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gDirichlet(q,dim,iv,m,dcomp,numcomp,dest,geom,1,lev);   
-        }          
-        bc_found = true;
-      }
-       
-      if(bc_found)
-      {
-        for (int comp = 0; comp < numcomp; ++comp){ 
-          //BC projection u|bc->u_w|bc
-          amrex::Real sum = 0.0;
-          for(int m=0; m<amrdg->qMp_L2proj; ++m)
-          {
-            sum+= amrdg->L2proj_quadmat[dcomp +comp][m]*bc_val[m];
-          }
-          
-          sum /=amrdg->RefMat_phiphi(dcomp + comp,dcomp + comp, false, false);
-          dest(iv, dcomp + comp) = sum;
-        }           
-      }           
-    }
-    else if(boundary_lo_type[dim] == 1 || boundary_hi_type[dim] == 1)//Neumann
-    {    
-      if ((amrdg->bc_w[q][0].lo(dim) == amrex::BCType::ext_dir) && iv[dim] < lo[dim]){
-        for(int m=0; m<amrdg->qMp_L2proj; ++m){
-          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gNeumann(q, dim,iv,m,dcomp,numcomp,dest,geom,-1,lev);  
-        }       
-        bc_found = true;
-      }      
-      else if ((amrdg->bc_w[q][0].hi(dim) == amrex::BCType::ext_dir) && iv[dim] > hi[dim]) {
-        for(int m=0; m<amrdg->qMp_L2proj; ++m){
-          //bc_val[m] = amrdg->sim->model_pde->pde_BC_gNeumann(q, dim,iv,m,dcomp,numcomp,dest,geom,1,lev);   
-        }        
-        bc_found = true;
-      } 
-      
-      if(bc_found)
-      {
-        for (int comp = 0; comp < numcomp; ++comp){ 
-          //BC projection u|bc->u_w|bc
-          amrex::Real sum = 0.0;
-          for(int m=0; m<amrdg->qMp_L2proj; ++m)
-          {
-            sum+= amrdg->L2proj_quadmat[dcomp +comp][m]*bc_val[m];
-          }
-          
-          sum /=amrdg->RefMat_phiphi(dcomp + comp,dcomp + comp, false, false);
-          
-          dest(iv, dcomp + comp) = sum;     
-          
-          //IntVect::TheDimensionVector(dim))[1]
-        }           
-      }
-    }
-  }
-}
 
 amrex::Real AmrDG::gDirichlet_bc(int d, int side, int q) const
 { 
