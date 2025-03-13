@@ -24,7 +24,7 @@
 template <typename NumericalMethodType>
 class Mesh;
 
-template <typename EquationType>
+template <typename EquationType,typename NumericalMethodType>
 class BoundaryCondition;
 
 template <typename EquationType>
@@ -57,7 +57,8 @@ class Solver
 
         //execute simulation (time-stepping and possible AMR operations)
         template <typename EquationType>
-        void evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde, std::shared_ptr<BoundaryCondition<EquationType>> bdcond);
+        void evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde, 
+                    std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond);
 
         //perform a time-step, advance solution by one time-step
         template <typename EquationType>
@@ -139,8 +140,7 @@ class Solver
 
         //Apply boundary conditions by calling BC methods
         template <typename EquationType>
-        void FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
-                                std::shared_ptr<BoundaryCondition<EquationType>> bdcond,
+        void FillBoundaryCells(std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond,
                                 amrex::Vector<amrex::MultiFab>* U_ptr, 
                                 int lev, amrex::Real time);
 
@@ -459,22 +459,22 @@ Solver<NumericalMethodType>::Quadrature::~Quadrature()
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,std::shared_ptr<BoundaryCondition<EquationType>> bdcond)
+void Solver<NumericalMethodType>::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
+                                        std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond)
 {
     static_cast<NumericalMethodType*>(this)->evolve(model_pde,bdcond); 
 }
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
-                                        std::shared_ptr<BoundaryCondition<EquationType>> bdcond,
-                                        amrex::Vector<amrex::MultiFab>* U_ptr, 
-                                        int lev, amrex::Real time)
+void Solver<NumericalMethodType>::FillBoundaryCells( std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond,
+                                                    amrex::Vector<amrex::MultiFab>* U_ptr, 
+                                                    int lev, amrex::Real time)
 
 {
     //static_cast<NumericalMethodType*>(this)->FillBoundaryCells(mesh,bdcond,U_ptr,lev,time); 
     //TODO: in case AmrDG should prvide some specialized functionalities to BC maybe then static_cast is needed
-    bdcond->FillBoundaryCells(mesh, U_ptr, lev, time);
+    bdcond->FillBoundaryCells(U_ptr, lev, time);
 }
 
 template <typename NumericalMethodType>

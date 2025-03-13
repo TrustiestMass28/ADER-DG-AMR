@@ -33,7 +33,9 @@ class Mesh;
 using namespace amrex;
 
 
-template <typename EquationType>
+//This BC class implements
+//stationary boundary conditions
+template <typename EquationType, typename NumericalMethodType>
 class BoundaryCondition
 {
   public: 
@@ -52,10 +54,15 @@ class BoundaryCondition
         _settings(std::forward<Args>(args)...);
     }
 
-    template<typename NumericalMethodType>
-    void init(std::shared_ptr<ModelEquation<EquationType>> _model_pde, std::shared_ptr<Solver<NumericalMethodType>> _solver);
+    void init(std::shared_ptr<ModelEquation<EquationType>> _model_pde, 
+              std::shared_ptr<Solver<NumericalMethodType>> _solver,
+              std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
     void setModelEquation(std::shared_ptr<ModelEquation<EquationType>> _model_pde);
+
+    void setSolver(std::shared_ptr<Solver<NumericalMethodType>> _solver);
+
+    void setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
     void setDirichletBC();
 
@@ -69,14 +76,18 @@ class BoundaryCondition
 
     void set_system_curr_component(int _q, int _lev);
 
-    template<typename NumericalMethodType>
-    void FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
-                          amrex::Vector<amrex::MultiFab>* U_ptr, 
+    void FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, 
                           int lev, amrex::Real time);
 
   protected:
-    //Ptr used to access numerical method and solver data
+    //Ptr used to access implemented model equation
     std::shared_ptr<ModelEquation<EquationType>> model_pde;
+
+    //Ptr used to access numerical method and solver data
+    std::shared_ptr<Solver<NumericalMethodType>> solver;
+
+    //Ptr used to access mesh/geom data
+    std::shared_ptr<Mesh<NumericalMethodType>> mesh;
 
     //Store amrex BC types in each dim
     amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_lo;
@@ -112,21 +123,36 @@ class BoundaryCondition
       int curr_lev;
 };
 
-template <typename EquationType>    
-void BoundaryCondition<EquationType>::setModelEquation(std::shared_ptr<ModelEquation<EquationType>> _model_pde)
+template <typename EquationType, typename NumericalMethodType>   
+void BoundaryCondition<EquationType,NumericalMethodType>::setModelEquation(
+                                                          std::shared_ptr<ModelEquation<EquationType>> _model_pde)
 {
   model_pde = _model_pde;
 }
 
-template <typename EquationType>    
-void BoundaryCondition<EquationType>::set_system_curr_component(int _q, int _lev)
+
+
+template <typename EquationType, typename NumericalMethodType>   
+void BoundaryCondition<EquationType,NumericalMethodType>::setSolver(std::shared_ptr<Solver<NumericalMethodType>> _solver)
+{
+  solver = _solver;
+}
+
+template <typename EquationType, typename NumericalMethodType>   
+void BoundaryCondition<EquationType,NumericalMethodType>::setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh)
+{
+  mesh = _mesh;
+}
+
+template <typename EquationType, typename NumericalMethodType>    
+void BoundaryCondition<EquationType,NumericalMethodType>::set_system_curr_component(int _q, int _lev)
 {
   curr_q = _q;
   curr_lev = _lev;
 }
 
-template <typename EquationType>       
-void BoundaryCondition<EquationType>::_settings(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
+template <typename EquationType, typename NumericalMethodType>      
+void BoundaryCondition<EquationType,NumericalMethodType>::_settings(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
                                                 amrex::Vector<amrex::Vector<int>> _bc_hi_type,
                                                 amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
                                                 amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi)
@@ -135,12 +161,16 @@ void BoundaryCondition<EquationType>::_settings(amrex::Vector<amrex::Vector<int>
   setBCAMREXtype(_bc_lo,_bc_hi);                                               
 }
 
-template <typename EquationType>       
-template<typename NumericalMethodType>
-void BoundaryCondition<EquationType>::init(std::shared_ptr<ModelEquation<EquationType>> _model_pde,
-                                          std::shared_ptr<Solver<NumericalMethodType>> _solver)
+template <typename EquationType, typename NumericalMethodType>
+void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<ModelEquation<EquationType>> _model_pde,
+                                                              std::shared_ptr<Solver<NumericalMethodType>> _solver,
+                                                              std::shared_ptr<Mesh<NumericalMethodType>> _mesh)
 {
   setModelEquation(_model_pde);
+
+  setSolver(_solver);
+
+  setMesh(_mesh);
 
   //TODO: use solver ptr to pass reference of bc, bc_w
   _solver->init_bc(bc,n_comp);
@@ -198,8 +228,8 @@ void BoundaryCondition<EquationType>::init(std::shared_ptr<ModelEquation<Equatio
   //TODO:maybe use solver to also pass some quadrature or basis info
 }
 
-template <typename EquationType>    
-void BoundaryCondition<EquationType>::setBCtype(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
+template <typename EquationType, typename NumericalMethodType>   
+void BoundaryCondition<EquationType,NumericalMethodType>::setBCtype(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
                                                 amrex::Vector<amrex::Vector<int>> _bc_hi_type)
 {
   bc_lo_type.resize(model_pde->Q_model);
@@ -216,8 +246,8 @@ void BoundaryCondition<EquationType>::setBCtype(amrex::Vector<amrex::Vector<int>
   }
 }
 
-template <typename EquationType>    
-void BoundaryCondition<EquationType>::setBCAMREXtype(amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
+template <typename EquationType, typename NumericalMethodType>
+void BoundaryCondition<EquationType,NumericalMethodType>::setBCAMREXtype(amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
                                                     amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi)
 {
   bc_lo.resize(model_pde->Q_model);
@@ -231,10 +261,8 @@ void BoundaryCondition<EquationType>::setBCAMREXtype(amrex::Vector<amrex::Array<
   }
 }
 
-template <typename EquationType>    
-template<typename NumericalMethodType>
-void BoundaryCondition<EquationType>::FillBoundaryCells(std::shared_ptr<Mesh<NumericalMethodType>> mesh,
-                                                        amrex::Vector<amrex::MultiFab>* U_ptr, 
+template <typename EquationType, typename NumericalMethodType>
+void BoundaryCondition<EquationType,NumericalMethodType>::FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, 
                                                         int lev, amrex::Real time)
 {
   amrex::Geometry geom_l = mesh->get_Geom(lev);
@@ -262,8 +290,8 @@ void BoundaryCondition<EquationType>::FillBoundaryCells(std::shared_ptr<Mesh<Num
   } 
 }
 
-template <typename EquationType>    
-void BoundaryCondition<EquationType>::operator() (const IntVect& iv, Array4<Real> const& dest,
+template <typename EquationType, typename NumericalMethodType>   
+void BoundaryCondition<EquationType,NumericalMethodType>::operator() (const IntVect& iv, Array4<Real> const& dest,
                                                   const int dcomp, const int numcomp,
                                                   GeometryData const& geom, const Real time,
                                                   const BCRec* bcr, const int bcomp,
@@ -275,6 +303,8 @@ void BoundaryCondition<EquationType>::operator() (const IntVect& iv, Array4<Real
 
   const auto lo = geom.Domain().smallEnd();
   const auto hi = geom.Domain().bigEnd();
+
+  //model_pde->
 
   /*
   amrex::Vector<amrex::Real> bc_val(amrdg->qMp_L2proj);
