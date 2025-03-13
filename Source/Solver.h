@@ -290,6 +290,11 @@ class Solver
                     NumericalMethodType* numme;
             };
 
+            //number of points at which boundary conditions are
+            //need to be set by the NumericalMethodType, called
+            //by BoundaryCondition. Set in init_bc
+            int n_pt_bc;
+            
     protected:
         std::shared_ptr<std::ofstream> ofs;
 

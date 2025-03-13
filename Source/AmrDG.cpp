@@ -119,6 +119,10 @@ void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
   //since use modal DG we will apply BCs to individual spatial modes
   n_comp = basefunc->Np_s;
   bc.resize(Q,amrex::Vector<amrex::BCRec>(n_comp));
+
+  //bc evaluated at all spatial quadrature point in ghost cells
+  //then they will be projected back to n_comp modes
+  n_pt_bc = quadrule->qMp_s;
 }
 
 AmrDG::~AmrDG(){
