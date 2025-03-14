@@ -144,6 +144,9 @@ class Solver
                                 amrex::Vector<amrex::MultiFab>* U_ptr, 
                                 int lev, amrex::Real time);
 
+        //Transformations to BC cell vlaues before being set as final value
+        amrex::Real setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev);
+
         //General class for numerical methods that use basis decomposition of the solution
         //can maange spatial,temporal and mixed basis functions
         //TODO: use CRTP
@@ -480,6 +483,13 @@ void Solver<NumericalMethodType>::FillBoundaryCells( std::shared_ptr<BoundaryCon
     //static_cast<NumericalMethodType*>(this)->FillBoundaryCells(mesh,bdcond,U_ptr,lev,time); 
     //TODO: in case AmrDG should prvide some specialized functionalities to BC maybe then static_cast is needed
     bdcond->FillBoundaryCells(U_ptr, lev, time);
+}
+
+template <typename NumericalMethodType>
+amrex::Real Solver<NumericalMethodType>::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev){
+
+    return static_cast<NumericalMethodType*>(this)->setBC(bc,comp,dcomp,q,lev); 
+
 }
 
 template <typename NumericalMethodType>

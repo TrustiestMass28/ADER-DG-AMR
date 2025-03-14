@@ -98,6 +98,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                 amrex::Array4<const amrex::Real> fm,  
                 amrex::Array4<const amrex::Real> dfp,
                 amrex::Array4<const amrex::Real> dfm);
+
+    amrex::Real setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev);
     
     class BasisLegendre : public Basis
     {
