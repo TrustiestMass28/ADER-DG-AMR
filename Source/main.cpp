@@ -13,21 +13,132 @@ int main(int argc, char* argv[])
     { 
 
       /*-------------------------------------------*/
-      //Settings
-      std::string simulation_case = "isentropic_vortex";
-      int p  = 1;
-      amrex::Real T = 1.0;
-      int t_outplt = 10;
-      /*-------------------------------------------*/
-      //Set-up simulation
+      /*------------------SETTINGS-----------------*/
+      //INIT SIMULATION
       Simulation<AmrDG,Compressible_Euler> sim;
 
-      sim.setNumericalSettings(p,T);
+      //EQUATION
+      std::string simulation_case = "isentropic_vortex";
+
       sim.setModelSettings(simulation_case);
-      //sim.setBoundaryConditions(4);
+
+      //NUMERICAL
+      int p  = 1;
+      amrex::Real T = 10.0;
+
+      sim.setNumericalSettings(p,T);
+
+      //IO
+      int dtn_outplt = 10;
+      amrex::Real dt_outplt = -1;
       
+      sim.setIO(dtn_outplt, dt_outplt);
+
+      //AMR
+      int max_level = 0;            // number of levels = max_level + 1
+      int dtn_regrid  = 1;          // try regrid every n timesteps
+      int nghost = 1;               //number of ghost cells, dont change
+      amrex::Real dt_regrid = -1;    //regrid every dt time, negative wont use it
+
+      //BOUNDARY CONDITION
+      int Q = sim.getQ();
+
+      amrex::Array<int,AMREX_SPACEDIM> is_periodic;
+      amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_lo;
+      amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_hi;
+      amrex::Vector<amrex::Vector<int>> bc_lo_type;
+      amrex::Vector<amrex::Vector<int>> bc_hi_type;
+
+      bc_lo.resize(Q);
+      bc_hi.resize(Q);
+      bc_lo_type.resize(Q);
+      bc_hi_type.resize(Q);
+
+      if(AMREX_SPACEDIM == 2)
+      {     
+            is_periodic[0]  = 1;
+            is_periodic[1]  = 1;
+            
+            for(int q=0; q<Q; ++q)
+            {       
+                  bc_lo_type[q].resize(AMREX_SPACEDIM);
+                  bc_hi_type[q].resize(AMREX_SPACEDIM);
+                  
+                  bc_lo[q][0]=BCType::int_dir;
+                  bc_lo[q][1]=BCType::int_dir;
+                  
+                  bc_hi[q][0]=BCType::int_dir;
+                  bc_hi[q][1]=BCType::int_dir;
+                  
+                  bc_lo_type[q][0]=1;
+                  bc_lo_type[q][1]=1;
+                  
+                  bc_hi_type[q][0]=1;
+                  bc_hi_type[q][1]=1;
+            }
+
+            if(simulation_case ==  "isentropic_vortex")
+            {
+                  //need periodic in x to ensure waves interaction
+                  is_periodic[0]  = 1;
+                  is_periodic[1]  = 1;
+                  for(int q=0; q<Q; ++q){//rho,rhou1,rhou2,rhoe
+                        bc_lo[q][1]=BCType::int_dir;
+                        bc_hi[q][1]=BCType::int_dir;
+                        bc_lo[q][0]=BCType::int_dir;
+                        bc_hi[q][0]=BCType::int_dir;
+                        
+                        bc_lo_type[q][0]=2;
+                        bc_lo_type[q][1]=2;
+                        
+                        bc_hi_type[q][0]=2;
+                        bc_hi_type[q][1]=2;
+                  }   
+            }
+      }
+
+      sim.setBoundaryConditions(bc_lo_type,bc_hi_type,bc_lo, bc_hi);
+
+      //GEOMETRY/DOMAIN
+      int n_cell_x; int n_cell_y; int n_cell_z;
+      amrex::Real L_x_lo; amrex::Real L_y_lo; amrex::Real L_z_lo;
+      amrex::Real L_x_hi; amrex::Real L_y_hi; amrex::Real L_z_hi;
+      int coord = 0;
+     
+      if(simulation_case == "isentropic_vortex"){      
+            L_x_lo   = 0.0;
+            L_x_hi   = 10.0;
+            n_cell_x = 16;
+            
+            L_y_lo   = 0.0;
+            L_y_hi   = 10.0; 
+            n_cell_y = 16;
+
+
+            L_z_lo   = 0.0;
+            L_z_hi   = 0.0;
+            n_cell_z = 0;   
+
+            coord = 0;//cartesian, don't touch
+      }
+
+      amrex::Vector<int> n_cell{AMREX_D_DECL(n_cell_x, n_cell_y, n_cell_z)};
+
+      amrex::RealBox domain {{AMREX_D_DECL(L_x_lo,L_y_lo,L_z_lo)}, 
+                              {AMREX_D_DECL(L_x_hi, L_y_hi, L_z_hi)}}; 
+
+      //don't change ref criteria, some functions expect refinement 2
+      amrex::Vector<amrex::IntVect> amr_ratio;
+      for (int l = 0; l < max_level; ++l) {
+            amr_ratio.push_back(amrex::IntVect(AMREX_D_DECL(2, 2, 2)));
+        
+      }
+
+      sim.setGeometrySettings(domain,max_level,n_cell,coord,amr_ratio, is_periodic,dtn_regrid,dt_regrid,nghost); 
+
       /*-------------------------------------------*/
-      //Run simulation
+      /*--------------------RUN--------------------*/
+      
       // wallclock time
       const auto strt_total = amrex::second();
                           
