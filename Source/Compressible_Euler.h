@@ -32,6 +32,22 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
     virtual amrex::Real pde_BC_gDirichlet(int d, int side, int q)  const override {return 0.0;};
 
     virtual amrex::Real pde_BC_gNeumann(int d, int side, int q)  const override {return 0.0;};
+
+    virtual amrex::Real pde_BC_gDirichlet(int q, int dim,const amrex::IntVect& iv, 
+                                          int quad_pt_idx, const int dcomp, 
+                                          const int ncomp,
+                                          amrex::Array4<amrex::Real> const& dest, 
+                                          amrex::GeometryData const& geom, int side, 
+                                          int lev,const amrex::Vector<amrex::Vector<amrex::Real>>& gbc) 
+                                          const override {return 0.0;};
+
+    virtual amrex::Real pde_BC_gNeumann(int q, int dim, const amrex::IntVect& iv, 
+                                        int quad_pt_idx, const int dcomp,
+                                        const int ncomp,
+                                        amrex::Array4<amrex::Real> const& dest,
+                                        amrex::GeometryData const& geom, 
+                                        int side, int lev,const amrex::Vector<amrex::Vector<amrex::Real>>& gbc) 
+                                        const override {return 0.0;};
     
   private:
 

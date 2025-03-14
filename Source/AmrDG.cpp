@@ -125,6 +125,20 @@ void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
   n_pt_bc = quadrule->qMp_s;
 }
 
+amrex::Real AmrDG::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev)
+{
+  //BC projection u|bc->u_w|bc
+  amrex::Real sum = 0.0;
+  for(int m=0; m<quadrule->qMp_s; ++m)
+  {
+    sum+= quadmat[dcomp +comp][m]*bc[m];
+  }
+
+  sum /=refMat_phiphi(dcomp + comp,dcomp + comp, false, false);
+
+  return sum;
+}
+
 AmrDG::~AmrDG(){
   //delete basefunc;
   //delete quadrule;

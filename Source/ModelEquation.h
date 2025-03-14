@@ -55,6 +55,22 @@ class ModelEquation
 
     virtual amrex::Real pde_BC_gNeumann(int d, int side, int q)  const = 0;
 
+    virtual amrex::Real pde_BC_gDirichlet(int q, int dim,const amrex::IntVect& iv, 
+                                          int quad_pt_idx, const int dcomp, 
+                                          const int ncomp,
+                                          amrex::Array4<amrex::Real> const& dest, 
+                                          amrex::GeometryData const& geom, int side, 
+                                          int lev,const amrex::Vector<amrex::Vector<amrex::Real>>& gbc) 
+                                          const = 0;
+      
+  virtual amrex::Real pde_BC_gNeumann(int q, int dim, const amrex::IntVect& iv, 
+                                      int quad_pt_idx, const int dcomp,
+                                      const int ncomp,
+                                      amrex::Array4<amrex::Real> const& dest,
+                                      amrex::GeometryData const& geom, 
+                                      int side, int lev,const amrex::Vector<amrex::Vector<amrex::Real>>& gbc) 
+                                      const =0;
+
     //Number of model equations in the system
     int Q_model;
 
@@ -109,21 +125,7 @@ class ModelEquation
                         const amrex::IntVect& iv, const int dcomp, const int ncomp,
                         amrex::Vector<amrex::Real>* Ubc, 
                         amrex::Vector<amrex::Real>* Ubc_valid) const = 0;
-                        
-    virtual amrex::Real pde_BC_gDirichlet(int q, int dim,const amrex::IntVect& iv, 
-                                          int quad_pt_idx, const int dcomp, 
-                                          const int ncomp,
-                                          amrex::Array4<amrex::Real> const& dest, 
-                                          amrex::GeometryData const& geom, int side, 
-                                          int lev) const = 0;
-                                          
-    virtual amrex::Real pde_BC_gNeumann(int q, int dim, const amrex::IntVect& iv, 
-                                        int quad_pt_idx, const int dcomp,
-                                        const int ncomp,
-                                        amrex::Array4<amrex::Real> const& dest,
-                                        amrex::GeometryData const& geom, 
-                                        int side, int lev) const =0;
-     
+                             
     virtual amrex::Real pde_BC_gDirichlet(int d, int side, int q)  const = 0;
     
     virtual amrex::Real pde_BC_gNeumann(int d, int side, int q)  const = 0;
