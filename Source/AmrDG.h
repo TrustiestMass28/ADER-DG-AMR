@@ -29,10 +29,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     ~AmrDG();
 
-    void settings(int _p, amrex::Real _T) {
-      p = _p;
-      T = _T;
-    }
+    void settings(int _p, amrex::Real _T);
 
     void init();
 

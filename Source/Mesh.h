@@ -38,7 +38,7 @@ class Mesh : public amrex::AmrCore
         Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
             int _coord, Vector<IntVect> const& _ref_ratios,  
             Array<int,AMREX_SPACEDIM> const& _is_per, int _dtn_regrid = 0, 
-            int _dt_regrid = 0, int _nghost= 1);
+            amrex::Real _dt_regrid = 0, int _nghost= 1);
 
         ~Mesh() = default;   
 
@@ -92,7 +92,7 @@ class Mesh : public amrex::AmrCore
         int dtn_regrid = 0;  
 
         //Regrid physical time interval
-        int dt_regrid = 0;  
+        amrex::Real dt_regrid = 0;  
 
         //Number of ghost cells
         int nghost= 1;    
@@ -108,7 +108,7 @@ template <typename NumericalMethodType>
 Mesh<NumericalMethodType>::Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
             int _coord, Vector<IntVect> const& _ref_ratios,  
             Array<int,AMREX_SPACEDIM> const& _is_per, int _dtn_regrid , 
-            int _dt_regrid,int _nghost) 
+            amrex::Real _dt_regrid,int _nghost) 
     :  AmrCore (_rb, _max_level, _n_cell, _coord, _ref_ratios, _is_per) 
 {
     L = _max_level+1;

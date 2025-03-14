@@ -7,6 +7,11 @@
 
 using namespace amrex;
 
+void AmrDG::settings(int _p, amrex::Real _T) {
+  p = _p;
+  T = _T;
+}
+
 void AmrDG::init()
 {
   //Set vectors size
@@ -106,8 +111,6 @@ void AmrDG::init()
   set_vandermat();
 
   set_ref_element_matrix();
-
-  //TODO:Set-up boundary conditions
 
   //TODO:Set-up mesh interpolation
 

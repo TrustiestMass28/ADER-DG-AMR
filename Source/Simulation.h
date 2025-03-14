@@ -43,13 +43,13 @@ class Simulation
     void setGeometrySettings(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
                     int _coord, Vector<IntVect> const& _ref_ratios,  
                     Array<int,AMREX_SPACEDIM> const& _is_per, int dtn_regrid = 0, 
-                    int dt_regrid = 0,int nghost= 1);
+                    amrex::Real dt_regrid = 0,int nghost= 1);
 
     void setIO(int _n_out, amrex::Real _t_out);
 
-  private:
-    int _coord = 0;//cartesian, don't touch
+    int getQ();
 
+  private:
     std::shared_ptr<std::ofstream> ofs;
 
     std::shared_ptr<ModelEquation<EquationType>> model;
@@ -117,7 +117,7 @@ void Simulation<NumericalMethodType,EquationType>::setGeometrySettings(const Rea
                                                                       const Vector<int>& _n_cell, 
                                                                       int _coord, Vector<IntVect> const& _ref_ratios,  
                                                                       Array<int,AMREX_SPACEDIM> const& _is_per,
-                                                                      int dtn_regrid, int dt_regrid ,int nghost)
+                                                                      int dtn_regrid, amrex::Real dt_regrid ,int nghost)
 {
   mesh = std::make_shared<Mesh<NumericalMethodType>>(_rb,_max_level,_n_cell,_coord,_ref_ratios,_is_per,
                                                       dtn_regrid, dt_regrid, nghost);   
@@ -128,6 +128,13 @@ void Simulation<NumericalMethodType,EquationType>::setIO(int _n_out, amrex::Real
 {
   dtn_outplt = _n_out;
   dt_outplt  = _t_out;
+}
+
+template <typename NumericalMethodType,typename EquationType>
+int Simulation<NumericalMethodType,EquationType>::getQ()
+{
+  //to be called only after ModelEquation object has been init
+  return model->Q_model;
 }
 
 #endif // SIMULATION_H

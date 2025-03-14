@@ -9,7 +9,7 @@
       
       //Numeric Settings
       //AMR/MISC
-      int max_level = 0;// number of levels = max_level + 1
+      
       int t_regrid  = 1;// try regrid every t_regrid timesteps
       int t_limit   = 1;//every how many timesteps apply limtier
             
@@ -210,14 +210,7 @@
         //AMR_TVB_C[l] = 1.0+(amrex::Real)l*2.0;        
       }
 
-      amrex::Vector<int> n_cell{AMREX_D_DECL(n_cell_x, n_cell_y, n_cell_z)};
-      amrex::RealBox real_box {{AMREX_D_DECL(L_x_lo,L_y_lo,L_z_lo)}, 
-                              {AMREX_D_DECL(L_x_hi, L_y_hi, L_z_hi)}}; 
-      amrex::Vector<amrex::IntVect> refinement;
-      for (int l = 0; l < max_level; ++l) {
-        refinement.push_back(amrex::IntVect(AMREX_D_DECL(2, 2, 2)));
-        //don't change ref criteria, some functions expect refinement 2
-      }
+
       
       /*-------------------------------------------*/
       //Boundary Conditions
