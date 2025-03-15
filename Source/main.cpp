@@ -1,9 +1,9 @@
 #include <iostream>
 #include <AMReX.H>
 
-#include "Simulation.h"
 #include "AmrDG.h"
 #include "Compressible_Euler.h"
+#include "Simulation.h"
 
 using namespace amrex;
 
@@ -26,14 +26,15 @@ int main(int argc, char* argv[])
       int p  = 1;
       amrex::Real T = 10.0;
 
-      sim.setNumericalSettings(p,T);
+      //sim.setNumericalSettings(p,T);
 
       //IO
       int dtn_outplt = 10;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);
-
+      
+      /*
       //AMR
       int max_level = 0;            // number of levels = max_level + 1
       int dtn_regrid  = 1;          // try regrid every n timesteps
@@ -61,20 +62,20 @@ int main(int argc, char* argv[])
             
             for(int q=0; q<Q; ++q)
             {       
-                  bc_lo_type[q].resize(AMREX_SPACEDIM);
-                  bc_hi_type[q].resize(AMREX_SPACEDIM);
-                  
-                  bc_lo[q][0]=BCType::int_dir;
-                  bc_lo[q][1]=BCType::int_dir;
-                  
-                  bc_hi[q][0]=BCType::int_dir;
-                  bc_hi[q][1]=BCType::int_dir;
-                  
-                  bc_lo_type[q][0]=1;
-                  bc_lo_type[q][1]=1;
-                  
-                  bc_hi_type[q][0]=1;
-                  bc_hi_type[q][1]=1;
+            bc_lo_type[q].resize(AMREX_SPACEDIM);
+            bc_hi_type[q].resize(AMREX_SPACEDIM);
+            
+            bc_lo[q][0]=BCType::int_dir;
+            bc_lo[q][1]=BCType::int_dir;
+            
+            bc_hi[q][0]=BCType::int_dir;
+            bc_hi[q][1]=BCType::int_dir;
+            
+            bc_lo_type[q][0]=1;
+            bc_lo_type[q][1]=1;
+            
+            bc_hi_type[q][0]=1;
+            bc_hi_type[q][1]=1;
             }
 
             if(simulation_case ==  "isentropic_vortex")
@@ -136,13 +137,12 @@ int main(int argc, char* argv[])
 
       sim.setGeometrySettings(domain,max_level,n_cell,coord,amr_ratio, is_periodic,dtn_regrid,dt_regrid,nghost); 
 
-      /*-------------------------------------------*/
-      /*--------------------RUN--------------------*/
+
       
       // wallclock time
       const auto strt_total = amrex::second();
                           
-      sim.run();
+      //sim.run();
                     
       // wallclock time
       auto end_total = amrex::second() - strt_total;
@@ -150,11 +150,16 @@ int main(int argc, char* argv[])
       // print wallclock time
       ParallelDescriptor::ReduceRealMax(end_total ,ParallelDescriptor::IOProcessorNumber());
       amrex::Print() << "\nTotal Time: " << end_total << '\n';
+      */
     }
     amrex::Finalize();
     
     return 0;
 }
+
+      /*-------------------------------------------*/
+      /*--------------------RUN--------------------*/
+
 
 /*------------------------------------------------------------------------*/
 /* 
