@@ -232,10 +232,11 @@ template <typename EquationType, typename NumericalMethodType>
 void BoundaryCondition<EquationType,NumericalMethodType>::setBCtype(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
                                                 amrex::Vector<amrex::Vector<int>> _bc_hi_type)
 {
-  bc_lo_type.resize(model_pde->Q_model);
-  bc_hi_type.resize(model_pde->Q_model);
+  int Q = _bc_lo_type.size(); //cant get it from model ocz have not apssed ptr yet
+  bc_lo_type.resize(Q);
+  bc_hi_type.resize(Q);
   
-  for(int q=0; q<model_pde->Q_model; ++q){
+  for(int q=0; q<Q; ++q){
     bc_lo_type[q].resize(AMREX_SPACEDIM);
     bc_hi_type[q].resize(AMREX_SPACEDIM);
     
@@ -250,10 +251,12 @@ template <typename EquationType, typename NumericalMethodType>
 void BoundaryCondition<EquationType,NumericalMethodType>::setBCAMREXtype(amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
                                                     amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi)
 {
-  bc_lo.resize(model_pde->Q_model);
-  bc_hi.resize(model_pde->Q_model);
+  int Q = bc_lo.size();
+
+  bc_lo.resize(Q);
+  bc_hi.resize(Q);
   
-  for(int q=0; q<model_pde->Q_model; ++q){
+  for(int q=0; q<Q; ++q){
     for(int d=0; d<AMREX_SPACEDIM; ++d){
       bc_lo[q][d] = _bc_lo[q][d];
       bc_hi[q][d] = _bc_hi[q][d];

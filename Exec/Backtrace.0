@@ -9,30 +9,27 @@ Host Name: LAPTOP-NF332GRM
             readelf -wl my_exefile | grep my_line_address'
     to find out the offset for that line.
 
- 0: ./main2d.gnu.ex(+0x199a5d) [0x55fb06fc0a5d]
+ 0: ./main2d.gnu.ex(+0x19b2ed) [0x55ca0c96d2ed]
     amrex::BLBackTrace::handler(int) at /usr/include/x86_64-linux-gnu/bits/unistd.h:284
  (inlined by) amrex::BLBackTrace::print_backtrace_info(_IO_FILE*) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:213
  (inlined by) amrex::BLBackTrace::handler(int) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:99
 
- 1: /lib/x86_64-linux-gnu/libc.so.6(+0x42520) [0x7f81a29a1520]
+ 1: /lib/x86_64-linux-gnu/libc.so.6(+0x42520) [0x7f697d6e7520]
 
- 2: /lib/x86_64-linux-gnu/libstdc++.so.6(_ZNKSt12__basic_fileIcE7is_openEv+0x4) [0x7f81a2d5fa64]
-    ?? ??:0
+ 2: ./main2d.gnu.ex(+0x2a3f2f) [0x55ca0ca75f2f]
+    BoundaryCondition<Compressible_Euler, AmrDG>::setBCtype(amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >) at /home/sfabiano/ADER-DG-AMR/Exec/../Source/BoundaryCondition.h:237
+ (inlined by) BoundaryCondition<Compressible_Euler, AmrDG>::_settings(amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > >) at /home/sfabiano/ADER-DG-AMR/Exec/../Source/BoundaryCondition.h:161
+ (inlined by) void BoundaryCondition<Compressible_Euler, AmrDG>::settings<amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > > >(amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > >) at /home/sfabiano/ADER-DG-AMR/Exec/../Source/BoundaryCondition.h:54
+ (inlined by) void Simulation<AmrDG, Compressible_Euler>::setBoundaryConditions<amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > > >(amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > >, amrex::Vector<std::array<int, 2ul>, std::allocator<std::array<int, 2ul> > >) at /home/sfabiano/ADER-DG-AMR/Exec/../Source/Simulation.h:112
 
- 3: /lib/x86_64-linux-gnu/libstdc++.so.6(_ZNSt13basic_filebufIcSt11char_traitsIcEE5closeEv+0x2b) [0x7f81a2da749b]
-    ?? ??:0
+ 3: ./main2d.gnu.ex(+0x2cf22) [0x55ca0c7fef22]
+    amrex::Vector<amrex::Vector<int, std::allocator<int> >, std::allocator<amrex::Vector<int, std::allocator<int> > > >::~Vector() at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_Vector.H:24
+ (inlined by) main at /home/sfabiano/ADER-DG-AMR/Exec/../Source/main.cpp:102
 
- 4: ./main2d.gnu.ex(+0x29eb39) [0x55fb070c5b39]
-    std::basic_ofstream<char, std::char_traits<char> >::close() at /usr/include/c++/11/fstream:1000
- (inlined by) Simulation<AmrDG, Compressible_Euler>::~Simulation() at /home/sfabiano/ADER-DG-AMR/Exec/../Source/Simulation.h:76
+ 4: /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f697d6ced90]
 
- 5: ./main2d.gnu.ex(+0x2b89f) [0x55fb06e5289f]
-    main at /home/sfabiano/ADER-DG-AMR/Exec/../Source/main.cpp:156
+ 5: /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f697d6cee40]
 
- 6: /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f81a2988d90]
-
- 7: /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f81a2988e40]
-
- 8: ./main2d.gnu.ex(+0x2bc65) [0x55fb06e52c65]
+ 6: ./main2d.gnu.ex(+0x2d4f5) [0x55ca0c7ff4f5]
     ?? ??:0
 

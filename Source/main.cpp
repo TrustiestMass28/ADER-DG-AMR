@@ -26,15 +26,15 @@ int main(int argc, char* argv[])
       int p  = 1;
       amrex::Real T = 10.0;
 
-      //sim.setNumericalSettings(p,T);
+      sim.setNumericalSettings(p,T);
 
       //IO
       int dtn_outplt = 10;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);
+
       
-      /*
       //AMR
       int max_level = 0;            // number of levels = max_level + 1
       int dtn_regrid  = 1;          // try regrid every n timesteps
@@ -43,7 +43,8 @@ int main(int argc, char* argv[])
 
       //BOUNDARY CONDITION
       int Q = sim.getQ();
-
+      
+      
       amrex::Array<int,AMREX_SPACEDIM> is_periodic;
       amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_lo;
       amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_hi;
@@ -99,7 +100,7 @@ int main(int argc, char* argv[])
       }
 
       sim.setBoundaryConditions(bc_lo_type,bc_hi_type,bc_lo, bc_hi);
-
+      /*
       //GEOMETRY/DOMAIN
       int n_cell_x; int n_cell_y; int n_cell_z;
       amrex::Real L_x_lo; amrex::Real L_y_lo; amrex::Real L_z_lo;

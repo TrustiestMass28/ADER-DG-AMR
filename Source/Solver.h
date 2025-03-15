@@ -43,7 +43,6 @@ class Solver
 
         template <typename... Args>
         void settings(Args... args) {
-            std::cout << "test" << std::endl;
             static_cast<NumericalMethodType*>(this)->settings(std::forward<Args>(args)...);
         }
 
