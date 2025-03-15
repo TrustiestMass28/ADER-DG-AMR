@@ -25,7 +25,7 @@ template <typename NumericalMethodType,typename EquationType>
 class Simulation
 {
   public:    
-    Simulation(); 
+    Simulation() = default; 
     
     ~Simulation();
 
@@ -66,14 +66,14 @@ class Simulation
     amrex::Real dt_outplt;   //data output physical time interval
 };
 
-
+/*
 template <typename NumericalMethodType,typename EquationType>
 Simulation<NumericalMethodType,EquationType>::Simulation() 
-{}
+{}*/
 
 template <typename NumericalMethodType,typename EquationType>
 Simulation<NumericalMethodType,EquationType>::~Simulation() {
-  ofs->close();
+  //ofs->close();
 }
 
 template <typename NumericalMethodType,typename EquationType>
