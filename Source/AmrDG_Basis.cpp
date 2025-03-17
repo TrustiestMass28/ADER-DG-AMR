@@ -61,6 +61,8 @@ void AmrDG::BasisLegendre::set_idx_mapping_st()
     for(int ii=0; ii<=numme->p-tt;++ii){
       basis_idx_st[ctr][0] = ii;
       basis_idx_st[ctr][1] = tt;
+
+      basis_idx_t[ctr][0] = tt;
       ctr+=1;      
     }
   }
@@ -72,6 +74,8 @@ void AmrDG::BasisLegendre::set_idx_mapping_st()
         basis_idx_st[ctr][0] = ii;
         basis_idx_st[ctr][1] = jj;
         basis_idx_st[ctr][2] = tt;
+
+        basis_idx_t[ctr][0] = tt;
         ctr+=1;
       }
     }
@@ -86,6 +90,8 @@ void AmrDG::BasisLegendre::set_idx_mapping_st()
           basis_idx_st[ctr][1] = jj;
           basis_idx_st[ctr][2] = kk;
           basis_idx_st[ctr][3] = tt;    
+
+          basis_idx_t[ctr][0] = tt;
           ctr+=1;
         }
       }
@@ -173,14 +179,13 @@ amrex::Real AmrDG::BasisLegendre::ddphi_s(int idx, const amrex::Vector<amrex::Ve
 //temporal basis function
 amrex::Real AmrDG::BasisLegendre::phi_t(int tidx, amrex::Real tau) const 
 {
-  return std::legendre(basis_idx_st[tidx][AMREX_SPACEDIM], tau);
-  //TODO: use basis_idx_t?? with only 1 dimension?
+  return std::legendre(basis_idx_t[tidx][0], tau); 
 }
 
 //derivative of temporal basis function
 amrex::Real AmrDG::BasisLegendre::dtphi_t(int tidx, amrex::Real tau) const
 {
-  return (std::assoc_legendre(basis_idx_st[tidx][AMREX_SPACEDIM],1,tau))
+  return (std::assoc_legendre(basis_idx_t[tidx][0],1,tau))
           /(std::sqrt(1.0-std::pow(tau,2))); 
 }
 
@@ -189,7 +194,7 @@ amrex::Real AmrDG::BasisLegendre::dtphi_t(int tidx, amrex::Real tau) const
 amrex::Real AmrDG::BasisLegendre::phi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
                                           const amrex::Vector<amrex::Real>& x) const 
 {
-  amrex::Real mphi = phi_s(idx,basis_idx_st,x);
+  amrex::Real mphi = phi_s(idx,idx_map,x);
   mphi*=phi_t(idx,x[AMREX_SPACEDIM]);
   
   return mphi;

@@ -48,8 +48,10 @@ void AmrDG::init()
 
   //basis functions d.o.f idx mapper
   basefunc->basis_idx_s.resize(basefunc->Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
-  basefunc->basis_idx_t.resize(basisf)
+  basefunc->basis_idx_t.resize(basefunc->Np_st, amrex::Vector<int>(1));
   basefunc->basis_idx_st.resize(basefunc->Np_st, amrex::Vector<int>(AMREX_SPACEDIM+1));  
+  //basis_idx_t for each of the Np_st basis func, stores the idx of the time polynomial,
+  //thats why it has basefunc->Np_st
 
   basefunc->set_idx_mapping_s();
   basefunc->set_idx_mapping_st();

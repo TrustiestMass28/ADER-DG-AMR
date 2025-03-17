@@ -47,7 +47,7 @@ void AmrDG::set_ref_element_matrix()
     
     for(int i=0; i<basefunc->Np_st;++i){
       Mk_h_w[j][i]= refMat_phiphi(i,j,true,false)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
-                    -refMat_tphiDtphi(j,i));   //TODO:BUG
+                    -refMat_tphiDtphi(j,i));  
                     /*
       for(int d=0; d<AMREX_SPACEDIM; ++d){
         Sk_pred[d][j][i]   = refMat_tphitphi(i,j)*refMat_phiDphi(i,j,d);  
@@ -306,9 +306,9 @@ amrex::Real AmrDG::refMat_tphitphi(int i,int j) const
   //basis function can be implemented here
   //index[-1] indicates time coordinate
   
-  return (amrex::Real)kroneckerDelta(basefunc->basis_idx_st[i][AMREX_SPACEDIM],
-    basefunc->basis_idx_st[j][AMREX_SPACEDIM])
-    *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_st[j][AMREX_SPACEDIM]+1.0));
+  return (amrex::Real)kroneckerDelta(basefunc->basis_idx_t[i][AMREX_SPACEDIM],
+    basefunc->basis_idx_t[j][AMREX_SPACEDIM])
+    *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_t[j][AMREX_SPACEDIM]+1.0));
 }
 
 amrex::Real AmrDG::refMat_tphiDtphi(int i,int j) const 
@@ -333,13 +333,13 @@ amrex::Real AmrDG::refMat_tphiDtphi(int i,int j) const
   
  
   //computes the integral using gaussian quadrature
-  int N = quadrule->qMp_1d;
+  int N = quadrule->qMp_1d; 
   amrex::Real w;
   amrex::Real tphiDtphi=0.0;
   for(int q=0; q<N;++q){  
     w = 1.0;
-    //w*=2.0/(amrex::Real)std::pow((amrex::Real)std::assoc_legendre(N,1,basefunc->basis_idx_t[q][0]),2.0);
-    //tphiDtphi+=(basefunc->phi_t(j, basefunc->basis_idx_t[q][0])*basefunc->dtphi_t(i, basefunc->basis_idx_t[q][0])*w);  
+    w*=2.0/(amrex::Real)std::pow((amrex::Real)std::assoc_legendre(N,1,quadrule->xi_ref_quad_t[q][0]),2.0);
+    tphiDtphi+=(basefunc->phi_t(j, quadrule->xi_ref_quad_t[q][0])*basefunc->dtphi_t(i, quadrule->xi_ref_quad_t[q][0])*w);  
   }
   return tphiDtphi;
   
