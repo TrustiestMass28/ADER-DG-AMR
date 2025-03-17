@@ -44,21 +44,25 @@ void AmrDG::set_ref_element_matrix()
 {
   //Generate matrices used for predictor step
   for(int j=0; j<basefunc->Np_st;++j){
+    
     for(int i=0; i<basefunc->Np_st;++i){
       Mk_h_w[j][i]= refMat_phiphi(i,j,true,false)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
-                    -refMat_tphiDtphi(j,i));   
-                    
+                    -refMat_tphiDtphi(j,i));   //TODO:BUG
+                    /*
       for(int d=0; d<AMREX_SPACEDIM; ++d){
         Sk_pred[d][j][i]   = refMat_tphitphi(i,j)*refMat_phiDphi(i,j,d);  
       }      
       Mk_pred_src[j][i] =refMat_tphitphi(i,j)*refMat_phiphi(i,j,true,false);
+      */
     }
-    
+    /*
     for(int i=0; i<basefunc->Np_s;++i){
       Mk_pred[j][i] = basefunc->phi_t(j,-1.0)*refMat_phiphi(i,j,true,true);
     }
+      */
   }
 
+  /*
   Eigen::MatrixXd Sk_pred_eigen(basefunc->Np_st,basefunc->Np_st);
   Eigen::MatrixXd Mk_s_eigen(basefunc->Np_st,basefunc->Np_st);
   Eigen::MatrixXd Vinv_eigen(basefunc->Np_st,quadrule->qMp_st);
@@ -185,6 +189,7 @@ void AmrDG::set_ref_element_matrix()
       quadmat[j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s[i])*w;
     }
   }  
+    */
 }
 
 amrex::Real AmrDG::refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const 
@@ -333,8 +338,8 @@ amrex::Real AmrDG::refMat_tphiDtphi(int i,int j) const
   amrex::Real tphiDtphi=0.0;
   for(int q=0; q<N;++q){  
     w = 1.0;
-    w*=2.0/(amrex::Real)std::pow((amrex::Real)std::assoc_legendre(N,1,basefunc->basis_idx_t[q][0]),2.0);
-    tphiDtphi+=(basefunc->phi_t(j, basefunc->basis_idx_t[q][0])*basefunc->dtphi_t(i, basefunc->basis_idx_t[q][0])*w);  
+    //w*=2.0/(amrex::Real)std::pow((amrex::Real)std::assoc_legendre(N,1,basefunc->basis_idx_t[q][0]),2.0);
+    //tphiDtphi+=(basefunc->phi_t(j, basefunc->basis_idx_t[q][0])*basefunc->dtphi_t(i, basefunc->basis_idx_t[q][0])*w);  
   }
   return tphiDtphi;
   

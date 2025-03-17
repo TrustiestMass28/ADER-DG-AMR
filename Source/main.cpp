@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
       }
 
       sim.setBoundaryConditions(bc_lo_type,bc_hi_type,bc_lo, bc_hi);
-      /*
+      
       //GEOMETRY/DOMAIN
       int n_cell_x; int n_cell_y; int n_cell_z;
       amrex::Real L_x_lo; amrex::Real L_y_lo; amrex::Real L_z_lo;
@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
       // wallclock time
       const auto strt_total = amrex::second();
                           
-      //sim.run();
+      sim.run();
                     
       // wallclock time
       auto end_total = amrex::second() - strt_total;
@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
       // print wallclock time
       ParallelDescriptor::ReduceRealMax(end_total ,ParallelDescriptor::IOProcessorNumber());
       amrex::Print() << "\nTotal Time: " << end_total << '\n';
-      */
+      
     }
     amrex::Finalize();
     

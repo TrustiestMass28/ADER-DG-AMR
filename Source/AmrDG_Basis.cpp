@@ -11,7 +11,7 @@ void AmrDG::BasisLegendre::set_number_basis()
   Np_st = (int)((amrex::Real)factorial(numme->p+AMREX_SPACEDIM+1)
         /((amrex::Real)factorial(numme->p)*(amrex::Real)factorial(AMREX_SPACEDIM+1)));
 
-  //Np_t = Np_st-Np_s; not needed for DG
+  Np_t = Np_st-Np_s; //not needed for DG
 }
 
 //Generate index mapping between basis fuction idx and its componetns individual idxs
