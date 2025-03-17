@@ -221,11 +221,12 @@ class Solver
                 //Set spatio-temporal basis functions Phi(x,t) index mapping
                 amrex::Vector<amrex::Vector<int>> basis_idx_st;
 
-                void setNumericalMethod(NumericalMethodType* _numme);
+                void setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme);
 
             protected:
                 //Ptr used to access numerical method and solver data
-                NumericalMethodType* numme;
+                //NumericalMethodType* numme;
+                std::shared_ptr<NumericalMethodType> numme;
 
         };
 
@@ -285,11 +286,11 @@ class Solver
 
                 //  int qMp_L2proj; //number of quadrature points only in space, used for the BCs,ICs,
 
-                void setNumericalMethod(NumericalMethodType* _numme);
+                void setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme);
                 
                 protected:
                     //Ptr used to access numerical method and solver data
-                    NumericalMethodType* numme;
+                    std::shared_ptr<NumericalMethodType> numme;
             };
 
             //number of points at which boundary conditions are
@@ -383,20 +384,19 @@ void Solver<NumericalMethodType>::init(std::shared_ptr<ModelEquation<EquationTyp
 {
     setMesh(_mesh);
 
+    
     //Get model specific data that influence numerical set-up
     Q = model_pde->Q_model;
     Q_unique = model_pde->Q_model_unique;
     flag_source_term = model_pde->flag_source_term;
 
+    
     //Numerical method specific initialization
     static_cast<NumericalMethodType*>(this)->init();
 
-
-    //TODO: here construct Boundary Object
-
-
     const Real time = 0.0;
-    mesh->InitFromScratch(time);    //AmrCore
+    //mesh->InitFromScratch(time);    //AmrCore
+    
 }
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
@@ -441,7 +441,7 @@ void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEqu
 }
 
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::Basis::setNumericalMethod(NumericalMethodType* _numme)
+void Solver<NumericalMethodType>::Basis::setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme)
 {
     numme = _numme;
 }
@@ -449,11 +449,11 @@ void Solver<NumericalMethodType>::Basis::setNumericalMethod(NumericalMethodType*
 template <typename NumericalMethodType>
 Solver<NumericalMethodType>::Basis::~Basis()
 {
-    delete numme;
+    //delete numme;
 }
 
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::Quadrature::setNumericalMethod(NumericalMethodType* _numme)
+void Solver<NumericalMethodType>::Quadrature::setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme)
 {
     numme = _numme;
 }
@@ -461,7 +461,7 @@ void Solver<NumericalMethodType>::Quadrature::setNumericalMethod(NumericalMethod
 template <typename NumericalMethodType>
 Solver<NumericalMethodType>::Quadrature::~Quadrature()
 {
-    delete numme;
+    //delete numme;
 }
 
 template <typename NumericalMethodType>

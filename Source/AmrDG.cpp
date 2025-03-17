@@ -40,22 +40,25 @@ void AmrDG::init()
   //Basis function
   basefunc = std::make_shared<BasisLegendre>();
 
-  basefunc->setNumericalMethod(this);
-
+  //basefunc->setNumericalMethod(this);
+  basefunc->setNumericalMethod(shared_from_this());
+  
   //Number of modes/components of solution decomposition
   basefunc->set_number_basis();
 
   //basis functions d.o.f idx mapper
   basefunc->basis_idx_s.resize(basefunc->Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
+  basefunc->basis_idx_t.resize(basisf)
   basefunc->basis_idx_st.resize(basefunc->Np_st, amrex::Vector<int>(AMREX_SPACEDIM+1));  
 
   basefunc->set_idx_mapping_s();
   basefunc->set_idx_mapping_st();
 
+  
   //Set-up quadrature rule
   quadrule = std::make_shared<QuadratureGaussLegendre>();
 
-  quadrule->setNumericalMethod(this);
+  quadrule->setNumericalMethod(shared_from_this());
 
   //Number of quadrature pts
   quadrule->set_number_quadpoints();
@@ -78,7 +81,7 @@ void AmrDG::init()
 
   //Generation of quadrature pts
   quadrule->set_quadpoints();
-
+                              
   //Initialize generalized Vandermonde matrix (only volume, no boudnary version)
   //and their inverse
   V.resize(quadrule->qMp_st,amrex::Vector<amrex::Real> (basefunc->Np_st)); 
@@ -100,21 +103,22 @@ void AmrDG::init()
   Mk_h_w_inv.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
   Mk_pred.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_s));  
   Sk_pred.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_st,
-                  amrex::Vector<amrex::Real>(basefunc->Np_st)));
+                                  amrex::Vector<amrex::Real>(basefunc->Np_st)));
   Mk_pred_src.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
 
   Sk_predVinv.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_st,
                       amrex::Vector<amrex::Real>(quadrule->qMp_st)));
   Mk_pred_srcVinv.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(quadrule->qMp_st));
-
+    
   //Construct system matrices
   set_vandermat();
-
+    
   set_ref_element_matrix();
-
+  
   //TODO:Set-up mesh interpolation
 
   //TODO::Set-up limiting
+
 }
 
 void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
