@@ -48,21 +48,18 @@ void AmrDG::set_ref_element_matrix()
     for(int i=0; i<basefunc->Np_st;++i){
       Mk_h_w[j][i]= refMat_phiphi(i,j,true,false)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
                     -refMat_tphiDtphi(j,i));  
-                    /*
+                    
       for(int d=0; d<AMREX_SPACEDIM; ++d){
         Sk_pred[d][j][i]   = refMat_tphitphi(i,j)*refMat_phiDphi(i,j,d);  
       }      
       Mk_pred_src[j][i] =refMat_tphitphi(i,j)*refMat_phiphi(i,j,true,false);
-      */
     }
-    /*
+    
     for(int i=0; i<basefunc->Np_s;++i){
       Mk_pred[j][i] = basefunc->phi_t(j,-1.0)*refMat_phiphi(i,j,true,true);
     }
-      */
   }
 
-  /*
   Eigen::MatrixXd Sk_pred_eigen(basefunc->Np_st,basefunc->Np_st);
   Eigen::MatrixXd Mk_s_eigen(basefunc->Np_st,basefunc->Np_st);
   Eigen::MatrixXd Vinv_eigen(basefunc->Np_st,quadrule->qMp_st);
@@ -189,7 +186,7 @@ void AmrDG::set_ref_element_matrix()
       quadmat[j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s[i])*w;
     }
   }  
-    */
+
 }
 
 amrex::Real AmrDG::refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const 

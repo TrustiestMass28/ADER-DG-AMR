@@ -51,7 +51,8 @@ void AmrDG::init()
   basefunc->basis_idx_t.resize(basefunc->Np_st, amrex::Vector<int>(1));
   basefunc->basis_idx_st.resize(basefunc->Np_st, amrex::Vector<int>(AMREX_SPACEDIM+1));  
   //basis_idx_t for each of the Np_st basis func, stores the idx of the time polynomial,
-  //thats why it has basefunc->Np_st
+  //thats why it has basefunc->Np_st. This because when we ened to evalaute temporal basis
+  //it is always in same loop as other spatial component, i.e when looping over Np_st
 
   basefunc->set_idx_mapping_s();
   basefunc->set_idx_mapping_st();
