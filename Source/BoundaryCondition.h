@@ -167,14 +167,14 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
                                                               std::shared_ptr<Mesh<NumericalMethodType>> _mesh)
 {
   setModelEquation(_model_pde);
-
+  
   setSolver(_solver);
-
+  
   setMesh(_mesh);
-
+  
   //TODO: use solver ptr to pass reference of bc, bc_w
-  _solver->init_bc(bc,n_comp);
-
+  solver->init_bc(bc,n_comp);
+  
   //gbc_lo,gbc_lo accessed inside ModelEquation
   //since we have static BCs, no need to call
   //implemented pde_BC_gDirichlet,pde_BC_gNeumann
@@ -190,12 +190,13 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
     gbc_lo[q].resize(AMREX_SPACEDIM);
     gbc_hi[q].resize(AMREX_SPACEDIM); 
   }
-
+  
   //bc.size(); should be equal to Q
   for(int q=0; q<bc.size(); ++q){
     for (int d = 0; d < AMREX_SPACEDIM; ++d) {  
       int _lo = bc_lo_type[q][d]; 
       int _hi = bc_hi_type[q][d];
+      
       //loop over components
       //low
       if(_lo == 0){//"dirichlet"
@@ -207,7 +208,7 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
       else if(_lo == 2){//"periodic"
         //nothing done
       }
-
+      
       //high
       if(_hi == 0){//"dirichlet"
         gbc_hi[q][d] =model_pde->pde_BC_gDirichlet(d,1,q);
@@ -218,14 +219,17 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
       else if(_hi == 2){//"periodic"
         //nothing done
       }
-
+      
       for (int n = 0; n < n_comp; ++n){
+        //for each equation of the PDE system
+        //we might have multiple sub components (e.g modes)
+        //assign same bc to all of them
         bc[q][n].setLo(d,bc_lo[q][d]);
         bc[q][n].setHi(d,bc_hi[q][d]);
       }
+      
     }
   }
-  //TODO:maybe use solver to also pass some quadrature or basis info
 }
 
 template <typename EquationType, typename NumericalMethodType>   
@@ -251,7 +255,7 @@ template <typename EquationType, typename NumericalMethodType>
 void BoundaryCondition<EquationType,NumericalMethodType>::setBCAMREXtype(amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
                                                     amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi)
 {
-  int Q = bc_lo.size();
+  int Q = _bc_lo.size();
 
   bc_lo.resize(Q);
   bc_hi.resize(Q);
