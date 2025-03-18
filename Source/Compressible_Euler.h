@@ -48,6 +48,8 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
                                         amrex::GeometryData const& geom, 
                                         int side, int lev,const amrex::Vector<amrex::Vector<amrex::Real>>& gbc) 
                                         const override {return 0.0;};
+
+    virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k, amrex::Vector<amrex::Real> xi) const override {return 0.0;};
     
   private:
 
@@ -67,8 +69,7 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
     
 
                                   
-    virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k,
-                               amrex::Vector<amrex::Real> xi) override;
+
 
     virtual amrex::Real pde_CFL(int d,int m,int i, int j, int k,
                                 amrex::Vector<amrex::Array4<const amrex::Real>>* u) const override;

@@ -396,6 +396,8 @@ void Solver<NumericalMethodType>::init(std::shared_ptr<ModelEquation<EquationTyp
     //AmrCore.h function initialize multilevel mesh, geometry, Box array and DistributionMap
     //calls MakeNewLevelFromScratch
     _mesh->InitFromScratch(time);
+
+    set_initial_condition(model_pde);
 }
 
 template <typename NumericalMethodType>
@@ -436,7 +438,28 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
-    
+    //loop over levels
+    auto _mesh = mesh.lock();
+    for(int l=0; l<_mesh->L; ++l){
+        if(l == 0)
+        {
+            static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,l);
+        }
+        else
+        {   
+            for(int q=0 ; q<Q; ++q){//TODO
+                //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
+                //for ghost at fine-coarseinterface just copy from coarse
+                //FillPatchGhostFC(lev,time,q);
+              }  
+        }
+    }
+
+    //TODO:average down, (after Initfromscartch should avg down fine->coarse)
+    //TODO:check if this is really needed in AMRDG, in any case, should be done 
+    //depending on implementation of num method
+    //avg_down_initial_condition()
+    //static_cast<NumericalMethodType*>(this)->avg_down_initial_condition(lev);
 }
 
 template <typename NumericalMethodType>
