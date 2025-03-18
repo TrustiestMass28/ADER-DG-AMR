@@ -81,13 +81,13 @@ class BoundaryCondition
 
   protected:
     //Ptr used to access implemented model equation
-    std::shared_ptr<ModelEquation<EquationType>> model_pde;
+    std::weak_ptr<ModelEquation<EquationType>> model_pde;
 
     //Ptr used to access numerical method and solver data
-    std::shared_ptr<Solver<NumericalMethodType>> solver;
+    std::weak_ptr<Solver<NumericalMethodType>> solver;
 
     //Ptr used to access mesh/geom data
-    std::shared_ptr<Mesh<NumericalMethodType>> mesh;
+    std::weak_ptr<Mesh<NumericalMethodType>> mesh;
 
     //Store amrex BC types in each dim
     amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_lo;
@@ -172,8 +172,9 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
   
   setMesh(_mesh);
   
+
   //TODO: use solver ptr to pass reference of bc, bc_w
-  solver->init_bc(bc,n_comp);
+  _solver->init_bc(bc,n_comp);
   
   //gbc_lo,gbc_lo accessed inside ModelEquation
   //since we have static BCs, no need to call
@@ -183,10 +184,10 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
   //for each component of the PDE system
   //gbc_lo stores the BC value as defined
   //in the implemented ModelEquation derived
-  gbc_lo.resize(model_pde->Q_model);
-  gbc_hi.resize(model_pde->Q_model);
+  gbc_lo.resize(_model_pde->Q_model);
+  gbc_hi.resize(_model_pde->Q_model);
 
-  for(int q=0; q<model_pde->Q_model; ++q){
+  for(int q=0; q<_model_pde->Q_model; ++q){
     gbc_lo[q].resize(AMREX_SPACEDIM);
     gbc_hi[q].resize(AMREX_SPACEDIM); 
   }
@@ -200,10 +201,10 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
       //loop over components
       //low
       if(_lo == 0){//"dirichlet"
-        gbc_lo[q][d] =model_pde->pde_BC_gDirichlet(d,-1,q);
+        gbc_lo[q][d] =_model_pde->pde_BC_gDirichlet(d,-1,q);
       }
       else if(_lo == 1){//"neumann"
-        gbc_lo[q][d] =model_pde->pde_BC_gNeumann(d,-1,q);    
+        gbc_lo[q][d] =_model_pde->pde_BC_gNeumann(d,-1,q);    
       }
       else if(_lo == 2){//"periodic"
         //nothing done
@@ -211,10 +212,10 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
       
       //high
       if(_hi == 0){//"dirichlet"
-        gbc_hi[q][d] =model_pde->pde_BC_gDirichlet(d,1,q);
+        gbc_hi[q][d] =_model_pde->pde_BC_gDirichlet(d,1,q);
       }
       else if(_hi == 1){//"neumann"
-        gbc_hi[q][d] =model_pde->pde_BC_gNeumann(d,1,q);  
+        gbc_hi[q][d] =_model_pde->pde_BC_gNeumann(d,1,q);  
       }
       else if(_hi == 2){//"periodic"
         //nothing done
@@ -272,7 +273,9 @@ template <typename EquationType, typename NumericalMethodType>
 void BoundaryCondition<EquationType,NumericalMethodType>::FillBoundaryCells(amrex::Vector<amrex::MultiFab>* U_ptr, 
                                                                             int lev, amrex::Real time)
 {
-  amrex::Geometry geom_l = mesh->get_Geom(lev);
+  auto _mesh = mesh.lock();
+
+  amrex::Geometry geom_l = _mesh->get_Geom(lev);
   
   //applies boundary conditions    
   for(int q=0; q<(*U_ptr).size(); ++q){
@@ -308,13 +311,16 @@ void BoundaryCondition<EquationType,NumericalMethodType>::operator() (const IntV
   //the comp number to pde_BC_gDirichlet,pde_BC_gNeumann (they need to be modified accordingly)
   //for (int comp = 0; comp < numcomp; ++comp) { ..bc_w[q][comp] and pass comp to functions
 
+  auto _solver = solver.lock();
+  auto _model_pde = model_pde.lock();
+
   const auto lo = geom.Domain().smallEnd();
   const auto hi = geom.Domain().bigEnd();
 
   //used to hold tmp bc value
   //e.g in case we first evaluate at poitns and then
   //ptorject to modes.
-  amrex::Vector<amrex::Real> _bc(solver->n_pt_bc);
+  amrex::Vector<amrex::Real> _bc(_solver->n_pt_bc);
 
   //The way inner bool checks on bc.lo(dim),bc.hi(dim)
   //work, expects all equation system components to have same BC 
@@ -325,28 +331,28 @@ void BoundaryCondition<EquationType,NumericalMethodType>::operator() (const IntV
 
     if ((bc[curr_q][0].lo(dim) == amrex::BCType::ext_dir) && iv[dim] < lo[dim]){
       //Boundary Low
-      for(int m=0; m<solver->n_pt_bc; ++m){
+      for(int m=0; m<_solver->n_pt_bc; ++m){
         if(bc_lo_type[curr_q][dim] == 0)//Dirichlet
         {
-          _bc[m] = model_pde->pde_BC_gDirichlet(curr_q,dim,iv,m,dcomp,numcomp,dest,geom,-1,curr_lev,gbc_lo);
+          _bc[m] = _model_pde->pde_BC_gDirichlet(curr_q,dim,iv,m,dcomp,numcomp,dest,geom,-1,curr_lev,gbc_lo);
         }
         else if(bc_lo_type[curr_q][dim] == 1)//Neumann
         {
-          _bc[m] =  model_pde->pde_BC_gNeumann(curr_q, dim,iv,m,dcomp,numcomp,dest,geom,-1,curr_lev,gbc_lo);  
+          _bc[m] =  _model_pde->pde_BC_gNeumann(curr_q, dim,iv,m,dcomp,numcomp,dest,geom,-1,curr_lev,gbc_lo);  
         }
       }
       bc_found = true;
     }
     else if ((bc[curr_q][0].hi(dim) == amrex::BCType::ext_dir) && iv[dim] > hi[dim]) {
       //Boundary High
-      for(int m=0; m<solver->n_pt_bc; ++m){
+      for(int m=0; m<_solver->n_pt_bc; ++m){
         if(bc_lo_type[curr_q][dim] == 0)//Dirichlet
         {
-          _bc[m] = model_pde->pde_BC_gDirichlet(curr_q,dim,iv,m,dcomp,numcomp,dest,geom,1,curr_lev,gbc_hi);
+          _bc[m] = _model_pde->pde_BC_gDirichlet(curr_q,dim,iv,m,dcomp,numcomp,dest,geom,1,curr_lev,gbc_hi);
         }
         else if(bc_lo_type[curr_q][dim] == 1)//Neumann
         {
-          _bc[m] =  model_pde->pde_BC_gNeumann(curr_q, dim,iv,m,dcomp,numcomp,dest,geom,1,curr_lev,gbc_hi);  
+          _bc[m] =  _model_pde->pde_BC_gNeumann(curr_q, dim,iv,m,dcomp,numcomp,dest,geom,1,curr_lev,gbc_hi);  
         }
       }
       bc_found = true;
@@ -357,7 +363,7 @@ void BoundaryCondition<EquationType,NumericalMethodType>::operator() (const IntV
       for (int comp = 0; comp < n_comp; ++comp){ 
         //in case we need to perform other operations, e.g for projection
         //otherwise we simply assign single value of bc to the dest
-        dest(iv, dcomp + comp) = solver->setBC(_bc,comp,dcomp,curr_q, curr_lev);
+        dest(iv, dcomp + comp) = _solver->setBC(_bc,comp,dcomp,curr_q, curr_lev);
 
         //IntVect::TheDimensionVector(dim))[1]
       }           
