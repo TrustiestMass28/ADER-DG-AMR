@@ -101,7 +101,7 @@ class Mesh : public amrex::AmrCore
         
         void setSolver(std::shared_ptr<Solver<NumericalMethodType>> _solver);
 
-        std::shared_ptr<Solver<NumericalMethodType>> solver;       
+        std::weak_ptr<Solver<NumericalMethodType>> solver;       
 };
 
 template <typename NumericalMethodType>
@@ -120,7 +120,7 @@ Mesh<NumericalMethodType>::Mesh(const RealBox& _rb, int _max_level,const Vector<
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::init(std::shared_ptr<Solver<NumericalMethodType>> _solver)
 {
-    setSolver(solver);
+    setSolver(_solver);
 }
 
 template <typename NumericalMethodType>
@@ -134,7 +134,8 @@ void Mesh<NumericalMethodType>::MakeNewLevelFromScratch(int lev, amrex::Real tim
                                     const amrex::BoxArray& ba,
                                     const amrex::DistributionMapping& dm) 
 {
-    solver->set_init_data_system(lev, ba, dm);
+    auto _solver = solver.lock();
+    _solver->set_init_data_system(lev, ba, dm);
 }
 
 template <typename NumericalMethodType>

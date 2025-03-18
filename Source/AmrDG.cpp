@@ -14,28 +14,30 @@ void AmrDG::settings(int _p, amrex::Real _T) {
 
 void AmrDG::init()
 {
+  auto _mesh = mesh.lock();
+
   //Set vectors size
-  U_w.resize(mesh->L); 
-  U.resize(mesh->L); 
-  if(flag_source_term){S.resize(mesh->L);}
-  U_center.resize(mesh->L); 
+  U_w.resize(_mesh->L); 
+  U.resize(_mesh->L); 
+  if(flag_source_term){S.resize(_mesh->L);}
+  U_center.resize(_mesh->L); 
 
-  F.resize(mesh->L);
-  Fm.resize(mesh->L);
-  Fp.resize(mesh->L);
+  F.resize(_mesh->L);
+  Fm.resize(_mesh->L);
+  Fp.resize(_mesh->L);
 
-  DF.resize(mesh->L);
-  DFm.resize(mesh->L);
-  DFp.resize(mesh->L);
+  DF.resize(_mesh->L);
+  DFm.resize(_mesh->L);
+  DFp.resize(_mesh->L);
 
-  Fnum.resize(mesh->L);
-  Fnumm_int.resize(mesh->L);
-  Fnump_int.resize(mesh->L);
+  Fnum.resize(_mesh->L);
+  Fnumm_int.resize(_mesh->L);
+  Fnump_int.resize(_mesh->L);
 
-  H_w.resize(mesh->L); 
-  H.resize(mesh->L); 
-  H_p.resize(mesh->L);
-  H_m.resize(mesh->L);
+  H_w.resize(_mesh->L); 
+  H.resize(_mesh->L); 
+  H_p.resize(_mesh->L);
+  H_m.resize(_mesh->L);
 
   //Basis function
   basefunc = std::make_shared<BasisLegendre>();
@@ -160,9 +162,11 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
   //Init data structures for level for all solution components of the system
   U_w[lev].resize(Q); 
   U[lev].resize(Q);
+  
   if(flag_source_term){S[lev].resize(Q);}
+  
   U_center[lev].resize(Q); 
-
+  
   H_w[lev].resize(Q); 
   H[lev].resize(Q);  
   H_p[lev].resize(AMREX_SPACEDIM);
@@ -199,22 +203,24 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
                                     const DistributionMapping& dm, int q)
 {
-  H_w[lev][q].define(ba, dm, basefunc->Np_st, mesh->nghost);
+  auto _mesh = mesh.lock();
+
+  H_w[lev][q].define(ba, dm, basefunc->Np_st, _mesh->nghost);
   H_w[lev][q].setVal(0.0);
-  H[lev][q].define(ba, dm, quadrule->qMp_st, mesh->nghost);
+  H[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
   H[lev][q].setVal(0.0);
   
-  U_w[lev][q].define(ba, dm, basefunc->Np_s, mesh->nghost);
+  U_w[lev][q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
   U_w[lev][q].setVal(0.0);
 
-  U[lev][q].define(ba, dm, quadrule->qMp_st, mesh->nghost);
+  U[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
   U[lev][q].setVal(0.0);
 
 
-  U_center[lev][q].define(ba, dm, 1, mesh->nghost);
+  U_center[lev][q].define(ba, dm, 1, _mesh->nghost);
   U_center[lev][q].setVal(0.0);
 
-  if(flag_source_term){S[lev][q].define(ba, dm, quadrule->qMp_st, mesh->nghost);
+  if(flag_source_term){S[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
   S[lev][q].setVal(0.0);}
 
   //idc_curl_K[lev].define(ba, dm,1,0);
@@ -225,29 +231,29 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
   //idc_grad_K[lev].setVal(0.0);
     
   for(int d=0; d<AMREX_SPACEDIM; ++d){ 
-    H_p[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    H_p[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
     H_p[lev][d][q].setVal(0.0);
 
-    H_m[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    H_m[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
     H_m[lev][d][q].setVal(0.0);
 
 
-    F[lev][d][q].define(ba, dm,quadrule->qMp_st,mesh->nghost);
+    F[lev][d][q].define(ba, dm,quadrule->qMp_st,_mesh->nghost);
     F[lev][d][q].setVal(0.0);
 
-    DF[lev][d][q].define(ba, dm,quadrule->qMp_st,mesh->nghost);
+    DF[lev][d][q].define(ba, dm,quadrule->qMp_st,_mesh->nghost);
     DF[lev][d][q].setVal(0.0);
 
-    Fm[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    Fm[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
     Fm[lev][d][q].setVal(0.0);
 
-    Fp[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    Fp[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
     Fp[lev][d][q].setVal(0.0);
 
-    DFm[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    DFm[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
     DFm[lev][d][q].setVal(0.0);
 
-    DFp[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,mesh->nghost);
+    DFp[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
     DFp[lev][d][q].setVal(0.0);
 
     Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
@@ -441,7 +447,9 @@ void AmrDG::numflux_integral(int lev,int d,int M, int N,
                             amrex::Vector<amrex::MultiFab>* DF_ptr_m,
                             amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
-  amrex::Real dvol = mesh->get_dvol(lev,d);
+  auto _mesh = mesh.lock();
+
+  amrex::Real dvol = _mesh->get_dvol(lev,d);
   
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
@@ -586,14 +594,16 @@ amrex::Real AmrDG::numflux(int d, int m,int i, int j, int k,
 //updates solution on valid cells
 void AmrDG::update_U_w(int lev)
 {
-  const auto dx = mesh->get_dx(lev);
-  amrex::Real vol = mesh->get_dvol(lev);
+  auto _mesh = mesh.lock();
+
+  const auto dx = _mesh->get_dx(lev);
+  amrex::Real vol = _mesh->get_dvol(lev);
 
   for(int q=0; q<Q; ++q){
     amrex::MultiFab& state_u_w = U_w[lev][q];
 
     amrex::MultiFab state_rhs;
-    state_rhs.define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), basefunc->Np_s, mesh->nghost); 
+    state_rhs.define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), basefunc->Np_s, _mesh->nghost); 
     state_rhs.setVal(0.0);
     
     amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
@@ -714,9 +724,11 @@ void AmrDG::update_U_w(int lev)
 
 void AmrDG::update_H_w(int lev)
 { 
+  auto _mesh = mesh.lock();
+
   for(int q=0; q<Q; ++q)
   {
-    const auto dx = mesh->get_dx(lev);
+    const auto dx = _mesh->get_dx(lev);
     
     amrex::MultiFab& state_h_w = H_w[lev][q];
     amrex::MultiFab& state_u_w = U_w[lev][q];
@@ -728,7 +740,7 @@ void AmrDG::update_H_w(int lev)
     }
     
     amrex::MultiFab state_rhs;
-    state_rhs.define(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), basefunc->Np_st, mesh->nghost); 
+    state_rhs.define(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), basefunc->Np_st, _mesh->nghost); 
     state_rhs.setVal(0.0); 
     
 #ifdef AMREX_USE_OMP
@@ -895,31 +907,19 @@ void AmrDG::InitData_system(int lev,const BoxArray& ba, const DistributionMappin
 
   //SOLVER
 
-  
   for(int q=0; q<Q; ++q){
     InitData_component(lev, ba,dm,q); 
   } 
 }
 
 
-
-
 void AmrDG::Init()
 {
-  //initialize multilevel mesh, geometry, Box array and DistributionMap
+  
   Print(Print(sim->ofs)) <<"AmrDG::Init()"<<"\n";  
   const Real time = 0.0;
   InitFromScratch(time);
 }
-
-void AmrDG::Evolve()
-{
-
-}
-
-
-
-
 
 //std::swap(U_w[lev][q],new_mf);    
 
