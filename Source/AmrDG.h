@@ -16,8 +16,34 @@
 #include "Solver.h"
 #include "Mesh.h"
 
-
 using namespace amrex;
+
+/*------------------------------------------------------------------------*/
+/*
+VARIABLES NAMES NOTATION
+q   :   variable to iterate across solution components U=[u1,...,uq,...,uQ], it 
+        is used also for quadrature loops to indicate q-th quadrature point
+d   :   variable to iterate across dimensions
+_w  :   indicates that the data is modal
+p   :   positive/plus/+, also indicates the order of DG scheme
+m   :   negative/minus/- ,
+bd  :   data has been evaluated at boundary location
+num :   numerical
+c   :   MultiFab component indexing 
+n   :   used to iterate until Np
+m   :   used to iterate until Mp
+l   :   used to iterate until L (levels)
+x   :   used to represent point in domain
+xi  :   used to represent point in reference domain
+OBSERVATIONS
+-MFiter are done differently depending on if we use MPI or MPI+OpenMP
+  if MPI: use static tiling, no parallelizatition of tile operations
+  if MPI+OMP: use dynamic tiling, each tile is given to a thread and then also 
+  the mesh loop is parallelized between the threads
+-some functions require to pass a pointer to either U_w or H_w, this is done because
+ in this way it is easier to e.g use the same functions in the context of Runge-Kutta
+*/
+/*------------------------------------------------------------------------*/
 
 class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 {
@@ -289,7 +315,6 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     //Print(*ofs)<<"------------------------------------------------"<<"\n";
     
     //if((t_outplt>0) && (n%t_outplt==0)){PlotFile(n, t);} 
-    
     set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
   }
@@ -307,7 +332,9 @@ void AmrDG::time_integration(std::shared_ptr<ModelEquation<EquationType>> model_
 template <typename EquationType>
 void AmrDG::ADER(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
-  for (int l = mesh->get_finest_lev(); l >= 0; --l){
+  auto _mesh = mesh.lock();
+
+  for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     //apply BC
     //FillBoundaryCells(&(U_w[l]), l);
     
@@ -367,11 +394,13 @@ template <typename EquationType>
 void AmrDG::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
   
-  amrex::Vector<amrex::Real> dt_tmp(mesh->get_finest_lev()+1);//TODO:proper access to finest_level (in Mesh)
+  auto _mesh = mesh.lock();
 
-  for (int l = 0; l <= mesh->get_finest_lev(); ++l)
+  amrex::Vector<amrex::Real> dt_tmp(_mesh->get_finest_lev()+1);//TODO:proper access to finest_level (in Mesh)
+
+  for (int l = 0; l <= _mesh->get_finest_lev(); ++l)
   {
-    const auto dx = mesh->get_dx(l);
+    const auto dx = _mesh->get_dx(l);
     //compute average mesh size
     amrex::Real dx_avg = 0.0;
     for(int d = 0; d < AMREX_SPACEDIM; ++d){
@@ -708,9 +737,6 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
 ///////////////////////////////////////////////////////////////////////////
 //LIMTIING/TAGGING
 
-
-
-    
     amrex::Real minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
                         bool &troubled_flag, int l) const;
     
@@ -792,65 +818,11 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
   private: 
 
 
-   
-
-    
-    //ADER-DG    
-    void ADER();
-    
-    void ComputeDt();
-    
     void Predictor_set(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                       amrex::Vector<amrex::MultiFab>* H_w_ptr);
-                      
-    void Update_H_w(int lev, int q);
-    
-    void Update_U_w(int lev, int q);
-    
-  
+
     
     //Non-linear fluxes, Numerical fluxes
-                                                
-    void Flux(int lev,int d, int M, 
-              amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-              amrex::Vector<amrex::MultiFab>* U_ptr,
-              amrex::Vector<amrex::MultiFab>* F_ptr,
-              amrex::Vector<amrex::MultiFab>* DF_ptr,
-              amrex::Vector<amrex::Vector<amrex::Real>> xi,
-              bool flag_bd, bool is_predictor);
-              
-    void Source(int lev,int M,
-                amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-                amrex::Vector<amrex::MultiFab>* U_ptr,
-                amrex::Vector<amrex::MultiFab>* S_ptr,
-                amrex::Vector<amrex::Vector<amrex::Real>> xi, 
-                bool is_predictor);
-              
-    void InterfaceNumFlux(int lev,int d,int M, 
-                          amrex::Vector<amrex::MultiFab>* U_ptr_m, 
-                          amrex::Vector<amrex::MultiFab>* U_ptr_p);
-    
-    void InterfaceNumFlux_integrate(int lev,int d,int M);
-                                      
-    amrex::Real NumericalFlux(int d, int m,int i, int j, int k, 
-                              amrex::Array4<const amrex::Real> up, 
-                              amrex::Array4<const amrex::Real> um, 
-                              amrex::Array4<const amrex::Real> fp,
-                              amrex::Array4<const amrex::Real> fm,  
-                              amrex::Array4<const amrex::Real> dfp,
-                              amrex::Array4<const amrex::Real> dfm);
-                              
-    amrex::Real PhysicalFlux(int lev, int d,int q, int m, int i, int j, int k,
-                            amrex::Vector<amrex::Array4<const amrex::Real>>* u,                             
-                            amrex::Vector<amrex::Real> xi);
-                            
-    amrex::Real DPhysicalFlux(int lev, int d,int q, int m, int i, int j, int k,
-                            amrex::Vector<amrex::Array4<const amrex::Real>>* u,                             
-                            amrex::Vector<amrex::Real> xi);
-                              
-    amrex::Real PhysicalSource(int lev,int q, int m, int i, int j, int k,
-                              amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                              amrex::Vector<amrex::Real> xi);
 
     //I/O and MISC
     void NormDG();//TODO:
@@ -872,29 +844,3 @@ extern AMREX_EXPORT AmrDG::DGprojInterp custom_interp;
 */
 #endif
 
-/*------------------------------------------------------------------------*/
-/*
-VARIABLES NAMES NOTATION
-q   :   variable to iterate across solution components U=[u1,...,uq,...,uQ], it 
-        is used also for quadrature loops to indicate q-th quadrature point
-d   :   variable to iterate across dimensions
-_w  :   indicates that the data is modal
-p   :   positive/plus/+, also indicates the order of DG scheme
-m   :   negative/minus/- ,
-bd  :   data has been evaluated at boundary location
-num :   numerical
-c   :   MultiFab component indexing 
-n   :   used to iterate until Np
-m   :   used to iterate until Mp
-l   :   used to iterate until L (levels)
-x   :   used to represent point in domain
-xi  :   used to represent point in reference domain
-OBSERVATIONS
--MFiter are done differently depending on if we use MPI or MPI+OpenMP
-  if MPI: use static tiling, no parallelizatition of tile operations
-  if MPI+OMP: use dynamic tiling, each tile is given to a thread and then also 
-  the mesh loop is parallelized between the threads
--some functions require to pass a pointer to either U_w or H_w, this is done because
- in this way it is easier to e.g use the same functions in the context of Runge-Kutta
-*/
-/*------------------------------------------------------------------------*/

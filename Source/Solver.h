@@ -301,7 +301,7 @@ class Solver
     protected:
         std::shared_ptr<std::ofstream> ofs;
 
-        std::shared_ptr<Mesh<NumericalMethodType>> mesh;
+        std::weak_ptr<Mesh<NumericalMethodType>> mesh;
 
         //number of equations of the system
         int Q; 
@@ -383,27 +383,26 @@ template <typename EquationType>
 void Solver<NumericalMethodType>::init(std::shared_ptr<ModelEquation<EquationType>> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh) 
 {
     setMesh(_mesh);
-
     
     //Get model specific data that influence numerical set-up
     Q = model_pde->Q_model;
     Q_unique = model_pde->Q_model_unique;
     flag_source_term = model_pde->flag_source_term;
 
-    
     //Numerical method specific initialization
     static_cast<NumericalMethodType*>(this)->init();
 
     const Real time = 0.0;
-    //mesh->InitFromScratch(time);    //AmrCore
-    
+    //AmrCore.h function initialize multilevel mesh, geometry, Box array and DistributionMap
+    //calls MakeNewLevelFromScratch
+    _mesh->InitFromScratch(time);
 }
+
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
 {   
     static_cast<NumericalMethodType*>(this)->init_bc(bc, n_comp); 
 }
-
 
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh)
@@ -419,7 +418,7 @@ void Solver<NumericalMethodType>::set_init_data_system(int lev,const BoxArray& b
     //can also clear up Solver data members that arent needed for particular method
     //e.g the numerical fluxes
     static_cast<NumericalMethodType*>(this)->set_init_data_system(lev, ba, dm);
-
+    
     //init data for each ocmponent of the equation
     for(int q=0; q<Q; ++q){
         set_init_data_component(lev,ba,dm, q);

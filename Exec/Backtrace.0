@@ -9,41 +9,34 @@ Host Name: DESKTOP-2IHH3A0
             readelf -wl my_exefile | grep my_line_address'
     to find out the offset for that line.
 
- 0: ./main2d.gnu.ex(+0x19ba6d) [0x5602b98f3a6d]
+ 0: ./main2d.gnu.ex(+0x19b7fd) [0x5572a8e667fd]
     amrex::BLBackTrace::handler(int) at /usr/include/x86_64-linux-gnu/bits/unistd.h:284
  (inlined by) amrex::BLBackTrace::print_backtrace_info(_IO_FILE*) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:213
  (inlined by) amrex::BLBackTrace::handler(int) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:99
 
- 1: /lib/x86_64-linux-gnu/libc.so.6(+0x42520) [0x7f4893562520]
+ 1: /lib/x86_64-linux-gnu/libc.so.6(+0x42520) [0x7fc19526e520]
 
- 2: /lib/x86_64-linux-gnu/libc.so.6(read+0x10) [0x7f48936347e0]
+ 2: ./main2d.gnu.ex(+0x2a7a66) [0x5572a8f72a66]
+    std::ostream::operator<<(void const*) at /usr/include/c++/11/ostream:246
+ (inlined by) amrex::Print& amrex::Print::operator<< <Mesh<AmrDG>*>(Mesh<AmrDG>* const&) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_Print.H:96
+ (inlined by) Solver<AmrDG>::set_init_data_system(int, amrex::BoxArray const&, amrex::DistributionMapping const&) at /home/sfabiano/ADER-DG-AMR/Exec/../Source/Solver.h:422
 
- 3: /lib/x86_64-linux-gnu/libc.so.6(_IO_file_underflow+0x186) [0x7f48935acc36]
+ 3: ./main2d.gnu.ex(+0x230644) [0x5572a8efb644]
+    amrex::AmrMesh::MakeNewGrids(double) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/AmrCore/AMReX_AmrMesh.cpp:974
 
- 4: /lib/x86_64-linux-gnu/libc.so.6(_IO_default_uflow+0x36) [0x7f48935add96]
+ 4: ./main2d.gnu.ex(+0x2a3afc) [0x5572a8f6eafc]
+    std::__shared_count<(__gnu_cxx::_Lock_policy)2>::~__shared_count() at /usr/include/c++/11/bits/shared_ptr_base.h:704
+ (inlined by) std::__shared_ptr<ModelEquation<Compressible_Euler>, (__gnu_cxx::_Lock_policy)2>::~__shared_ptr() at /usr/include/c++/11/bits/shared_ptr_base.h:1154
+ (inlined by) std::shared_ptr<ModelEquation<Compressible_Euler> >::~shared_ptr() at /usr/include/c++/11/bits/shared_ptr.h:122
+ (inlined by) Simulation<AmrDG, Compressible_Euler>::run() at /home/sfabiano/ADER-DG-AMR/Exec/../Source/Simulation.h:84
 
- 5: /lib/x86_64-linux-gnu/libc.so.6(_IO_getline_info+0xac) [0x7f48935a041c]
-
- 6: /lib/x86_64-linux-gnu/libc.so.6(fgets+0x90) [0x7f489359f410]
-
- 7: ./main2d.gnu.ex(+0x19d98e) [0x5602b98f598e]
-    amrex::BLBackTrace::handler(int) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:164
- (inlined by) amrex::BLBackTrace::print_backtrace_info(_IO_FILE*) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:307
- (inlined by) amrex::BLBackTrace::handler(int) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:99
-
- 8: /lib/x86_64-linux-gnu/libc.so.6(+0x42520) [0x7f4893562520]
-
- 9: ./main2d.gnu.ex(+0x2a4450) [0x5602b99fc450]
-    BoundaryCondition<Compressible_Euler, AmrDG>::init(std::shared_ptr<ModelEquation<Compressible_Euler> >, std::shared_ptr<Solver<AmrDG> >, std::shared_ptr<Mesh<AmrDG> >) at /home/sfabiano/ADER-DG-AMR/Exec/../Source/BoundaryCondition.h:226
- (inlined by) Simulation<AmrDG, Compressible_Euler>::run() at /home/sfabiano/ADER-DG-AMR/Exec/../Source/Simulation.h:86
-
-10: ./main2d.gnu.ex(+0x2d599) [0x5602b9785599]
+ 5: ./main2d.gnu.ex(+0x2d329) [0x5572a8cf8329]
     main at /home/sfabiano/ADER-DG-AMR/Exec/../Source/main.cpp:149
 
-11: /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f4893549d90]
+ 6: /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7fc195255d90]
 
-12: /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f4893549e40]
+ 7: /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7fc195255e40]
 
-13: ./main2d.gnu.ex(+0x2dc75) [0x5602b9785c75]
+ 8: ./main2d.gnu.ex(+0x2da05) [0x5572a8cf8a05]
     ?? ??:0
 

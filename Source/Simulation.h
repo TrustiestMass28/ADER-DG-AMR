@@ -82,15 +82,15 @@ void Simulation<NumericalMethodType,EquationType>::run()
   mesh->init(solver);
   
   solver->init(model,mesh);
-
+  /*
   bdcond->init(model,solver,mesh);
   
   //set initial conditions and average fine->coarse (after Initfromscartch should avg down)
-  solver->set_initial_condition(model);
-  //TODO:average
+  solver->set_initial_condition(model);*/
+  //TODO:average down
 
   //evolve, pass Model as ptr so we can access its implementation of methods
-  solver->evolve(model,bdcond);
+  //solver->evolve(model,bdcond);
 }
 
 template <typename NumericalMethodType,typename EquationType>
@@ -122,7 +122,7 @@ void Simulation<NumericalMethodType,EquationType>::setGeometrySettings(const Rea
                                                                       int dtn_regrid, amrex::Real dt_regrid ,int nghost)
 {
   mesh = std::make_shared<Mesh<NumericalMethodType>>(_rb,_max_level,_n_cell,_coord,_ref_ratios,_is_per,
-                                                      dtn_regrid, dt_regrid, nghost);   
+                                                      dtn_regrid, dt_regrid, nghost);  
 } 
 
 template <typename NumericalMethodType,typename EquationType>
