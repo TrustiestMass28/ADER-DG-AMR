@@ -80,6 +80,17 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void set_init_data_component(int lev,const BoxArray& ba,
                                 const DistributionMapping& dm, int q);
 
+    template <typename EquationType> 
+    void set_initial_condition(std::shared_ptr<ModelEquation<EquationType>> model_pde, int lev);
+
+    template <typename EquationType> 
+    amrex::Real set_initial_condition_U_w(std::shared_ptr<ModelEquation<EquationType>> model_pde,
+                                      int lev,int q,int n,int i,int j,int k);
+
+    template <typename EquationType> 
+    amrex::Real set_initial_condition_U(std::shared_ptr<ModelEquation<EquationType>> model_pde,
+                                        int lev,int q,int i,int j,int k, amrex::Vector<amrex::Real> xi);
+
     void get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
                         amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
@@ -260,6 +271,72 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 };
 
 //templated methods
+
+template <typename EquationType> 
+void AmrDG::set_initial_condition(std::shared_ptr<ModelEquation<EquationType>> model_pde, int lev)
+{
+  
+  //Print(*ofs) <<"AmrDG::InitialCondition() "<<lev<<"\n";
+  //applies the initial condition to all the solution components modes
+  amrex::Vector<amrex::MultiFab *> state_uw(Q);
+ 
+  for(int q=0; q<Q; ++q){
+    state_uw[q] = &(U_w[lev][q]); 
+  }  
+  
+#ifdef AMREX_USE_OMP
+#pragma omp parallel 
+#endif
+  {
+    amrex::Vector<amrex::FArrayBox *> fab_uw(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > uw(Q);
+    
+    #ifdef AMREX_USE_OMP  
+    for (MFIter mfi(*(state_uw[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+    #else
+    for (MFIter mfi(*(state_uw[0]),true); mfi.isValid(); ++mfi)
+    #endif   
+    {
+      const amrex::Box& bx = mfi.growntilebox();
+      //we wil lfill also ghost cells at fine coarse itnerface of fine lvl
+
+      for(int q=0 ; q<Q; ++q){
+        fab_uw[q]=&((*(state_uw[q]))[mfi]);
+        uw[q]=(*(fab_uw[q])).array();
+      } 
+      
+      for(int q=0; q<Q; ++q){
+        amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+        { 
+          uw[q](i,j,k,n) = set_initial_condition_U_w(model_pde,lev,q,n,i, j, k);  
+        });          
+      }
+    }   
+  }
+}
+
+template <typename EquationType> 
+amrex::Real AmrDG::set_initial_condition_U_w(std::shared_ptr<ModelEquation<EquationType>> model_pde,int lev,int q,int n,int i,int j,int k)
+{
+  
+  //project initial condition for solution to initial condition for solution modes         
+  amrex::Real sum = 0.0;
+  for(int m=0; m<quadrule->qMp_s; ++m) 
+  {
+    sum+= set_initial_condition_U(model_pde,lev,q,i,j,k,quadrule->xi_ref_quad_s[m])*quadmat[n][m];   
+  }
+  
+  return (sum/(refMat_phiphi(n,n, false, false)));  
+}
+
+template <typename EquationType> 
+amrex::Real AmrDG::set_initial_condition_U(std::shared_ptr<ModelEquation<EquationType>> model_pde,int lev,int q,int i,int j,int k, amrex::Vector<amrex::Real> xi)
+{
+  amrex::Real u_ic;
+  u_ic = model_pde->pde_IC(lev,q,i,j,k,xi);
+
+  return u_ic;
+}
 
 //  ComputeDt, time_integration
 template <typename EquationType>
@@ -657,6 +734,7 @@ void AmrDG::flux_bd(int lev,int d, int M,
     }
   }
 }
+
 
 
 

@@ -71,18 +71,20 @@ class ModelEquation
                                       int side, int lev,const amrex::Vector<amrex::Vector<amrex::Real>>& gbc) 
                                       const =0;
 
-    //Number of model equations in the system
-    int Q_model;
+  virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k, amrex::Vector<amrex::Real> xi) const = 0;
 
-    //Number of model equatons in the system that are unique
-    //i.e not lienarly dependent/composed from others
-    int Q_model_unique;
+  //Number of model equations in the system
+  int Q_model;
 
-    //Name of simulation/problem case solved              
-    std::string model_case;
-    
-    //Flag to indicate if source term is considered
-    bool flag_source_term;    
+  //Number of model equatons in the system that are unique
+  //i.e not lienarly dependent/composed from others
+  int Q_model_unique;
+
+  //Name of simulation/problem case solved              
+  std::string model_case;
+  
+  //Flag to indicate if source term is considered
+  bool flag_source_term;    
 
 
     //////////////////////////////////////////////////////////

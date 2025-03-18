@@ -82,13 +82,9 @@ void Simulation<NumericalMethodType,EquationType>::run()
   mesh->init(solver);
   
   solver->init(model,mesh);
-  
-  bdcond->init(model,solver,mesh);
-  /*
-  //set initial conditions and average fine->coarse (after Initfromscartch should avg down)
-  solver->set_initial_condition(model);*/
-  //TODO:average down
 
+  bdcond->init(model,solver,mesh);
+  
   //evolve, pass Model as ptr so we can access its implementation of methods
   //solver->evolve(model,bdcond);
 }
