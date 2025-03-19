@@ -11,6 +11,22 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
     Compressible_Euler() = default;  
 
     ~Compressible_Euler() = default;
+    
+    struct VarNames : public ModelVarNames{
+      VarNames(){
+        names = { "mass_density", 
+                  "momentum_x", 
+                  "momentum_y", 
+                  "energy_density", 
+                  "angular_momentum_z"
+                }; 
+      }
+    };
+
+    const ModelVarNames& getModelVarNames() const override {
+      static VarNames names; 
+      return names;
+    }
 
     void settings(std::string _euler_case);
 
