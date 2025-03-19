@@ -516,55 +516,6 @@ void AmrDG::NormDG()
   }
 }  
 
-
-void AmrDG::PlotFile(int tstep, amrex::Real time) const
-{
-  //Output AMR U_w MFab modal data for all solution components, expected 
-  //to then plot the first mode,i.e cell average
-  
-  //using same timestep for all levels
-  amrex::Vector<int> lvl_tstep; 
-  for (int l = 0; l <= finest_level; ++l)
-  {
-    lvl_tstep.push_back(tstep);
-  }
-  for(int q=0; q<Q; ++q){
-    amrex::Vector<std::string> plot_var_name;
-    //Output all modes, then can chose which one to visualize
-    //Variables naming
-    
-    for(int m =0 ; m<Np; ++m){
-      if(sim->model_pde->equation_type == "Compressible_Euler")
-      {
-        if(q==0){plot_var_name.push_back("mass_density_"+std::to_string(m));}
-        else if(q==1){plot_var_name.push_back("momentum_x_"+std::to_string(m));}
-        else if(q==2){plot_var_name.push_back("momentum_y_"+std::to_string(m));}
-        else if(q==3){plot_var_name.push_back("energy_density_"+std::to_string(m));}
-        else if(q==4){plot_var_name.push_back("angular_momentum_z_"+std::to_string(m));}
-      }
-      else if(sim->model_pde->equation_type == "Advection")
-      {
-        if(q==0){
-          plot_var_name.push_back("density_x_"+std::to_string(m));      
-        }
-      }
-    }
-
-    std::string name  = "../Results/tstep_"+std::to_string(tstep)+"_q_"+std::to_string(q)+"_plt";
-    const std::string& pltfile_name = name;//amrex::Concatenate(name,5);
-    
-    //mf to output
-    Vector<const MultiFab*> mf_out;
-    for (int l = 0; l <= finest_level; ++l)
-    {
-      mf_out.push_back(&(U_w[l][q]));           
-    }
-    //amrex::WriteSingleLevelPlotfile(pltfile, U_w[q],plot_modes_name, domain_geom, time, 0);
-    amrex::WriteMultiLevelPlotfile(pltfile_name, finest_level+1, mf_out, plot_var_name,
-                               Geom(), time, lvl_tstep, refRatio());
-  }
-} 
-
 void AmrDG::Conservation(int lev, int M, amrex::Vector<amrex::Vector<amrex::Real>> xi, int d)
 {
   //function to be called before and after timesteps,limiters are applied etc to check

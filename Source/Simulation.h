@@ -83,7 +83,7 @@ void Simulation<NumericalMethodType,EquationType>::run()
   
   solver->init(model,mesh);
 
-  bdcond->init(model,solver,mesh);
+  //bdcond->init(model,solver,mesh);
   
   //evolve, pass Model as ptr so we can access its implementation of methods
   //solver->evolve(model,bdcond);

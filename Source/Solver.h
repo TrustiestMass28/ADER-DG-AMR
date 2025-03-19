@@ -137,6 +137,11 @@ class Solver
             ofs = _ofs;
         }
 
+        template <typename EquationType>
+        void PlotFile(std::shared_ptr<ModelEquation<EquationType>> model_pde,
+                                                    amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
+                                                    int tstep, amrex::Real time) const;
+                                                
         //Apply boundary conditions by calling BC methods
         template <typename EquationType>
         void FillBoundaryCells(std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond,
@@ -388,7 +393,7 @@ void Solver<NumericalMethodType>::init(std::shared_ptr<ModelEquation<EquationTyp
     Q = model_pde->Q_model;
     Q_unique = model_pde->Q_model_unique;
     flag_source_term = model_pde->flag_source_term;
-
+    
     //Numerical method specific initialization
     static_cast<NumericalMethodType*>(this)->init();
 
@@ -451,6 +456,7 @@ void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEqu
                 //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
                 //for ghost at fine-coarseinterface just copy from coarse
                 //FillPatchGhostFC(lev,time,q);
+                //TODO: should possible avg down be put here?
               }  
         }
     }
@@ -593,6 +599,60 @@ void Solver<NumericalMethodType>::numflux_integral(int lev,int d, int M, int N,
     static_cast<NumericalMethodType*>(this)->numflux_integral(lev,d,M,N,U_ptr_m,U_ptr_p,F_ptr_m,
                                                             F_ptr_p,DF_ptr_m,DF_ptr_p); 
 }
+
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::PlotFile(std::shared_ptr<ModelEquation<EquationType>> model_pde,
+                                            amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
+                                            int tstep, amrex::Real time) const
+{   
+    auto varNames = model_pde->getModelVarNames();
+
+    auto _mesh = mesh.lock();
+    //Output AMR U_w MFab modal data for all solution components, expected 
+    //to then plot the first mode,i.e cell average
+    
+    //using same timestep for all levels
+    amrex::Vector<int> lvl_tstep; 
+    for (int l = 0; l <= _mesh->get_finest_lev(); ++l)
+    {
+        lvl_tstep.push_back(tstep);
+    }
+
+    //get number of Mfab components stored in each Mfab of X
+    int N = X[0][0].nComp();
+
+    //loop over number of PDEs in the system
+    for(int q=0; q<Q; ++q){
+        amrex::Vector<std::string> plot_var_name;
+        //For the selected PDE solution component,
+        //get its name and for eahc of the MFab components
+        //add a idx component name m to the string
+        //usefull in case we have multiple modes
+        for(int m =0 ; m<N; ++m){
+            for (size_t i = 0; i < varNames.names.size(); ++i) {
+                if (i == q) { 
+                    const auto& var = varNames.names[i];    
+                    plot_var_name.push_back(var + "_" + std::to_string(m));
+                }
+            }
+        }
+
+        std::string name  = "../Results/tstep_"+std::to_string(tstep)+"_q_"+std::to_string(q)+"_plt";
+        const std::string& pltfile_name = name;//amrex::Concatenate(name,5);
+        
+        //mf to output
+        amrex::Vector<const MultiFab*> mf_out;
+        for (int l = 0; l <=  _mesh->get_finest_lev(); ++l)
+        {
+            mf_out.push_back(&X[l][q]);           
+        }
+
+        //amrex::WriteSingleLevelPlotfile(pltfile, U_w[q],plot_modes_name, domain_geom, time, 0);
+        amrex::WriteMultiLevelPlotfile(pltfile_name, _mesh->get_finest_lev()+1, mf_out, plot_var_name,
+                                _mesh->get_Geom(), time, lvl_tstep, _mesh->get_refRatio());
+    }
+} 
 
 
 #endif 

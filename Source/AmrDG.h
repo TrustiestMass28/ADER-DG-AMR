@@ -343,8 +343,6 @@ template <typename EquationType>
 void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
                   std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond)
 {
-
-  
   int n=0;
   amrex::Real t= 0.0;  
   //if(t_outplt>0){PlotFile(0, t);}
@@ -365,6 +363,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
       }
     }  
     */
+
     //Print(*ofs) << "ADER Time Integraton"<< "\n";
     //advance solution by one time-step.
     time_integration(model_pde);
@@ -904,8 +903,6 @@ class AmrDG : public amrex::AmrCore, public NumericalMethod
 
     //I/O and MISC
     void NormDG();//TODO:
-    
-    void PlotFile(int tstep, amrex::Real time) const;
     
     void L1Norm_DG_AMR();
 

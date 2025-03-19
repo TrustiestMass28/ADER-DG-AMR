@@ -17,6 +17,13 @@ class ModelEquation
 
     virtual ~ModelEquation() = default;
 
+    struct ModelVarNames{
+      amrex::Vector<std::string> names;
+      virtual ~ModelVarNames() = default;    
+    };
+
+    virtual const ModelVarNames& getModelVarNames() const = 0;
+
     template <typename... Args>
     void settings(Args... args) {
         static_cast<EquationType*>(this)->settings(std::forward<Args>(args)...);

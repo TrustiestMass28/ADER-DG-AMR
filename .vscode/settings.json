@@ -78,6 +78,7 @@
         "eigenvalues": "cpp",
         "alignedvector3": "cpp",
         "any": "cpp",
-        "svd": "cpp"
+        "svd": "cpp",
+        "climits": "cpp"
     }
 }

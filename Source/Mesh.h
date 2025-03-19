@@ -85,6 +85,10 @@ class Mesh : public amrex::AmrCore
 
         const Geometry& get_Geom(int lev);// return Geom (lev);
 
+        IntVect get_refRatio (int lev); 
+
+        const Vector<IntVect>& get_refRatio();
+
         //Max number of levels
         int L = 1;
 
@@ -205,6 +209,17 @@ const Geometry& Mesh<NumericalMethodType>::get_Geom(int lev)
     return Geom(lev);
 }
 
+template <typename NumericalMethodType>
+IntVect  Mesh<NumericalMethodType>::get_refRatio (int lev)
+{
+    return refRatio(lev);
+} 
+
+template <typename NumericalMethodType>
+const Vector<IntVect>&  Mesh<NumericalMethodType>::get_refRatio()
+{
+    return refRatio();
+}
 
 /*
 ADAPTIVE MESH REFINEMENT (GEOMETRY BASED OPERATIONS)
