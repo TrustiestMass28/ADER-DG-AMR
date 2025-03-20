@@ -8,6 +8,9 @@
 
 using namespace amrex;
 
+template <typename NumericalMethodType>
+class Mesh;
+
 template <typename EquationType>
 class ModelEquation 
 {
@@ -39,20 +42,26 @@ class ModelEquation
     }
 
     //implementation of the physical flux present in the hyperbolic PDE
-    virtual amrex::Real pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
-                                amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                const amrex::Vector<amrex::Real>& xi) const =0;
+    template <typename NumericalMethodType>
+    amrex::Real pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
+                          amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                          const amrex::Vector<amrex::Real>& xi,
+                          std::weak_ptr<Mesh<NumericalMethodType>> mesh) const ;
 
     //derivative of the physical flux of the hyperbolic PDE
     //if we are solving a system, then we have to specify here 
     //the unique eigenvalues of Jacobian of the flux
-    virtual amrex::Real pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
+    template <typename NumericalMethodType>
+    amrex::Real pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
+                          amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                          const amrex::Vector<amrex::Real>& xi,
+                          std::weak_ptr<Mesh<NumericalMethodType>> mesh) const;
+    
+    template <typename NumericalMethodType>
+    amrex::Real pde_source(int lev,int q, int m, int i, int j, int k, 
                                   amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                  const amrex::Vector<amrex::Real>& xi) const =0;
-            
-    virtual amrex::Real pde_source(int lev,int q, int m, int i, int j, int k, 
-                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                  const amrex::Vector<amrex::Real>& xi) const =0;
+                                  const amrex::Vector<amrex::Real>& xi,
+                                  std::weak_ptr<Mesh<NumericalMethodType>> mesh) const;
 
     //return characteristic speed used for CFL number and Dt computation
     virtual amrex::Real pde_cfl_lambda(int d,int m,int i, int j, int k,
@@ -175,5 +184,35 @@ class ModelEquation
 
     std::shared_ptr<std::ofstream> ofs;
 };
+
+template <typename EquationType>
+template <typename NumericalMethodType> 
+amrex::Real ModelEquation<EquationType>::pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
+                                                  amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                                  const amrex::Vector<amrex::Real>& xi,
+                                                  std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+{
+  return static_cast<const EquationType*>(this)->pde_flux(lev,d,q,m,i,j,k,u,xi,mesh);  
+}
+
+template <typename EquationType>
+template <typename NumericalMethodType>
+amrex::Real ModelEquation<EquationType>::pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
+                              amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                              const amrex::Vector<amrex::Real>& xi,
+                              std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+{
+  return static_cast<const EquationType*>(this)->pde_dflux(lev,d,q,m,i,j,k,u,xi,mesh);    
+}
+
+template <typename EquationType>
+template <typename NumericalMethodType>
+amrex::Real ModelEquation<EquationType>::pde_source(int lev,int q, int m, int i, int j, int k, 
+                              amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                              const amrex::Vector<amrex::Real>& xi,
+                              std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+{
+  return static_cast<const EquationType*>(this)->pde_source(lev,q,m,i,j,k,u,xi,mesh); 
+}
 
 #endif 
