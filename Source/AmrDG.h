@@ -343,9 +343,18 @@ template <typename EquationType>
 void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
                   std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond)
 {
+
+  bool dtn_plt; 
+  bool dt_plt;
+
   int n=0;
   amrex::Real t= 0.0;  
-  //if(t_outplt>0){PlotFile(0, t);}
+
+  //Plot initial condition
+  dtn_plt =  (dtn_outplt > 0);
+  dt_plt = (dt_outplt > 0);
+  if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
+
   //NormDG();
   
   set_Dt(model_pde);
@@ -385,17 +394,26 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
       }
     }
     */
+
+    //update timestep idx and physical time
     n+=1;
     t+=Dt;
+
     //Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
     //Print(*ofs)<<"------------------------------------------------"<<"\n";
     
-    //if((t_outplt>0) && (n%t_outplt==0)){PlotFile(n, t);} 
+    //plotting at pre-specified times
+    dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
+    dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-10);
+    if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
+
     set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
   }
   
   //NormDG();
+
+
 
 }
 
