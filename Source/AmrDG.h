@@ -629,7 +629,7 @@ void AmrDG::source(int lev,int M,
       for(int q=0 ; q<Q; ++q){
         amrex::ParallelFor(bx,M,[&] (int i, int j, int k, int m) noexcept
         {
-          (source[q])(i,j,k,m) = model_pde->pde_source(lev,q,m,i,j,k,&u,xi[m]);  
+          (source[q])(i,j,k,m) = model_pde->pde_source(lev,q,m,i,j,k,&u,xi[m],mesh);  
         });
       }
     }
@@ -685,7 +685,7 @@ void AmrDG::flux(int lev,int d, int M,
       for(int q=0 ; q<Q; ++q){
         amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
         {              
-          (flux[q])(i,j,k,m) =  model_pde->pde_flux(lev,d,q,m,i, j, k, &u, xi[m]);
+          (flux[q])(i,j,k,m) =  model_pde->pde_flux(lev,d,q,m,i, j, k, &u, xi[m], mesh);
         });
       }
     }
@@ -744,8 +744,8 @@ void AmrDG::flux_bd(int lev,int d, int M,
       for(int q=0 ; q<Q; ++q){
         amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
         {              
-        (flux[q])(i,j,k,m) = model_pde->pde_flux(lev,d,q,m,i, j, k, &u, xi[m]);
-        (dflux[q])(i,j,k,m) = model_pde->pde_dflux(lev,d,q,m,i, j, k, &u, xi[m]);
+        (flux[q])(i,j,k,m) = model_pde->pde_flux(lev,d,q,m,i, j, k, &u, xi[m],mesh);
+        (dflux[q])(i,j,k,m) = model_pde->pde_dflux(lev,d,q,m,i, j, k, &u, xi[m],mesh);
         });
       }
     }

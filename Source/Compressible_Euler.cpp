@@ -42,7 +42,19 @@ void Compressible_Euler::settings(std::string _euler_case){
   gamma_adiab = 1.4;
 }  
 
-
+amrex::Real Compressible_Euler::pde_cfl_lambda(int d,int m,int i, int j, int k,
+                              amrex::Vector<amrex::Array4<const amrex::Real>>* u) const
+{
+  amrex::Real lambda;
+  amrex::Real c=Soundspeed(u,i, j, k, 0);
+  if(d==0)
+  {lambda = std::abs(((*u)[1])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
+  else if(d==1)
+  {lambda = std::abs(((*u)[2])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
+  else if(d==2)
+  {lambda = std::abs(((*u)[3])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
+  return lambda;
+} 
 /*
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -365,40 +377,7 @@ amrex::Real Compressible_Euler::pde_source(int lev, int q, int m, int i, int j, 
                                           amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                           amrex::Vector<amrex::Real> xi) const
 {
-  amrex::Real s;
-  if(test_case == "keplerian_disc")
-  {
-    const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
-    const auto dx     = numerical_pde->Geom(lev).CellSizeArray();
-  
-    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(3.0,3.0,3.0)};
-    amrex::Real x_shape_ctr = ctr_ptr[0];
-    amrex::Real y_shape_ctr = ctr_ptr[1];     
-    
-    amrex::Real xc = prob_lo[0] + (i+0.5) * dx[0];
-    amrex::Real yc = prob_lo[1] + (j+0.5) * dx[1];
-    amrex::Real x = (dx[0]/2.0)*xi[0]+xc; 
-    amrex::Real y = (dx[1]/2.0)*xi[1]+yc;    
-    
-    amrex::Real xp = x-x_shape_ctr;
-    amrex::Real yp = y-y_shape_ctr;
 
-    amrex::Real r = std::sqrt((xp*xp+yp*yp)); 
-     
-    amrex::Real Dr = 0.1;
-    amrex::Real eps = 0.25;
-    amrex::Real ax =  (0.5-0.5*Dr < r) ? (-xp/std::pow(r,3.0)) 
-                      : (-xp/(r*(std::pow(r,2.0)+std::pow(eps,2.0)))); 
-    amrex::Real ay =  (0.5-0.5*Dr < r) ? (-yp/std::pow(r,3.0)) 
-                      : (-yp/(r*(std::pow(r,2.0)+std::pow(eps,2.0)))); 
-    
-    if(q ==0){s= 0.0;}
-    else if(q ==1){s= -((*u)[0])(i,j,k,m)*ax;}  
-    else if(q ==2){s= -((*u)[0])(i,j,k,m)*ay;}  
-    else if(q ==3){s= -((*u)[1])(i,j,k,m)*ax-((*u)[2])(i,j,k,m)*ay;}  
-    else if(q ==4){s= 0.0;}  
-  }
-  return s;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -453,144 +432,14 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
                                         amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                         amrex::Vector<amrex::Real> xi) const
 {
-  amrex::Real f;
-  amrex::Real prs=Pressure(u,i,j,k,m);
-#if(AMREX_SPACEDIM ==2)    
-    if(d==0)//f1
-    {
-      if(q==0){f= ((*u)[1])(i,j,k,m);}
-      else if(q==1){f=(std::pow(((*u)[1])(i,j,k,m),2.0)/((*u)[0])(i,j,k,m))+prs;}
-      else if(q==2){f=((*u)[1])(i,j,k,m)*((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      else if(q==3){f=(((*u)[3])(i,j,k,m)+prs)*(((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m));}
-    }
-    
-    else if(d==1)//f2
-    {
-      if(q==0){f= ((*u)[2])(i,j,k,m);}
-      else if(q==1){f=((*u)[2])(i,j,k,m)*((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      else if(q==2){f= (std::pow(((*u)[2])(i,j,k,m),2.0)/((*u)[0])(i,j,k,m))+prs;}
-      else if(q==3){f= (((*u)[3])(i,j,k,m)+prs)*(((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m));}
-    }
-    
-    if(flag_angular_momentum)
-    { 
-      //implementation of angular momentum conservation law
-      const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
-      const auto prob_hi = numerical_pde->Geom(lev).ProbHiArray();
-      const auto dx     = numerical_pde->Geom(lev).CellSizeArray();
-      amrex::Real x1c = prob_lo[0] + (i+Real(0.5)) * dx[0];
-      amrex::Real x2c = prob_lo[1] + (j+Real(0.5)) * dx[1];
-      amrex::Real x1 = dx[0]*0.5*(xi[0])+x1c;
-      amrex::Real x2 = dx[1]*0.5*(xi[1])+x2c;
 
-      amrex::Real L3 = x1*((*u)[2])(i,j,k,m)-x2*((*u)[1])(i,j,k,m);
-   
-      if(d==0)//f1
-      {
-        if(q==4){f= L3*((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m)-x2*prs;}
-      }
-      else if(d==1)//f2
-      {
-        if(q==4){f= L3*((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m)+x1*prs;}
-      }
-    }  
-#elif(AMREX_SPACEDIM ==3)
-  {//q=0->rho,  q=1->rho*u1, q=2->rho*u2, q=3->rho*u3,q=4->rho*e
-    if(d==0)//f1
-    {
-      if(q==0){f= ((*u)[1])(i,j,k,m);}
-      else if(q==1){f= (std::pow(((*u)[1])(i,j,k,m),2.0)/((*u)[0])(i,j,k,m))+prs;}
-      else if(q==2){f= ((*u)[1])(i,j,k,m)*((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      else if(q==3){f= ((*u)[1])(i,j,k,m)*((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      else if(q==4){f= (((*u)[4])(i,j,k,m)+prs)*(((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m));}   
-    }
-    
-    else if(d==1)//f2
-    {
-      if(q==0){f= ((*u)[2])(i,j,k,m);}
-      else if(q==1){f= ((*u)[2])(i,j,k,m)*((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      else if(q==2){f= (std::pow(((*u)[2])(i,j,k,m),2.0)/((*u)[0])(i,j,k,m))+prs;}
-      else if(q==3){f= ((*u)[2])(i,j,k,m)*((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      else if(q==4){f= (((*u)[4])(i,j,k,m)+prs)*(((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m));}
-    }
-    else if(d==2)//f3
-    {
-      if(q==0){f= ((*u)[3])(i,j,k,m);}
-      else if(q==1){f=((*u)[3])(i,j,k,m)*((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      else if(q==2){f= ((*u)[3])(i,j,k,m)*((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      else if(q==3){f= (std::pow(((*u)[3])(i,j,k,m),2.0)/((*u)[0])(i,j,k,m))+prs;}
-      else if(q==4){f= (((*u)[4])(i,j,k,m)+prs)*(((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m));}
-    }
-    
-    if(euler_flag_angular_momentum)
-    { 
-      //implementation of angular momentum conservation law
-      const auto prob_lo = numerical_pde->Geom(lev).ProbLoArray();
-      const auto prob_hi = numerical_pde->Geom(lev).ProbHiArray();
-      const auto dx     = numerical_pde->Geom(lev).CellSizeArray();
-      amrex::Real x1c = prob_lo[0] + (i+Real(0.5)) * dx[0];
-      amrex::Real x2c = prob_lo[1] + (j+Real(0.5)) * dx[1];
-      amrex::Real x3c = prob_lo[2] + (k+Real(0.5)) * dx[2];
-      amrex::Real x1 = dx[0]*0.5*(xi[0])+x1c;
-      amrex::Real x2 = dx[1]*0.5*(xi[1])+x2c;
-      amrex::Real x3 = dx[2]*0.5*(xi[2])+x3c;
-   
-      amrex::Real L1 = x2*((*u)[3])(i,j,k,m)-x3*((*u)[2])(i,j,k,m);
-      amrex::Real L2 = x3*((*u)[1])(i,j,k,m)-x1*((*u)[3])(i,j,k,m);
-      amrex::Real L3 = x1*((*u)[2])(i,j,k,m)-x2*((*u)[1])(i,j,k,m);
-      
-      if(d==0)//f1
-      {
-        if(q==5){f= L1*((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-        else if(q==6){f= L2*((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m)+x3*prs;}
-        else if(q==7){f= L3*((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m)-x2*prs;}
-      }
-      else if(d==1)//f2
-      {
-        if(q==5){f= L1*((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m)-x3*prs;}
-        else if(q==6){f= L2*((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-        else if(q==7){f= L3*((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m)+x1*prs;}
-      }
-      else if(d==2)//f3
-      {
-        if(q==5){f= L1*((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m)+x2*prs;}
-        else if(q==6){f= L2*((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m)-x1*prs;}
-        else if(q==7){f= L3*((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m);}
-      }
-    }
-  }
-#endif
-
-  return f;
 } 
 
 amrex::Real Compressible_Euler::pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
                                           amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                           amrex::Vector<amrex::Real> xi) const
 {
-  amrex::Real df;
-  amrex::Real un;
-  amrex::Real c = Soundspeed(u, i,j,k,m);
-  
-  amrex::Real n[AMREX_SPACEDIM];
-#if(AMREX_SPACEDIM ==2) 
-  if(d==0){n[0]=1.0;n[1]=0.0;}
-  else if(d==1){n[0]=0.0;n[1]=1.0;}
-#elif(AMREX_SPACEDIM ==3)
-  if(d==0){n[0]=1.0;n[1]=0.0;n[2]=0.0;}
-  else if(d==1){n[0]=0.0;n[1]=1.0;n[2]=0.0;}
-  else if(d==2){n[0]=0.0;n[1]=0.0;n[2]=1.0;}
-#endif
 
-  un = 0.0;
-  for(int _d=0;_d<AMREX_SPACEDIM; ++_d)
-  {
-    un+=((((*u)[_d+1])(i,j,k,m)/((*u)[0])(i,j,k,m))*n[_d]);
-  }
-  
-  df=std::max({std::abs(un-c), std::abs(un), std::abs(un+c)});
-  
-  return df;
 }
 
 amrex::Real Compressible_Euler::get_DU_from_U_w(int d, int q, int i, int j, int k,
@@ -719,30 +568,9 @@ amrex::Real Compressible_Euler::Soundspeed(amrex::Vector<amrex::Array4<const amr
   return c;
 }
 
-amrex::Real Compressible_Euler::Soundspeed(amrex::Vector<amrex::Array4< amrex::Real>>* u,
-                                          int i, int j, int k, int m) const
-{
-  //return the pointwise value of soundspeed, i.e at quadrature/interpolation point
-  amrex::Real c;
-  amrex::Real prs=Pressure(u,i,j,k,m);
-  
-  c = std::sqrt(gamma_adiab*(prs/((*u)[0])(i,j,k,m)));
-  return c;
-}
 
-amrex::Real Compressible_Euler::pde_CFL(int d,int m,int i, int j, int k,
-                                        amrex::Vector<amrex::Array4<const amrex::Real>>* u) const
-{
-  amrex::Real lambda;
-  amrex::Real c=Soundspeed(u,i, j, k, 0);
-  if(d==0)
-  {lambda = std::abs(((*u)[1])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
-  else if(d==1)
-  {lambda = std::abs(((*u)[2])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
-  else if(d==2)
-  {lambda = std::abs(((*u)[3])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
-  return lambda;
-} 
+
+
 
 void Compressible_Euler::pde_BC(int lev, int dim,int side, int q,  int quad_pt_idx,
                                 const IntVect& iv, const int dcomp, const int ncomp,
