@@ -4,6 +4,7 @@
 #include <string>
 #include <limits>
 #include <memory>
+#include <filesystem>  
 
 #ifdef AMREX_USE_OMP
 #include <omp.h>
@@ -79,9 +80,14 @@ Simulation<NumericalMethodType,EquationType>::~Simulation() {
 template <typename NumericalMethodType,typename EquationType>
 void Simulation<NumericalMethodType,EquationType>::run()
 {
+  std::string results_dir = "../Results";
+  if (!std::filesystem::exists(results_dir)) {
+      std::filesystem::create_directories(results_dir);
+  }
+
   mesh->init(solver);
   
-  solver->init(model,mesh);
+  solver->init(model,mesh,dtn_outplt,dt_outplt);
 
   bdcond->init(model,solver,mesh);
   

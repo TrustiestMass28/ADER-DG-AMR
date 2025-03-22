@@ -299,6 +299,7 @@ void AmrDG::set_initial_condition(std::shared_ptr<ModelEquation<EquationType>> m
     {
       const amrex::Box& bx = mfi.growntilebox();
       //we wil lfill also ghost cells at fine coarse itnerface of fine lvl
+      //therefore no need to then call FillPatch
 
       for(int q=0 ; q<Q; ++q){
         fab_uw[q]=&((*(state_uw[q]))[mfi]);
@@ -355,6 +356,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   dt_plt = (dt_outplt > 0);
   if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
 
+  /*
   //NormDG();
   
   set_Dt(model_pde);
@@ -364,14 +366,14 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   //time stepping
   while(t<T)
   {  
-    /*
-    if ((max_level > 0) && (n>0))
-    {
-      if((t_regrid > 0) && (n % t_regrid == 0)){
-        regrid(0, t);
-      }
-    }  
-    */
+    
+    //if ((max_level > 0) && (n>0))
+    //{
+    //  if((t_regrid > 0) && (n % t_regrid == 0)){
+    //    regrid(0, t);
+    //  }
+    //}  
+    
 
     //Print(*ofs) << "ADER Time Integraton"<< "\n";
     //advance solution by one time-step.
@@ -382,18 +384,18 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     //gather valid fine cell solutions U_w into valid coarse cells
     //AverageFineToCoarse();   
     
-    /*
+    
     //prepare data for next time step
-    for(int l=0; l<=finest_level; ++l){
-      for(int q=0; q<Q; ++q){ 
-        //FillPatch(l, t, U_w[l][q], 0, Np,q); 
-        U_w[l][q].FillBoundary(geom[l].periodicity());
-        if(l>0){FillPatchGhostFC(l,0,q);}
-        //FillBoundary will be repeated also for FillPatchGHost, but there there
-        //is not info about periodic BC
-      }
-    }
-    */
+    //for(int l=0; l<=finest_level; ++l){
+    //  for(int q=0; q<Q; ++q){ 
+    //    //FillPatch(l, t, U_w[l][q], 0, Np,q); 
+    //    U_w[l][q].FillBoundary(geom[l].periodicity());
+    //    if(l>0){FillPatchGhostFC(l,0,q);}
+    //    //FillBoundary will be repeated also for FillPatchGHost, but there there
+    //    //is not info about periodic BC
+    //  }
+    //}
+    
 
     //update timestep idx and physical time
     n+=1;
@@ -409,8 +411,9 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
 
     set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
+    
   }
-  
+  */
   //NormDG();
 
 

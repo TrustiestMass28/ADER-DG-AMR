@@ -49,7 +49,9 @@ class Solver
         //TODO: pass all tempaltes of other classes from which Solver might need data to init
         //like stuff from geometry for number of levels,...
         template <typename EquationType>
-        void init(std::shared_ptr<ModelEquation<EquationType>> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
+        void init(  std::shared_ptr<ModelEquation<EquationType>> model_pde, 
+                    std::shared_ptr<Mesh<NumericalMethodType>> _mesh,
+                    int _dtn_outplt, amrex::Real _dt_outplt);
 
         //reshape bc vector depending on solver used (e.g if use modal or not)
         void init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp);
@@ -334,7 +336,7 @@ class Solver
 
         //I/O 
         int dtn_outplt;   //data output time-steps interval
-        int dt_outplt;   //data output physical time interval
+        amrex::Real dt_outplt;   //data output physical time interval
 
         //Multifabs vectors (LxDxQ or LxQ)
         //L:  max number of levels
@@ -385,8 +387,14 @@ class Solver
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::init(std::shared_ptr<ModelEquation<EquationType>> model_pde, std::shared_ptr<Mesh<NumericalMethodType>> _mesh) 
+void Solver<NumericalMethodType>::init( std::shared_ptr<ModelEquation<EquationType>> model_pde, 
+                                        std::shared_ptr<Mesh<NumericalMethodType>> _mesh,
+                                        int _dtn_outplt, amrex::Real _dt_outplt) 
 {
+    //set I/O
+    dtn_outplt = _dtn_outplt;
+    dt_outplt = _dt_outplt;
+
     setMesh(_mesh);
     
     //Get model specific data that influence numerical set-up
@@ -653,6 +661,5 @@ void Solver<NumericalMethodType>::PlotFile(std::shared_ptr<ModelEquation<Equatio
                                 _mesh->get_Geom(), time, lvl_tstep, _mesh->get_refRatio());
     }
 } 
-
 
 #endif 
