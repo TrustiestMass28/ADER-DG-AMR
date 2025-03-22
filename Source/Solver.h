@@ -649,7 +649,7 @@ void Solver<NumericalMethodType>::PlotFile(std::shared_ptr<ModelEquation<Equatio
             }
         }
 
-        std::string name  = "../Results/"+out_name_prefix+"_"+std::to_string(tstep)+"_q_"+std::to_string(q)+"_plt";
+        std::string name  = "../Results/Simulation Data/"+out_name_prefix+"_"+std::to_string(tstep)+"_q_"+std::to_string(q)+"_plt";
         const std::string& pltfile_name = name;//amrex::Concatenate(name,5);
         
         //mf to output

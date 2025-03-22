@@ -11,7 +11,7 @@ from mpl_toolkits.axes_grid1 import AxesGrid
 warnings.filterwarnings("ignore")
 yt.utilities.logger.colorize_logging()
 
-
+#TODO: plot folder inside the result (Result/plots)
 #TODO: currently we can do 2D slices plots of 1D,2D,3D data. Maybe  3d visualization should be implemented
 #TODO: reconstruct polynomial solution in each cell and plot at itnerpolation point for most accurate visualization
 #TODO: for Euler equations given energy and momentum we can derive the pressure (derived field) and this should be plotted
@@ -52,7 +52,7 @@ def main_plot():
     #iterate across selected timesteps
     for tsep in tstep_lst:  
         #load data                
-        file_name = "../../Results/"+out_name_prefix+"_"+str(tsep)+"_q_"+str(sol_n)+"_plt"
+        file_name = "../../Results/Simulation Data/"+out_name_prefix+"_"+str(tsep)+"_q_"+str(sol_n)+"_plt"
         ds_tmp = yt.load(file_name,unit_system="mks",units_override=units_override)
 
         field_to_plot, field_name, ds= get_qty_to_plt(equation_type,sol_n,mode_n,ds_tmp,tsep,units_override,field_composite)     
@@ -99,7 +99,7 @@ def main_plot():
         sl.set_figure_size(L) 
         
         sl.render()
-        sl.save("plots/"+str(tsep)+"_sol_"+str(sol_n)+".png")
+        sl.save("../../Results/Plots/"+str(tsep)+"_sol_"+str(sol_n)+".png")
         
         #######################
         
@@ -146,7 +146,7 @@ def get_qty_to_plt(equation_type,sol_n,mode_n,ds,t,units_override,field_composit
     if equation_type == "Compressible_Euler_2D":
         if sol_n!=0:
             #add density field
-            density_file_name = "../../Results/tstep_"+str(t)+"_q_"+str(0)+"_plt"
+            density_file_name = "../../Results/Simulation Data/tstep_"+str(t)+"_q_"+str(0)+"_plt"
             density_ds = yt.load(density_file_name,unit_system="mks",units_override=units_override)
             
             def _field_mode_density(field,data):
@@ -192,7 +192,7 @@ def get_colorbar_bounds(q, Nsteps,field_composite,equation_type,sol_n,mode_n,uni
     for tsep in range(0,Nsteps+1,one_every):
         try:
             #load data
-            file_name = "../../Results/tstep_"+str(tsep)+"_q_"+str(q)+"_plt"
+            file_name = "../../Results/Simulation Data/tstep_"+str(tsep)+"_q_"+str(q)+"_plt"
             ds_tmp = yt.load(file_name,unit_system="mks")
             field_to_plot, field_name, ds= get_qty_to_plt(equation_type,sol_n,mode_n,ds_tmp,tsep,units_override,field_composite)
             #get max/min
