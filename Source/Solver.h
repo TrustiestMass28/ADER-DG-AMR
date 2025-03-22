@@ -51,7 +51,7 @@ class Solver
         template <typename EquationType>
         void init(  std::shared_ptr<ModelEquation<EquationType>> model_pde, 
                     std::shared_ptr<Mesh<NumericalMethodType>> _mesh,
-                    int _dtn_outplt, amrex::Real _dt_outplt);
+                    int _dtn_outplt, amrex::Real _dt_outplt, std::string _out_name_prefix);
 
         //reshape bc vector depending on solver used (e.g if use modal or not)
         void init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp);
@@ -338,6 +338,8 @@ class Solver
         int dtn_outplt;   //data output time-steps interval
         amrex::Real dt_outplt;   //data output physical time interval
 
+        std::string out_name_prefix;
+
         //Multifabs vectors (LxDxQ or LxQ)
         //L:  max number of levels
         //D:  dimensions
@@ -389,11 +391,12 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::init( std::shared_ptr<ModelEquation<EquationType>> model_pde, 
                                         std::shared_ptr<Mesh<NumericalMethodType>> _mesh,
-                                        int _dtn_outplt, amrex::Real _dt_outplt) 
+                                        int _dtn_outplt, amrex::Real _dt_outplt, std::string _out_name_prefix) 
 {
     //set I/O
     dtn_outplt = _dtn_outplt;
     dt_outplt = _dt_outplt;
+    out_name_prefix = _out_name_prefix;
 
     setMesh(_mesh);
     
@@ -646,7 +649,7 @@ void Solver<NumericalMethodType>::PlotFile(std::shared_ptr<ModelEquation<Equatio
             }
         }
 
-        std::string name  = "../Results/tstep_"+std::to_string(tstep)+"_q_"+std::to_string(q)+"_plt";
+        std::string name  = "../Results/"+out_name_prefix+"_"+std::to_string(tstep)+"_q_"+std::to_string(q)+"_plt";
         const std::string& pltfile_name = name;//amrex::Concatenate(name,5);
         
         //mf to output
