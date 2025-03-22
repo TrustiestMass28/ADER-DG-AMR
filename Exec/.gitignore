@@ -1,6 +1,9 @@
 # Ignore any .ex file in the root directory or subdirectories
 *.ex
 
+#Ignore any Backtrace
+*Backtrace*
+
 # Ignore any subfolder (and its contents)
 */
 
