@@ -105,38 +105,11 @@ class ModelEquation
   //Flag to indicate if source term is considered
   bool flag_source_term;    
 
-
-    //////////////////////////////////////////////////////////
-    // Set reference to NumericalMethod for communication
-    //void setSolver(std::shared_ptr<Solver> nm){
-    //  numerical = nm;
-    //}
-
-    // Set reference to ModelEquation for communication
-    //void setModelEquation(std::shared_ptr<EquationType> me){
-    //    model_pde = me;
-    //}
-
-    // Getter methods
-    //std::shared_ptr<EquationType> getModelEquation() const {
-    //  return model_pde;
-    //}
-
-    //virtual ~ModelEquation() = default;  // Compiler generates default behavior
-    
-    //virtual void model_settings() = 0;
-
     /*
-
-
     void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
       ofs = _ofs;
     }
                                                             
-    virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k,
-                              amrex::Vector<amrex::Real> xi) = 0;
-
-
 
     virtual void pde_derived_qty(int lev, int q, int m, int i, int j, int k, 
                               amrex::Vector<amrex::Array4<amrex::Real>>* u,
@@ -181,7 +154,6 @@ class ModelEquation
                                         amrex::Vector<amrex::Array4<const amrex::Real>>* uw,
                                         amrex::Vector<amrex::Array4<amrex::Real>>* u) const = 0;
   
-
      */
   protected:
 
