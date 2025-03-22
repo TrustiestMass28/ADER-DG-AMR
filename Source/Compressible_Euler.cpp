@@ -39,7 +39,13 @@ void Compressible_Euler::settings(std::string _euler_case){
   Q_model=_Q_model;
   Q_model_unique =_Q_model_unique;
 
-  gamma_adiab = 1.4;
+  if(model_case == "keplerian_disc"){
+    gamma_adiab = 5.0/3.0;
+  }
+  else{
+    gamma_adiab = 1.4;
+  }
+
 }  
 
 amrex::Real Compressible_Euler::pde_cfl_lambda(int d,int m,int i, int j, int k,
@@ -55,6 +61,73 @@ amrex::Real Compressible_Euler::pde_cfl_lambda(int d,int m,int i, int j, int k,
   {lambda = std::abs(((*u)[3])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
   return lambda;
 } 
+
+amrex::Real Compressible_Euler::pde_BC_gDirichlet(int d, int side, int q) const
+{
+  //side: low=-1,high=1
+  //d : dimension in which we apply BC, then we chose if we are on which side. 
+  //q is solution vector component
+  
+  amrex::Real g;
+  if(model_case == "double_mach_reflection")
+  {
+    if(side == -1)
+    {
+      g= 10.06;
+    }
+    else if(side == 1)
+    {
+      g= 10.06;
+    }
+  }
+  return g;
+}
+
+amrex::Real Compressible_Euler::pde_BC_gNeumann(int d, int side, int q) const
+{
+  //side: low=-1,high=1
+  amrex::Real g;
+
+  //if(euler_test_case ==  "richtmeyer_meshkov_instability")
+  //{
+    //wall BC
+    //actually since we only have neumann in one direction, 
+    //no need to specify d
+    if(d==0)
+    {
+      if(side == -1)
+      {
+        g= 0.0;
+      }
+      else if(side == 1)
+      {
+        g= 0.0;
+      }  
+    }
+    else if(d==1)
+    {
+      if(side == -1)
+      {
+        g= 0.0;
+      }
+      else if(side == 1)
+      {
+        g= 0.0;
+      }  
+    }
+ // }
+  return g;
+}
+
+amrex::Real Compressible_Euler::smooth_discontinuity(amrex::Real xi, amrex::Real a, 
+                                                    amrex::Real b, amrex::Real s) const
+{
+amrex::Real d; 
+d=a+0.5*(1.0+std::tanh(s*xi))*(b-a);
+
+return d;
+}
+
 /*
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -316,70 +389,6 @@ amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
 ////also considering the other components BCs) 
 //to our solution vector components i.e to rho,rho_u1,rho_u2,rho_e
 
-amrex::Real Compressible_Euler::pde_BC_gDirichlet(int d, int side, int q) const
-{
-  //side: low=-1,high=1
-  //d : dimension in which we apply BC, then we chose if we are on which side. 
-  //q is solution vector component
-  
-  amrex::Real g;
-  if(test_case == "double_mach_reflection")
-  {
-    if(side == -1)
-    {
-      g= 10.06;
-    }
-    else if(side == 1)
-    {
-      g= 10.06;
-    }
-  }
-  return g;
-}
-
-amrex::Real Compressible_Euler::pde_BC_gNeumann(int d, int side, int q) const
-{
-  //side: low=-1,high=1
-  amrex::Real g;
-
-  //if(euler_test_case ==  "richtmeyer_meshkov_instability")
-  //{
-    //wall BC
-    //actually since we only have neumann in one direction, 
-    //no need to specify d
-    if(d==0)
-    {
-      if(side == -1)
-      {
-        g= 0.0;
-      }
-      else if(side == 1)
-      {
-        g= 0.0;
-      }  
-    }
-    else if(d==1)
-    {
-      if(side == -1)
-      {
-        g= 0.0;
-      }
-      else if(side == 1)
-      {
-        g= 0.0;
-      }  
-    }
- // }
-  return g;
-}
-
-amrex::Real Compressible_Euler::pde_source(int lev, int q, int m, int i, int j, int k, 
-                                          amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                                          amrex::Vector<amrex::Real> xi) const
-{
-
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 void Compressible_Euler::pde_derived_qty(int lev, int q, int m, int i, int j, int k, 
@@ -521,14 +530,7 @@ amrex::Real Compressible_Euler::get_D2U_from_U_w(int d1, int d2, int q, int i, i
   return derivative;
 }
 
-amrex::Real Compressible_Euler::smooth_discontinuity(amrex::Real xi, amrex::Real a, 
-                                                     amrex::Real b, amrex::Real s) const
-{
-  amrex::Real d; 
-  d=a+0.5*(1.0+std::tanh(s*xi))*(b-a);
-  
-  return d;
-}
+
 
 amrex::Real Compressible_Euler::Pressure(amrex::Vector<amrex::Array4<const amrex::Real>>* u, 
                                         int i, int j, int k,int m) const

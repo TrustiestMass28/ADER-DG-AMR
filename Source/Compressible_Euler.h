@@ -51,9 +51,9 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
     virtual amrex::Real pde_cfl_lambda(int d,int m,int i, int j, int k,
                                   amrex::Vector<amrex::Array4<const amrex::Real>>* u) const override;
 
-    virtual amrex::Real pde_BC_gDirichlet(int d, int side, int q)  const override {return 0.0;};
+    virtual amrex::Real pde_BC_gDirichlet(int d, int side, int q)  const override;
 
-    virtual amrex::Real pde_BC_gNeumann(int d, int side, int q)  const override {return 0.0;};
+    virtual amrex::Real pde_BC_gNeumann(int d, int side, int q)  const override;
 
     virtual amrex::Real pde_BC_gDirichlet(int q, int dim,const amrex::IntVect& iv, 
                                           int quad_pt_idx, const int dcomp, 
@@ -71,7 +71,10 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
                                         int side, int lev,const amrex::Vector<amrex::Vector<amrex::Real>>& gbc) 
                                         const override {return 0.0;};
 
-    virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k, amrex::Vector<amrex::Real> xi) const override {return 0.0;};
+    template <typename NumericalMethodType>
+    amrex::Real pde_IC(int lev, int q, int i,int j,int k, 
+                        const amrex::Vector<amrex::Real>& xi, 
+                        std::weak_ptr<Mesh<NumericalMethodType>> mesh) const;
     
   private:
 
@@ -87,7 +90,261 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
       template <typename T>
       amrex::Real Soundspeed(amrex::Vector<amrex::Array4<T>>* u,
                               int i, int j, int k, int m) const;
+
+      amrex::Real smooth_discontinuity(amrex::Real xi, amrex::Real a, 
+                                        amrex::Real b, amrex::Real s) const;
 };  
+
+template <typename NumericalMethodType>
+amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k, 
+                                      const amrex::Vector<amrex::Real>& xi, 
+                                      std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+{
+  auto _mesh = mesh.lock();
+
+  const auto prob_lo = _mesh->get_Geom(lev).ProbLoArray();
+  const auto dx     = _mesh->get_Geom(lev).CellSizeArray();
+  
+  amrex::Real uw_ic; 
+#if (AMREX_SPACEDIM == 1)
+  amrex::Real xc = prob_lo[0] + (i+0.5) * dx[0];
+
+  amrex::Real x = 0.5*dx[0]*xi[0]+xc;
+#elif(AMREX_SPACEDIM ==2) 
+  amrex::Real xc = prob_lo[0] + (i+0.5) * dx[0];
+  amrex::Real yc = prob_lo[1] + (j+0.5) * dx[1];
+
+  amrex::Real x = (dx[0]/2.0)*xi[0]+xc; 
+  amrex::Real y = (dx[1]/2.0)*xi[1]+yc;
+
+  if(model_case == "isentropic_vortex")
+  {
+    //Kevin Schaal et. al., Astrophysical hydrodynamics with a high-order 
+    //discontinuous Galerking scheme and adaptive mesh refinement, 
+    //Royal Astronomical Society (2015) ,https://doi.org/10.1093/mnras/stv1859
+    
+    //shape center
+    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(5.0,5.0,5.0)};
+    amrex::Real x_shape_ctr = ctr_ptr[0];
+    amrex::Real y_shape_ctr = ctr_ptr[1];    
+    
+    amrex::Real r = std::sqrt(((x-x_shape_ctr)*(x-x_shape_ctr)+(y-y_shape_ctr)
+                    *(y-y_shape_ctr)));
+                                    
+    amrex::Real beta= 5.0;
+    amrex::Real u1_infty = 1.0;
+    amrex::Real u2_infty = 0.0;    
+    amrex::Real rho = std::pow(1.0-(((gamma_adiab-1.0)*std::pow(beta,2.0))
+                      /(8.0*gamma_adiab*std::pow(M_PI,2)))*std::exp(1.0-std::pow(r,2.0)),
+                      (1.0/(gamma_adiab-1.0)));
+                      
+    amrex::Real prs = std::pow(rho,gamma_adiab);
+    amrex::Real du1 =-(y-y_shape_ctr)*(beta/(M_PI*2.0))
+                    *std::exp((1.0-std::pow(r,2.0))/2.0);
+                    
+    amrex::Real du2 =(x-x_shape_ctr)*(beta/(M_PI*2.0))
+                    *std::exp((1.0-std::pow(r,2.0))/2.0);
+                    
+    amrex::Real u1=u1_infty+du1;
+    
+    amrex::Real u2=u2_infty+du2;
+    
+    amrex::Real e=(prs/(rho*(gamma_adiab-1.0)))
+                  +0.5*(std::pow(u1,2.0)+std::pow(u2,2.0));
+    
+    if(q==0){uw_ic= rho;}
+    else if(q==1){uw_ic= rho*u1;}
+    else if(q==2){uw_ic= rho*u2;}
+    else if(q==3){uw_ic= rho*e;}
+  }
+  else if(model_case == "isentropic_vortex_static")
+  {
+    //Kevin Schaal et. al., Astrophysical hydrodynamics with a high-order 
+    //discontinuous Galerking scheme and adaptive mesh refinement, 
+    //Royal Astronomical Society (2015) ,https://doi.org/10.1093/mnras/stv1859
+    
+    //shape center
+    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(5.0,5.0,5.0)};
+    amrex::Real x_shape_ctr = ctr_ptr[0];
+    amrex::Real y_shape_ctr = ctr_ptr[1];    
+    
+    amrex::Real r = std::sqrt(((x-x_shape_ctr)*(x-x_shape_ctr)+(y-y_shape_ctr)
+                    *(y-y_shape_ctr)));
+                                    
+    amrex::Real beta= 5.0;
+    amrex::Real u1_infty = 0.0;
+    amrex::Real u2_infty = 0.0;    
+    amrex::Real rho = std::pow(1.0-(((gamma_adiab-1.0)*std::pow(beta,2.0))
+                      /(8.0*gamma_adiab*std::pow(M_PI,2)))*std::exp(1.0-std::pow(r,2.0)),
+                      (1.0/(gamma_adiab-1.0)));
+                      
+    amrex::Real prs = std::pow(rho,gamma_adiab);
+    amrex::Real du1 =-(y-y_shape_ctr)*(beta/(M_PI*2.0))
+                    *std::exp((1.0-std::pow(r,2.0))/2.0);
+                    
+    amrex::Real du2 =(x-x_shape_ctr)*(beta/(M_PI*2.0))
+                    *std::exp((1.0-std::pow(r,2.0))/2.0);
+                    
+    amrex::Real u1=u1_infty+du1;
+    
+    amrex::Real u2=u2_infty+du2;
+    
+    amrex::Real e=(prs/(rho*(gamma_adiab-1.0)))
+                  +0.5*(std::pow(u1,2.0)+std::pow(u2,2.0));
+    
+    if(q==0){uw_ic= rho;}
+    else if(q==1){uw_ic= rho*u1;}
+    else if(q==2){uw_ic= rho*u2;}
+    else if(q==3){uw_ic= rho*e;}
+  }
+  else if(model_case == "double_mach_reflection")
+  {
+    amrex::Real alpha=M_PI/3.0;
+    amrex::Real xp = (x-1.0/6.0)*std::cos(alpha)-y*std::sin(alpha);
+    
+    amrex::Real prs = (xp < 0.0) ? 116.5 : 1.0; 
+    amrex::Real rho = (xp < 0.0) ? 8.0 : 1.4; 
+    amrex::Real u1 = (xp < 0.0) ? (8.25*std::cos(alpha)) : 0.0; 
+    amrex::Real u2 = (xp < 0.0) ? (8.25*std::sin(alpha)) : 0.0;      
+    amrex::Real rho_e=(prs/(gamma_adiab-1.0))+0.5*rho*(std::pow(u1,2.0)+std::pow(u2,2.0));
+                  
+    if(q==0){uw_ic= rho;}
+    else if(q==1){uw_ic= rho*u1;}
+    else if(q==2){uw_ic= rho*u2;}
+    else if(q==3){uw_ic= rho_e;}    
+  }
+  else if(model_case == "kelvin_helmolz_instability")
+  {       
+    //Kevin Schaal et. al., Astrophysical hydrodynamics with a high-order
+    //discontinuous Galerking scheme and adaptive mesh refinement, 
+    //Royal Astronomical Society (2015) ,https://doi.org/10.1093/mnras/stv1859
+    amrex::Real w0=0.1;
+    amrex::Real sigma = 0.05/std::sqrt(2.0);
+    
+    amrex::Real rho =  ((y > 0.25) && (y < 0.75)) ? 2.0 : 1.0; 
+    amrex::Real prs=2.5;
+    amrex::Real u1 = ((y > 0.25) && (y < 0.75)) ? 0.5 : -0.5; 
+    amrex::Real u2 = w0*std::sin(4.0*M_PI*x)*(std::exp(-(std::pow(y-0.25,2.0))
+                    /(2.0*std::pow(sigma,2.0)))+std::exp(-(std::pow(y-0.75,2.0))
+                    /(2.0*std::pow(sigma,2))));
+                    
+    amrex::Real rho_e=(prs/(gamma_adiab-1.0))+0.5*rho*(std::pow(u1,2.0)+std::pow(u2,2.0));
+    
+    if(q==0){uw_ic= rho;}
+    else if(q==1){uw_ic= rho*u1;}
+    else if(q==2){uw_ic= rho*u2;}
+    else if(q==3){uw_ic= rho_e;}
+  }
+  else if(model_case == "richtmeyer_meshkov_instability")
+  {
+    //Jesse Chan et al, On the Entropy Projection and the Robustness of High 
+    //Order Entropy Stable Discontinuous Galerkin Schemes for Under-Resolved
+    //Flows (2022),  https://doi.org/10.3389/fphy.2022.898028
+    
+    amrex::Real length = 40.0;
+    
+    amrex::Real rho =  smooth_discontinuity(y-(18.0+2.0*std::cos(6.0*M_PI*x/length)), 
+                      1.0, 1.0/4.0, 2.0)+smooth_discontinuity(std::abs(y-4.0)-2.0, 3.22, 0.0, 2.0);
+                      
+    amrex::Real prs =  smooth_discontinuity(std::abs(y-4.0)-2.0, 4.9, 1.0, 2.0);
+    amrex::Real u1 = 0.0;
+    amrex::Real u2 = 0.0;
+    amrex::Real rho_e=(prs/(gamma_adiab-1.0))+0.5*rho*(std::pow(u1,2.0)+std::pow(u2,2.0));
+    if(q==0){uw_ic= rho;}
+    else if(q==1){uw_ic= rho*u1;}
+    else if(q==2){uw_ic= rho*u2;}
+    else if(q==3){uw_ic= rho_e;}
+  
+  }
+  else if(model_case == "keplerian_disc")
+  {
+    //Kevin Schaal et. al., Astrophysical hydrodynamics with a 
+    //high-order discontinuous Galerking scheme and adaptive mesh refinement,
+    //Royal Astronomical Society (2015) ,https://doi.org/10.1093/mnras/stv1859
+
+    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(3.0,3.0,3.0)};
+    amrex::Real x_shape_ctr = ctr_ptr[0];
+    amrex::Real y_shape_ctr = ctr_ptr[1];   
+  
+    amrex::Real r = std::sqrt(((x-x_shape_ctr)*(x-x_shape_ctr)+(y-y_shape_ctr)
+                    *(y-y_shape_ctr)));
+        
+    amrex::Real p0 = 1e-5;
+    amrex::Real rho0=1e-5;
+    amrex::Real rhoD=1.0;
+    amrex::Real Dr=0.1;
+    amrex::Real xp = x-x_shape_ctr;
+    amrex::Real yp = y-y_shape_ctr;
+    //define bounds for rho definition, to ease the implementation
+    amrex::Real b1 = 0.5-Dr/2.0;
+    amrex::Real b2 = 0.5+Dr/2.0;
+    amrex::Real b3 = 2.0-Dr/2.0;
+    amrex::Real b4 = 2.0+Dr/2.0;
+    amrex::Real v12 = ((rhoD-rho0)/Dr)*(r-(0.5-Dr/2.0))+rho0;
+    amrex::Real v34 = ((rho0-rhoD)/Dr)*(r-(2.0-Dr/2.0))+rhoD;
+    amrex::Real rho = (r < b1) ? rho0 : (r >=b1 && r < b2) ? v12 : 
+                      (r >=b2 && r < b3) ? rhoD : (r >=b3 && r < b4) ? v34 : 
+                      (r >=b4) ? rho0 : rho0; 
+                      
+    amrex::Real prs = p0;
+    amrex::Real u1 = (r > 0.5-2.0*Dr && r < 2.0+2.0*Dr) 
+                    ? (-yp)/(std::pow(r,3.0/2.0)) : 0; 
+    amrex::Real u2 = (r > 0.5-2.0*Dr && r < 2.0+2.0*Dr) 
+                    ? (xp)/(std::pow(r,3.0/2.0)) : 0; 
+                    
+    amrex::Real e=(prs/(rho*(gamma_adiab-1.0)))
+          +0.5*(std::pow(u1,2.0)+std::pow(u2,2.0));
+    
+    if(q==0){uw_ic= rho;}
+    else if(q==1){uw_ic= rho*u1;}
+    else if(q==2){uw_ic= rho*u2;}
+    else if(q==3){uw_ic= rho*e;}
+    
+    if(flag_angular_momentum)
+    {
+      //TODO:use xp or x as locations for Ang.mom?
+      //->use x and not shifted position because in source we also use x and also in derived_qty we use x
+      //outside of this IC function we dont have informations on where the shape is centered. and anyway is just 
+      //a scalar shift, nothing will change in final conservation
+      amrex::Real x1 = x;
+      amrex::Real x2 = y;
+      amrex::Real L3 = x1*rho*u2-x2*rho*u1;
+      if(q==4){uw_ic= L3;}
+    }   
+  }
+  else if(model_case == "radial_shock_tube")
+  { 
+    //Mishra and Hiltelbrand, Entropy stable shock capturing space-time DG 
+    //scheme for systems of conservation laws (2014),https://doi.org/10.1007/s00211-013-0558-0
+
+    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(3.0,3.0,3.0)};
+    amrex::Real x_shape_ctr = ctr_ptr[0];
+    amrex::Real y_shape_ctr = ctr_ptr[1];   
+  
+    amrex::Real r = std::sqrt(((x-x_shape_ctr)*(x-x_shape_ctr)+(y-y_shape_ctr)
+                    *(y-y_shape_ctr)));
+                    
+    amrex::Real rho =  (r > 0.4) ? 0.125 : 1.0; 
+    amrex::Real prs =  (r > 0.4) ? 0.125 : 1.0;
+    amrex::Real u1 = 0.0;
+    amrex::Real u2 = 0.0;
+    amrex::Real rho_e=(prs/(gamma_adiab-1.0))+0.5*rho*(std::pow(u1,2.0)+std::pow(u2,2.0));
+    if(q==0){uw_ic= rho;}
+    else if(q==1){uw_ic= rho*u1;}
+    else if(q==2){uw_ic= rho*u2;}
+    else if(q==3){uw_ic= rho_e;}
+  }
+#elif(AMREX_SPACEDIM ==3) 
+    amrex::Real xc = prob_lo[0] + (i+0.5) * dx[0];
+    amrex::Real yc = prob_lo[1] + (j+0.5) * dx[1];
+    amrex::Real zc = prob_lo[2] + (k+0.5) * dx[2];
+    
+    amrex::Real x = 0.5*dx[0]*xi[0]+xc;
+    amrex::Real y = 0.5*dx[1]*xi[1]+yc; 
+    amrex::Real z = 0.5*dx[2]*xi[2]+zc; 
+#endif 
+  return uw_ic;
+}
 
 template <typename NumericalMethodType>
 amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
@@ -385,8 +642,7 @@ return c;
     amrex::Real Soundspeed(amrex::Vector<amrex::Array4< amrex::Real>>* u,
                           int i, int j, int k, int m) const;
 
-    amrex::Real smooth_discontinuity(amrex::Real xi, amrex::Real a, 
-                                    amrex::Real b, amrex::Real s) const;
+
     
     amrex::Real gamma_adiab;
     */

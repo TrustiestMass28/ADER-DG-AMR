@@ -89,7 +89,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     template <typename EquationType> 
     amrex::Real set_initial_condition_U(std::shared_ptr<ModelEquation<EquationType>> model_pde,
-                                        int lev,int q,int i,int j,int k, amrex::Vector<amrex::Real> xi);
+                                        int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi);
 
     void get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
                         amrex::Vector<amrex::MultiFab>* U_w_ptr, 
@@ -330,10 +330,10 @@ amrex::Real AmrDG::set_initial_condition_U_w(std::shared_ptr<ModelEquation<Equat
 }
 
 template <typename EquationType> 
-amrex::Real AmrDG::set_initial_condition_U(std::shared_ptr<ModelEquation<EquationType>> model_pde,int lev,int q,int i,int j,int k, amrex::Vector<amrex::Real> xi)
+amrex::Real AmrDG::set_initial_condition_U(std::shared_ptr<ModelEquation<EquationType>> model_pde,int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi)
 {
   amrex::Real u_ic;
-  u_ic = model_pde->pde_IC(lev,q,i,j,k,xi);
+  u_ic = model_pde->pde_IC(lev,q,i,j,k,xi,mesh);
 
   return u_ic;
 }

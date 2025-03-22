@@ -87,7 +87,10 @@ class ModelEquation
                                       int side, int lev,const amrex::Vector<amrex::Vector<amrex::Real>>& gbc) 
                                       const =0;
 
-  virtual amrex::Real pde_IC(int lev, int q, int i,int j,int k, amrex::Vector<amrex::Real> xi) const = 0;
+  template <typename NumericalMethodType>
+  amrex::Real pde_IC(int lev, int q, int i,int j,int k, 
+                    const amrex::Vector<amrex::Real>& xi, 
+                    std::weak_ptr<Mesh<NumericalMethodType>> mesh) const;
 
   //Number of model equations in the system
   int Q_model;
@@ -213,6 +216,15 @@ amrex::Real ModelEquation<EquationType>::pde_source(int lev,int q, int m, int i,
                               std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
 {
   return static_cast<const EquationType*>(this)->pde_source(lev,q,m,i,j,k,u,xi,mesh); 
+}
+
+template <typename EquationType>
+template <typename NumericalMethodType>
+amrex::Real ModelEquation<EquationType>::pde_IC(int lev, int q, int i,int j,int k, 
+                    const amrex::Vector<amrex::Real>& xi, 
+                    std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+{
+  return static_cast<const EquationType*>(this)->pde_IC(lev,q,i,j,k,xi,mesh);
 }
 
 #endif 
