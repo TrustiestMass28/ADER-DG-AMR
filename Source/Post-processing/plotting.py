@@ -23,14 +23,15 @@ yt.utilities.logger.colorize_logging()
 
 def main_plot():
     """""---------------------------------------------""""" 
-    Nsteps = 270
+    Nsteps = 1
     
     equation_type = "Compressible_Euler_2D"
     #["Compressible_Euler_2D","Advection"]
     mode_n =0
     sol_n  = 0
-    plot_every = 2
+    plot_every = 1
     tstep_lst = list(range(0,Nsteps+1,plot_every))
+    out_name_prefix = "tstep"
     #if want to plot only one timestep or a coule of them use below
     #tstep_lst = [Nsteps]
     """""
@@ -51,7 +52,7 @@ def main_plot():
     #iterate across selected timesteps
     for tsep in tstep_lst:  
         #load data                
-        file_name = "../Results/tstep_"+str(tsep)+"_q_"+str(sol_n)+"_plt"
+        file_name = "../../Results/"+out_name_prefix+"_"+str(tsep)+"_q_"+str(sol_n)+"_plt"
         ds_tmp = yt.load(file_name,unit_system="mks",units_override=units_override)
 
         field_to_plot, field_name, ds= get_qty_to_plt(equation_type,sol_n,mode_n,ds_tmp,tsep,units_override,field_composite)     
@@ -145,7 +146,7 @@ def get_qty_to_plt(equation_type,sol_n,mode_n,ds,t,units_override,field_composit
     if equation_type == "Compressible_Euler_2D":
         if sol_n!=0:
             #add density field
-            density_file_name = "../Results/tstep_"+str(t)+"_q_"+str(0)+"_plt"
+            density_file_name = "../../Results/tstep_"+str(t)+"_q_"+str(0)+"_plt"
             density_ds = yt.load(density_file_name,unit_system="mks",units_override=units_override)
             
             def _field_mode_density(field,data):
@@ -191,7 +192,7 @@ def get_colorbar_bounds(q, Nsteps,field_composite,equation_type,sol_n,mode_n,uni
     for tsep in range(0,Nsteps+1,one_every):
         try:
             #load data
-            file_name = "../Results/tstep_"+str(tsep)+"_q_"+str(q)+"_plt"
+            file_name = "../../Results/tstep_"+str(tsep)+"_q_"+str(q)+"_plt"
             ds_tmp = yt.load(file_name,unit_system="mks")
             field_to_plot, field_name, ds= get_qty_to_plt(equation_type,sol_n,mode_n,ds_tmp,tsep,units_override,field_composite)
             #get max/min
