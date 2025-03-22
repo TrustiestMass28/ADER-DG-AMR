@@ -1,0 +1,66 @@
+Host Name: DESKTOP-2IHH3A0
+=== If no file names and line numbers are shown below, one can run
+            addr2line -Cpfie my_exefile my_line_address
+    to convert `my_line_address` (e.g., 0x4a6b) into file name and line number.
+    Or one can use amrex/Tools/Backtrace/parse_bt.py.
+
+=== Please note that the line number reported by addr2line may not be accurate.
+    One can use
+            readelf -wl my_exefile | grep my_line_address'
+    to find out the offset for that line.
+
+ 0: ./main2d.gnu.ex(+0x19b9ad) [0x560fe9d409ad]
+    amrex::BLBackTrace::handler(int) at /usr/include/x86_64-linux-gnu/bits/unistd.h:284
+ (inlined by) amrex::BLBackTrace::print_backtrace_info(_IO_FILE*) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:213
+ (inlined by) amrex::BLBackTrace::handler(int) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BLBackTrace.cpp:99
+
+ 1: /lib/x86_64-linux-gnu/libc.so.6(+0x42520) [0x7f3687f58520]
+
+ 2: /lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x12c) [0x7f3687fac9fc]
+
+ 3: /lib/x86_64-linux-gnu/libc.so.6(raise+0x16) [0x7f3687f58476]
+
+ 4: /lib/x86_64-linux-gnu/libc.so.6(abort+0xd3) [0x7f3687f3e7f3]
+
+ 5: /lib/x86_64-linux-gnu/libstdc++.so.6(+0xa2b9e) [0x7f36882e8b9e]
+    amrex::BaseFab<double>::~BaseFab() at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_BaseFab.H:2048
+
+ 6: /lib/x86_64-linux-gnu/libstdc++.so.6(+0xae20c) [0x7f36882f420c]
+    int* std::__uninitialized_default_n_1<true>::__uninit_default_n<int*, unsigned long>(int*, unsigned long) at /usr/include/c++/11/bits/stl_uninitialized.h:602
+ (inlined by) int* std::__uninitialized_default_n_1<true>::__uninit_default_n<int*, unsigned long>(int*, unsigned long) at /usr/include/c++/11/bits/stl_uninitialized.h:595
+ (inlined by) int* std::__uninitialized_default_n<int*, unsigned long>(int*, unsigned long) at /usr/include/c++/11/bits/stl_uninitialized.h:640
+ (inlined by) int* std::__uninitialized_default_n_a<int*, unsigned long, int>(int*, unsigned long, std::allocator<int>&) at /usr/include/c++/11/bits/stl_uninitialized.h:704
+ (inlined by) std::vector<int, std::allocator<int> >::_M_default_append(unsigned long) at /usr/include/c++/11/bits/vector.tcc:640
+ (inlined by) std::vector<int, std::allocator<int> >::_M_default_append(unsigned long) at /usr/include/c++/11/bits/vector.tcc:611
+ (inlined by) std::vector<int, std::allocator<int> >::resize(unsigned long) at /usr/include/c++/11/bits/stl_vector.h:940
+ (inlined by) amrex::VisMF::FindOffsets(amrex::FabArray<amrex::FArrayBox> const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, amrex::VisMF::Header&, amrex::VisMF::Header::Version, amrex::NFilesIter&, int) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_VisMF.cpp:1335
+
+ 7: /lib/x86_64-linux-gnu/libstdc++.so.6(+0xae277) [0x7f36882f4277]
+    std::_Rb_tree<int, std::pair<int const, amrex::Vector<int, std::allocator<int> > >, std::_Select1st<std::pair<int const, amrex::Vector<int, std::allocator<int> > > >, std::less<int>, std::allocator<std::pair<int const, amrex::Vector<int, std::allocator<int> > > > >::_M_mbegin() const at /usr/include/c++/11/bits/stl_tree.h:735
+ (inlined by) std::_Rb_tree<int, std::pair<int const, amrex::Vector<int, std::allocator<int> > >, std::_Select1st<std::pair<int const, amrex::Vector<int, std::allocator<int> > > >, std::less<int>, std::allocator<std::pair<int const, amrex::Vector<int, std::allocator<int> > > > >::_M_begin() at /usr/include/c++/11/bits/stl_tree.h:739
+ (inlined by) std::_Rb_tree<int, std::pair<int const, amrex::Vector<int, std::allocator<int> > >, std::_Select1st<std::pair<int const, amrex::Vector<int, std::allocator<int> > > >, std::less<int>, std::allocator<std::pair<int const, amrex::Vector<int, std::allocator<int> > > > >::find(int const&) at /usr/include/c++/11/bits/stl_tree.h:2523
+ (inlined by) std::map<int, amrex::Vector<int, std::allocator<int> >, std::less<int>, std::allocator<std::pair<int const, amrex::Vector<int, std::allocator<int> > > > >::find(int const&) at /usr/include/c++/11/bits/stl_map.h:1170
+ (inlined by) amrex::VisMF::FindOffsets(amrex::FabArray<amrex::FArrayBox> const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, amrex::VisMF::Header&, amrex::VisMF::Header::Version, amrex::NFilesIter&, int) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_VisMF.cpp:1345
+
+ 8: /lib/x86_64-linux-gnu/libstdc++.so.6(+0xae4d8) [0x7f36882f44d8]
+    amrex::VisMF::FindOffsets(amrex::FabArray<amrex::FArrayBox> const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, amrex::VisMF::Header&, amrex::VisMF::Header::Version, amrex::NFilesIter&, int) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_VisMF.cpp:1326
+
+ 9: /lib/x86_64-linux-gnu/libstdc++.so.6(+0xa6c4e) [0x7f36882ecc4e]
+    std::vector<double, std::allocator<double> >::_M_default_append(unsigned long) at /usr/include/c++/11/bits/vector.tcc:680
+ (inlined by) std::vector<double, std::allocator<double> >::_M_default_append(unsigned long) at /usr/include/c++/11/bits/vector.tcc:611
+ (inlined by) std::vector<double, std::allocator<double> >::resize(unsigned long) at /usr/include/c++/11/bits/stl_vector.h:940
+ (inlined by) amrex::operator>>(std::istream&, amrex::VisMF::Header&) at /home/sfabiano/ADER-DG-AMR/Exec/../Library/amrex/Src/Base/AMReX_VisMF.cpp:433
+
+10: ./main2d.gnu.ex(+0x2ab3d1) [0x560fe9e503d1]
+    Simulation<AmrDG, Compressible_Euler>::run() at /home/sfabiano/ADER-DG-AMR/Exec/../Source/Simulation.h:89
+
+11: ./main2d.gnu.ex(+0x2d395) [0x560fe9bd2395]
+    main at /home/sfabiano/ADER-DG-AMR/Exec/../Source/main.cpp:149
+
+12: /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f3687f3fd90]
+
+13: /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f3687f3fe40]
+
+14: ./main2d.gnu.ex(+0x2dbb5) [0x560fe9bd2bb5]
+    ?? ??:0
+

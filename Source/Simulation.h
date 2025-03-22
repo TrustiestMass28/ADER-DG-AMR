@@ -46,7 +46,7 @@ class Simulation
                     Array<int,AMREX_SPACEDIM> const& _is_per, int dtn_regrid = 0, 
                     amrex::Real dt_regrid = 0,int nghost= 1);
 
-    void setIO(int _n_out, amrex::Real _t_out);
+    void setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix = "");
 
     int getQ();
 
@@ -65,6 +65,8 @@ class Simulation
     int dtn_outplt;   //data output time-steps interval
 
     amrex::Real dt_outplt;   //data output physical time interval
+
+    std::string out_name_prefix = "tstep";
 };
 
 /*
@@ -85,9 +87,18 @@ void Simulation<NumericalMethodType,EquationType>::run()
       std::filesystem::create_directories(results_dir);
   }
 
+  // Iterate through all files in the directory
+  for (const auto& entry : std::filesystem::directory_iterator(results_dir)) {
+    // Check if the filename contains out_name_prefix
+    if (entry.path().filename().string().find(out_name_prefix) != std::string::npos) {
+        //std::cout << "Deleting file: " << entry.path() << std::endl;
+        std::filesystem::remove_all(entry.path());  // Delete the file
+    }
+  }
+
   mesh->init(solver);
   
-  solver->init(model,mesh,dtn_outplt,dt_outplt);
+  solver->init(model,mesh,dtn_outplt,dt_outplt,out_name_prefix);
 
   bdcond->init(model,solver,mesh);
   
@@ -128,10 +139,15 @@ void Simulation<NumericalMethodType,EquationType>::setGeometrySettings(const Rea
 } 
 
 template <typename NumericalMethodType,typename EquationType>
-void Simulation<NumericalMethodType,EquationType>::setIO(int _n_out, amrex::Real _t_out)
+void Simulation<NumericalMethodType,EquationType>::setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix)
 {
   dtn_outplt = _n_out;
   dt_outplt  = _t_out;
+
+  // Check if the name_prefix is not empty
+  if (!_out_name_prefix.empty()) {
+    out_name_prefix = _out_name_prefix;
+  }
 }
 
 template <typename NumericalMethodType,typename EquationType>
