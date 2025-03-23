@@ -1,7 +1,3 @@
-#include <Eigen/Dense>
-#include <Eigen/Core>
-#include <Eigen/SVD>
-
 #include "AmrDG.h"
 //#include "ModelEquation.h"
 
