@@ -58,35 +58,18 @@ int main(int argc, char* argv[])
 
       if(AMREX_SPACEDIM == 2)
       {     
-            is_periodic[0]  = 1;
-            is_periodic[1]  = 1;
-            
-            for(int q=0; q<Q; ++q)
-            {       
-            bc_lo_type[q].resize(AMREX_SPACEDIM);
-            bc_hi_type[q].resize(AMREX_SPACEDIM);
-            
-            bc_lo[q][0]=BCType::int_dir;
-            bc_lo[q][1]=BCType::int_dir;
-            
-            bc_hi[q][0]=BCType::int_dir;
-            bc_hi[q][1]=BCType::int_dir;
-            
-            bc_lo_type[q][0]=1;
-            bc_lo_type[q][1]=1;
-            
-            bc_hi_type[q][0]=1;
-            bc_hi_type[q][1]=1;
-            }
-
             if(simulation_case ==  "isentropic_vortex")
             {
                   //need periodic in x to ensure waves interaction
                   is_periodic[0]  = 1;
                   is_periodic[1]  = 1;
                   for(int q=0; q<Q; ++q){//rho,rhou1,rhou2,rhoe
+                        bc_lo_type[q].resize(AMREX_SPACEDIM);
+                        bc_hi_type[q].resize(AMREX_SPACEDIM);
+
                         bc_lo[q][1]=BCType::int_dir;
                         bc_hi[q][1]=BCType::int_dir;
+
                         bc_lo[q][0]=BCType::int_dir;
                         bc_hi[q][0]=BCType::int_dir;
                         
@@ -110,11 +93,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 256;
+            n_cell_x = 32;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 256;
+            n_cell_y = 32;
 
 
             L_z_lo   = 0.0;

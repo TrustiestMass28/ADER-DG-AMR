@@ -39,7 +39,7 @@ template <typename EquationType, typename NumericalMethodType>
 class BoundaryCondition
 {
   public: 
-    BoundaryCondition() = default;
+    BoundaryCondition();
 
     ~BoundaryCondition() = default;
 
@@ -116,12 +116,24 @@ class BoundaryCondition
                     amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
                     amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi);
 
+      int Q_model;
+
       //store the current pde system component (i.e which equation) we are applying bc to
       int curr_q;
 
       //store current level to which we are applying BCs to
       int curr_lev;
+
+      //: bcf(*this) {}
+      std::shared_ptr<amrex::GpuBndryFuncFab<BoundaryCondition<EquationType, NumericalMethodType>>> bcf;
+      //amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BoundaryCondition>> physbcf_bd;
 };
+
+template <typename EquationType, typename NumericalMethodType>   
+BoundaryCondition<EquationType,NumericalMethodType>::BoundaryCondition()
+{
+  bcf = std::make_shared<amrex::GpuBndryFuncFab<BoundaryCondition<EquationType, NumericalMethodType>>>(*this);
+}
 
 template <typename EquationType, typename NumericalMethodType>   
 void BoundaryCondition<EquationType,NumericalMethodType>::setModelEquation(
@@ -175,6 +187,8 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
 
   //TODO: use solver ptr to pass reference of bc, bc_w
   _solver->init_bc(bc,n_comp);
+
+  Q_model = _model_pde->Q_model;
   
   //gbc_lo,gbc_lo accessed inside ModelEquation
   //since we have static BCs, no need to call
@@ -184,10 +198,10 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
   //for each component of the PDE system
   //gbc_lo stores the BC value as defined
   //in the implemented ModelEquation derived
-  gbc_lo.resize(_model_pde->Q_model);
-  gbc_hi.resize(_model_pde->Q_model);
+  gbc_lo.resize(Q_model);
+  gbc_hi.resize(Q_model);
 
-  for(int q=0; q<_model_pde->Q_model; ++q){
+  for(int q=0; q<Q_model; ++q){
     gbc_lo[q].resize(AMREX_SPACEDIM);
     gbc_hi[q].resize(AMREX_SPACEDIM); 
   }
@@ -291,8 +305,8 @@ void BoundaryCondition<EquationType,NumericalMethodType>::FillBoundaryCells(amre
       //we are applying BCs to
       set_system_curr_component(q,lev);
 
-      amrex::GpuBndryFuncFab<BoundaryCondition> bcf(this);
-      amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BoundaryCondition>> physbcf_bd(geom_l,bc[q],bcf);  
+      //TODO:could be improved, maybe pre-cosntuct obejct inside init(). Care about geom object if it gets updated tho
+      amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BoundaryCondition<EquationType,NumericalMethodType>>> physbcf_bd(geom_l,bc[q],*bcf);  
       
       physbcf_bd((*U_ptr)[q], 0, (*U_ptr)[q].nComp(), (*U_ptr)[q].nGrowVect(), time,0);    
       //(MultiFab& mf, int icomp, int ncomp, IntVect const& nghost,real time, int bccomp)
