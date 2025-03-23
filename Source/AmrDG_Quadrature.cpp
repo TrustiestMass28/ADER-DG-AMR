@@ -19,6 +19,7 @@ void AmrDG::QuadratureGaussLegendre::set_number_quadpoints()
 
 void AmrDG::QuadratureGaussLegendre::set_quadpoints()
 {
+  //Generate qMp_1d==p+1 quadrature points
   int N = qMp_1d;
 
   amrex::Vector<amrex::Real> GLquadpts;
