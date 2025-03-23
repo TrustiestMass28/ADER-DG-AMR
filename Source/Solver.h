@@ -63,7 +63,9 @@ class Solver
 
         //perform a time-step, advance solution by one time-step
         template <typename EquationType>
-        void time_integration(std::shared_ptr<ModelEquation<EquationType>> model_pde);
+        void time_integration(  std::shared_ptr<ModelEquation<EquationType>> model_pde, 
+                                std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond,
+                                amrex::Real time);
 
         //compute and set time-step size
         template <typename EquationType>
@@ -149,6 +151,9 @@ class Solver
         void FillBoundaryCells(std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond,
                                 amrex::Vector<amrex::MultiFab>* U_ptr, 
                                 int lev, amrex::Real time);
+
+
+        void FillBoundary(amrex::MultiFab* U_ptr, int lev);
 
         //Transformations to BC cell vlaues before being set as final value
         amrex::Real setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev);
@@ -411,6 +416,9 @@ void Solver<NumericalMethodType>::init( std::shared_ptr<ModelEquation<EquationTy
     const Real time = 0.0;
     //AmrCore.h function initialize multilevel mesh, geometry, Box array and DistributionMap
     //calls MakeNewLevelFromScratch
+    //Initialize BoxArray, DistributionMapping and data from scratch.
+    //Calling this function requires the derive class implement its own MakeNewLevelFromScratch
+    //to allocate and initialize data.
     _mesh->InitFromScratch(time);
 
     set_initial_condition(model_pde);
@@ -524,6 +532,16 @@ void Solver<NumericalMethodType>::FillBoundaryCells( std::shared_ptr<BoundaryCon
 }
 
 template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::FillBoundary(amrex::MultiFab* U_ptr,int lev)
+{
+    auto _mesh = mesh.lock();
+    amrex::Geometry geom_l = _mesh->get_Geom(lev);
+
+    U_ptr->FillBoundary(geom_l.periodicity());
+}
+        //U_w[l][q].FillBoundary(geom[l].periodicity());
+
+template <typename NumericalMethodType>
 amrex::Real Solver<NumericalMethodType>::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev){
 
     return static_cast<NumericalMethodType*>(this)->setBC(bc,comp,dcomp,q,lev); 
@@ -532,9 +550,11 @@ amrex::Real Solver<NumericalMethodType>::setBC(const amrex::Vector<amrex::Real>&
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::time_integration(std::shared_ptr<ModelEquation<EquationType>> model_pde)
+void Solver<NumericalMethodType>::time_integration( std::shared_ptr<ModelEquation<EquationType>> model_pde, 
+                                                    std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond,
+                                                    amrex::Real time)
 {
-    static_cast<NumericalMethodType*>(this)->time_integration(model_pde); 
+    static_cast<NumericalMethodType*>(this)->time_integration(model_pde,bdcond,time); 
 }
 
 template <typename NumericalMethodType>

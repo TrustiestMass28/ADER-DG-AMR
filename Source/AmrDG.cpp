@@ -899,27 +899,7 @@ Mesh Interpolation
 
 
 
-void AmrDG::InitData_system(int lev,const BoxArray& ba, const DistributionMapping& dm)
-{
-  //Print(*ofs) <<"AmrDG::InitData_system() "<< lev<<"\n";
-  
-  //ADER SPECIFIC
 
-  //SOLVER
-
-  for(int q=0; q<Q; ++q){
-    InitData_component(lev, ba,dm,q); 
-  } 
-}
-
-
-void AmrDG::Init()
-{
-  
-  Print(Print(sim->ofs)) <<"AmrDG::Init()"<<"\n";  
-  const Real time = 0.0;
-  InitFromScratch(time);
-}
 
 //std::swap(U_w[lev][q],new_mf);    
 
