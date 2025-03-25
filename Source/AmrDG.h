@@ -93,7 +93,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     template <typename EquationType> 
     amrex::Real set_initial_condition_U(std::shared_ptr<ModelEquation<EquationType>> model_pde,
-                                        int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi);
+                                        int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi) const;
 
     void get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
                         amrex::Vector<amrex::MultiFab>* U_w_ptr, 
@@ -345,7 +345,7 @@ amrex::Real AmrDG::set_initial_condition_U_w(std::shared_ptr<ModelEquation<Equat
 }
 
 template <typename EquationType> 
-amrex::Real AmrDG::set_initial_condition_U(std::shared_ptr<ModelEquation<EquationType>> model_pde,int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi)
+amrex::Real AmrDG::set_initial_condition_U(std::shared_ptr<ModelEquation<EquationType>> model_pde,int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi) const
 {
   amrex::Real u_ic;
   u_ic = model_pde->pde_IC(lev,q,i,j,k,xi,mesh);
@@ -372,6 +372,9 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   dt_plt = (dt_outplt > 0);
   if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
 
+  L1Norm_DG_AMR(model_pde);
+  L2Norm_DG_AMR(model_pde);
+  
   //NormDG();
     
   set_Dt(model_pde);
@@ -435,6 +438,8 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     
   }
   
+  L1Norm_DG_AMR(model_pde);
+  L2Norm_DG_AMR(model_pde);
   //NormDG();
 
 
@@ -1113,11 +1118,11 @@ void AmrDG::L1Norm_DG_AMR(std::shared_ptr<ModelEquation<EquationType>> model_pde
 
 template <typename EquationType> 
 void AmrDG::L2Norm_DG_AMR(std::shared_ptr<ModelEquation<EquationType>> model_pde) 
-{
+{ 
   //TODO:actually could generalize it to p points
   //Generate 2*(p+1) quadrature points in 1D
   
-  int N = 2*(model_pde->qMp_1d);
+  int N = 2*(quadrule->qMp_1d);
   amrex::Vector<amrex::Real> GLquadpts;
   amrex::Real xiq = 0.0;
   amrex::Real theta = 0.0;
