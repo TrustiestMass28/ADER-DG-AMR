@@ -10,6 +10,34 @@ void AmrDG::settings(int _p, amrex::Real _T) {
 
 void AmrDG::init()
 {
+  amrex::Vector<std::string> logo = {
+    "######################################",
+    "     _   __  __ ___     ___   ___ ",
+    "    /_\\ |  \\/  | _ \\___|   \\ / __|",
+    "   / _ \\| |\\/| |   /___| |) | (_ |",
+    "  /_/ \\_\\_|  |_|_|_\\   |___/ \\___|",
+    "",
+    "       +..+..+----+---------+",
+    "     ->|  |  |    |<==      |",
+    "       +..+..+----|         |",
+    "     ->|  |  |    |<==      |",
+    "       +----+..+..+----+----+",
+    "    ==>|    |  |  |    |    |",
+    "       +----+..+..+----+----+",
+    "     =>|    |  |  |    |    |",
+    "       +----+..+..+----+----+",
+    "                                      ",
+    "      Adaptive Mesh Refinement      ",
+    "                 &                  ",
+    "      Discontinuous Galerking       ",
+    "######################################"
+  };
+
+  // Loop through the vector and print each line
+  for (const auto& line : logo) {
+      std::cout << line << std::endl;
+  }
+
   auto _mesh = mesh.lock();
 
   //Set vectors size
