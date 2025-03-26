@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
       sim.setNumericalSettings(p,T);
 
       //IO
-      int dtn_outplt = 10;
+      int dtn_outplt = -1;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);
