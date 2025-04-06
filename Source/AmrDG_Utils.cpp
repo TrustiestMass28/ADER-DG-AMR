@@ -172,48 +172,6 @@ void AmrDG::Conservation(int lev, int M, amrex::Vector<amrex::Vector<amrex::Real
   }    
 }
 
-void AmrDG::DEBUG_print_MFab() 
-{ 
-  //this function is used for debugging and prints out the specified MFab 
-  //and if wanted also multilevel data. Is jsut a cleaner option
-  //than copy paste the loop in the already dense code
-  //user should implement wathever they want
-  int q = 2;
-  int lev = 0;
-  int dim = 0;
 
-  //amrex::MultiFab& state_c = U_w[lev][q];
-  //amrex::MultiFab& state_c = H_w[lev][q];
-  //amrex::MultiFab& state_c = Fnum[lev][dim][q];
-  amrex::MultiFab& state_c = Fnumm_int[lev][dim][q];
-  //amrex::MultiFab& state_c = Fp[lev][dim][q];
-  //amrex::MultiFab& state_c = H_m[lev][dim][q];
-  //auto ba_tmp = Fnumm_int[lev][dim][q].boxArray();
-
-  for (MFIter mfi(state_c); mfi.isValid(); ++mfi){
-
-    //const amrex::Box& bx = mfi.tilebox();
-    const amrex::Box& bx = mfi.growntilebox();
-    
-    amrex::FArrayBox& fabc= state_c[mfi];
-    amrex::Array4<amrex::Real> const& uc = fabc.array();
-      
-    const auto lo = lbound(bx);
-    const auto hi = ubound(bx);   
-    
-    for(int k = lo.z; k <= hi.z; ++k){  
-      for(int i = lo.x; i <= hi.x; ++i){ 
-        for(int j = lo.y; j <= hi.y; ++j){
-          //for(int n = 0; n<qMpbd; ++n) {
-          for(int n = 0; n<Np; ++n) {
-            Print(3) <<i<<","<<j<<"  | w="<<n<<"| "<<uc(i,j,k,n)<<"\n";
-          }       
-        } 
-      }       
-    }
-  }
-  
-  Print() <<"        "<<"\n";
-}
 
 */

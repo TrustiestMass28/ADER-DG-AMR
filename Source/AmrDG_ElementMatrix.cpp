@@ -47,7 +47,7 @@ void AmrDG::set_ref_element_matrix()
     
     for(int i=0; i<basefunc->Np_st;++i){
       Mk_h_w[j][i]= refMat_phiphi(i,j,true,false)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
-                    -refMat_tphiDtphi(j,i));  
+                    -refMat_tphiDtphi(i,j));  
                     
       for(int d=0; d<AMREX_SPACEDIM; ++d){
         Sk_pred[d][j][i]   = refMat_tphitphi(i,j)*refMat_phiDphi(i,j,d);  
@@ -133,6 +133,8 @@ void AmrDG::set_ref_element_matrix()
     }
   }  
   
+  //Here, use qMp_st because ists quadrature of a double int_t int_dx integral
+  //therefore has D+1 pts
   for(int d=0; d<AMREX_SPACEDIM; ++d){
     for(int i=0; i<quadrule->qMp_st;++i){  
       w = 1.0;
@@ -141,9 +143,6 @@ void AmrDG::set_ref_element_matrix()
       }
       for(int j=0; j<basefunc->Np_s;++j){
         Sk_corr[d][j][i] = basefunc->dphi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st[i],d)*w;  
-        
-        //TODO: correct to use xi_ref_quad_st? shoudln be ebtter to use xi_ref_quad_s 
-        //      sicne loop over Np_s? is it also correct dphi_s or should it be dphi_st? BUG?
       }
     }
     for(int i=0; i<quadrule->qMp_st_bd;++i){ 
@@ -163,7 +162,6 @@ void AmrDG::set_ref_element_matrix()
     }
   }
    
-  //TODO: BUG? Also here, is it correct the type of quad points used? why _st and not _s?
   for(int i=0; i<quadrule->qMp_st;++i){  
     w = 1.0;
     for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
@@ -191,7 +189,7 @@ void AmrDG::set_ref_element_matrix()
 
 amrex::Real AmrDG::refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const 
 {
-  //computes M_{ji}=\int_{[-1,1]^D} \phi_i*\phi_j dx
+  //computes M_{ij}=M_{ji}=\int_{[-1,1]^D} \phi_i*\phi_j dx
   amrex::Real m= 1.0;
   if(is_predictor)
   {  
@@ -233,7 +231,7 @@ amrex::Real AmrDG::refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_n
 
 amrex::Real AmrDG::refMat_phiDphi(int i,int j, int dim) const 
 {
-  //computes Sd_{ji}=\int_{[-1,1]^D} \phi_i*d/dx_d \phi_j dx
+  //computes Sd_{ji}=\int_{[-1,1]^D} \phi_j*d/dx_d \phi_i dx
   
   //computes the integral using analytical form
   //amrex::Real m1= 1.0;
@@ -266,6 +264,7 @@ amrex::Real AmrDG::refMat_phiDphi(int i,int j, int dim) const
   amrex::Real w;
   amrex::Real sum=0.0;
   for(int q=0; q<(int)std::pow(N,AMREX_SPACEDIM);++q){  
+    //since is a spatial integral, use purely spatial quadrature points: quadrule->xi_ref_quad_s
     w = 1.0;
     amrex::Real phi = 1.0; 
     for  (int d = 0; d < AMREX_SPACEDIM; ++d){
@@ -311,6 +310,7 @@ amrex::Real AmrDG::refMat_tphitphi(int i,int j) const
 amrex::Real AmrDG::refMat_tphiDtphi(int i,int j) const 
 {
   //computes Sd_{ji}=\int_{[-1,1]^D} P_i(t)*d/dt P_j(t) dt
+  //component of Mh_ji
   
   ////computes the integral using analytical form
   //amrex::Real m2= 0.0;
@@ -336,7 +336,7 @@ amrex::Real AmrDG::refMat_tphiDtphi(int i,int j) const
   for(int q=0; q<N;++q){  
     w = 1.0;
     w*=2.0/(amrex::Real)std::pow((amrex::Real)std::assoc_legendre(N,1,quadrule->xi_ref_quad_t[q][0]),2.0);
-    tphiDtphi+=(basefunc->phi_t(j, quadrule->xi_ref_quad_t[q][0])*basefunc->dtphi_t(i, quadrule->xi_ref_quad_t[q][0])*w);  
+    tphiDtphi+=(basefunc->phi_t(i, quadrule->xi_ref_quad_t[q][0])*basefunc->dtphi_t(j, quadrule->xi_ref_quad_t[q][0])*w);  
   }
   return tphiDtphi;
   
@@ -364,11 +364,7 @@ Real AmrDG::coefficient_c(int k,int l) const
 
 /*
 
-Real AmrDG::RefMat_phiDphi(int i,int j, int dim) const
-{ 
 
-  //
-}
 
 
 */

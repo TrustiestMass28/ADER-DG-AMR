@@ -3,6 +3,51 @@
 
 using namespace amrex;
 
+void AmrDG::DEBUG_print_MFab() 
+{ 
+  //this function is used for debugging and prints out the specified MFab 
+  //and if wanted also multilevel data. Is jsut a cleaner option
+  //than copy paste the loop in the already dense code
+  //user should implement wathever they want
+  int q = 0;
+  int lev = 0;
+  int dim = 0;
+  int nproc = 0;
+  amrex::MultiFab& state_c = U_w[lev][q];
+  //amrex::MultiFab& state_c = H_w[lev][q];
+  //amrex::MultiFab& state_c = Fnum[lev][dim][q];
+  //amrex::MultiFab& state_c = Fnumm_int[lev][dim][q];
+  //amrex::MultiFab& state_c = Fp[lev][dim][q];
+  //amrex::MultiFab& state_c = H_m[lev][dim][q];
+  //auto ba_tmp = Fnumm_int[lev][dim][q].boxArray();
+
+  for (MFIter mfi(state_c); mfi.isValid(); ++mfi){
+
+    //const amrex::Box& bx = mfi.tilebox();
+    const amrex::Box& bx = mfi.growntilebox();
+    
+    amrex::FArrayBox& fabc= state_c[mfi];
+    amrex::Array4<amrex::Real> const& uc = fabc.array();
+      
+    const auto lo = lbound(bx);
+    const auto hi = ubound(bx);   
+    
+    for(int k = lo.z; k <= hi.z; ++k){  
+      for(int i = lo.x; i <= hi.x; ++i){ 
+        for(int j = lo.y; j <= hi.y; ++j){
+          //for(int n = 0; n<qMpbd; ++n) {
+          //for(int n = 0; n<basefunc->Np_s; ++n) {
+          for(int n = 0; n<2; ++n) {
+            Print(nproc) <<i<<","<<j<<"  | w="<<n<<"| "<<uc(i,j,k,n)<<"\n";
+          }       
+        } 
+      }       
+    }
+  }
+  
+  Print() <<"        "<<"\n";
+}
+
 void AmrDG::settings(int _p, amrex::Real _T) {
   p = _p;
   T = _T;
@@ -29,7 +74,7 @@ void AmrDG::init()
     "                                      ",
     "      Adaptive Mesh Refinement      ",
     "                 &                  ",
-    "      Discontinuous Galerking       ",
+    "       Discontinuous Galerkin       ",
     "######################################"
   };
 
@@ -81,6 +126,7 @@ void AmrDG::init()
   //it is always in same loop as other spatial component, i.e when looping over Np_st
 
   basefunc->set_idx_mapping_s();
+
   basefunc->set_idx_mapping_st();
 
   
@@ -304,7 +350,7 @@ void AmrDG::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
 
   //int qM = xi.size();
 
-  for(int m = 0; m<M ; ++m){
+  
     amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
     amrex::Vector<amrex::MultiFab *> state_u(Q); 
 
@@ -339,17 +385,23 @@ void AmrDG::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
         } 
         for(int q=0 ; q<Q; ++q){
           amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
-          {(u[q])(i,j,k,m)=0.0;}); 
+          {
+            for(int m = 0; m<M ; ++m){
+              (u[q])(i,j,k,m)=0.0;
+            }
+          }); 
 
           amrex::ParallelFor(bx,N,[&] (int i, int j, int k,int n) noexcept
           { 
-            (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_s(n,basefunc->basis_idx_s,xi[m])); 
+            for(int m = 0; m<M ; ++m){
+              (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_s(n,basefunc->basis_idx_s,xi[m])); 
+            }
           });  
                 
         }      
       }  
     }
-  }
+  
 }
 
 void AmrDG::get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
@@ -361,7 +413,7 @@ void AmrDG::get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
   //Can evalaute H_w (Np_st) at boundary using bd quadrature pts qM_st_bd or 
   //for the entire cell using qM_st
 
-  for(int m = 0; m<M ; ++m){
+  
     amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
     amrex::Vector<amrex::MultiFab *> state_u(Q); 
 
@@ -396,16 +448,22 @@ void AmrDG::get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
         } 
         for(int q=0 ; q<Q; ++q){
           amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
-          {(u[q])(i,j,k,m)=0.0;}); 
+          {
+            for(int m = 0; m<M ; ++m){
+              (u[q])(i,j,k,m)=0.0;
+            }
+          }); 
     
           amrex::ParallelFor(bx,N,[&] (int i, int j, int k,int n) noexcept
           { 
-            (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_st(n,basefunc->basis_idx_st,xi[m])); 
+            for(int m = 0; m<M ; ++m){
+              (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_st(n,basefunc->basis_idx_st,xi[m])); 
+            }
           });            
         }      
       }  
     }
-  }
+  
 }
 
 void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
@@ -450,6 +508,7 @@ void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr,
         {   
           if(n<basefunc->Np_s)
           {
+            //set first Np_s modes of H_w equalt to U_w
             amrex::Real tmp = (uw[q])(i,j,k,n); 
             (hw[q])(i,j,k,n)=tmp;  
           } 

@@ -124,7 +124,8 @@ amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
     //Royal Astronomical Society (2015) ,https://doi.org/10.1093/mnras/stv1859
     
     //shape center
-    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(5.0,5.0,5.0)};
+    //amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(5.0,5.0,5.0)};
+    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(9.0,9.0,9.0)};
     amrex::Real x_shape_ctr = ctr_ptr[0];
     amrex::Real y_shape_ctr = ctr_ptr[1];    
     
@@ -352,8 +353,6 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
                                         const amrex::Vector<amrex::Real>& xi,
                                         std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
 { 
-  auto _mesh = mesh.lock();
-
   amrex::Real f;
   amrex::Real prs=Pressure(u,i,j,k,m);
 
@@ -376,6 +375,8 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
     
     if(flag_angular_momentum)
     { 
+      auto _mesh = mesh.lock();
+
       //implementation of angular momentum conservation law
       const auto prob_lo = _mesh->get_Geom(lev).ProbLoArray();
       const auto prob_hi = _mesh->get_Geom(lev).ProbHiArray();
@@ -426,6 +427,7 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
     
     if(flag_angular_momentum)
     { 
+      auto _mesh = mesh.lock();
       //implementation of angular momentum conservation law
       
       const auto prob_lo = _mesh->get_Geom(lev).ProbLoArray();
