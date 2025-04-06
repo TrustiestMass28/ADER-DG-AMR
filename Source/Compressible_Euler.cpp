@@ -52,13 +52,13 @@ amrex::Real Compressible_Euler::pde_cfl_lambda(int d,int m,int i, int j, int k,
                               amrex::Vector<amrex::Array4<const amrex::Real>>* u) const
 {
   amrex::Real lambda;
-  amrex::Real c=Soundspeed(u,i, j, k, 0);
+  amrex::Real c=Soundspeed(u,i, j, k, m);
   if(d==0)
-  {lambda = std::abs(((*u)[1])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
+  {lambda = std::abs(((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m))+c;}
   else if(d==1)
-  {lambda = std::abs(((*u)[2])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
+  {lambda = std::abs(((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m))+c;}
   else if(d==2)
-  {lambda = std::abs(((*u)[3])(i,j,k,0)/((*u)[0])(i,j,k,0))+c;}
+  {lambda = std::abs(((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m))+c;}
   return lambda;
 } 
 

@@ -30,6 +30,7 @@ void AmrDG::BasisLegendre::set_idx_mapping_s()
     for(int jj=0; jj<=numme->p-ii;++jj){
       basis_idx_s[ctr][0] = ii;
       basis_idx_s[ctr][1] = jj;
+      
       if((ii==1 && jj==0) || (ii==0 && jj==1)){basis_idx_linear.push_back(ctr);} 
       ctr+=1;      
     }
@@ -53,12 +54,13 @@ void AmrDG::BasisLegendre::set_idx_mapping_s()
 
 //Generate index mapping between modified basis fuction idx and its componetns 
 //individual idxs
+//          basis_idx_st[ctr][NDIM] == basis_idx_t[ctr][0];    
 void AmrDG::BasisLegendre::set_idx_mapping_st()
 {
   #if (AMREX_SPACEDIM == 1)
   int ctr = 0;
-  for(int tt=0; tt<=numme->p;++tt){
-    for(int ii=0; ii<=numme->p-tt;++ii){
+  for(int ii=0; ii<=numme->p;++ii){
+    for(int tt=0; tt<=numme->p-ii;++tt){
       basis_idx_st[ctr][0] = ii;
       basis_idx_st[ctr][1] = tt;
 
@@ -68,24 +70,25 @@ void AmrDG::BasisLegendre::set_idx_mapping_st()
   }
   #elif (AMREX_SPACEDIM == 2)
   int ctr = 0;
-  for(int tt=0; tt<=numme->p;++tt){
-    for(int ii=0; ii<=numme->p-tt;++ii){ 
-      for(int jj=0; jj<=numme->p-tt-ii;++jj){      
+  for(int ii=0; ii<=numme->p;++ii){
+    for(int jj=0; jj<=numme->p-ii;++jj){ 
+      for(int tt=0; tt<=numme->p-ii-jj;++tt){      
         basis_idx_st[ctr][0] = ii;
         basis_idx_st[ctr][1] = jj;
         basis_idx_st[ctr][2] = tt;
 
         basis_idx_t[ctr][0] = tt;
+
         ctr+=1;
       }
     }
   }
   #elif (AMREX_SPACEDIM == 3)
   int ctr = 0;
-  for(int tt=0; tt<=numme->p;++tt){
-    for(int ii=0; ii<=numme->p-tt;++ii){
-      for(int jj=0; jj<=numme->p-tt-ii;++jj){
-        for(int kk=0; kk<=numme->p-tt-ii-jj;++kk){
+  for(int ii=0; ii<=numme->p;++ii){
+    for(int jj=0; jj<=numme->p-ii;++jj){
+      for(int kk=0; kk<=numme->p-ii-jj;++kk){
+        for(int tt=0; tt<=numme->p-ii-jj-kk;++tt){
           basis_idx_st[ctr][0] = ii;
           basis_idx_st[ctr][1] = jj;
           basis_idx_st[ctr][2] = kk;
@@ -125,6 +128,8 @@ amrex::Real AmrDG::BasisLegendre::dphi_s(int idx, const amrex::Vector<amrex::Vec
     else
     {
       phi*=(std::assoc_legendre(idx_map[idx][d],1,x[d]))/(std::sqrt(1.0-std::pow(x[d],2.0)));
+      //NB: analytically should have a "-" sign in front, becaue of implementation of assoc_legendre
+      //we dont need
     }   
   }
   return phi;
@@ -196,6 +201,7 @@ amrex::Real AmrDG::BasisLegendre::phi_st(int idx, const amrex::Vector<amrex::Vec
 {
   amrex::Real mphi = phi_s(idx,idx_map,x);
   mphi*=phi_t(idx,x[AMREX_SPACEDIM]);
+  //NB: expectes temproal coordinate to always be the last one (i,j,k,t)
   
   return mphi;
 }

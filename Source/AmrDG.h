@@ -282,6 +282,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     std::shared_ptr<BasisLegendre> basefunc;  //TODO:maybe doe snot need to be shared
 
     std::shared_ptr<QuadratureGaussLegendre> quadrule;  //TODO:maybe doe snot need to be shared
+
+    void DEBUG_print_MFab();
 };
 
 //templated methods
@@ -420,22 +422,30 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
       }
     }
     
-
     //update timestep idx and physical time
     n+=1;
     t+=Dt;
 
+    Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
+    Print()<<"------------------------------------------------"<<"\n";
     //Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
     //Print(*ofs)<<"------------------------------------------------"<<"\n";
     
     //plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
-    dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-10);
-    if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
+    dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);//use as tolerance dt_outplt, i.e same order of magnitude
+    Print() <<std::abs(std::fmod(t, dt_outplt))<<"\n";
+    if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
+    else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
 
     set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
-    
+
+    //DEBUG
+    if(n==1)
+    {
+      t=T+1;
+    }
   }
   
   L1Norm_DG_AMR(model_pde);
@@ -466,13 +476,16 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
   //iterate from finest level to coarsest
   for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     //apply BC
+  
     FillBoundaryCells(bdcond,&(U_w[l]), l, time);
+    //DEBUG_print_MFab();
     
     //set predictor initial guess
     set_predictor(&(U_w[l]), &(H_w[l]));  
     
     //iteratively find predictor
     int iter=0;    
+
     while(iter<p)
     { 
       if(model_pde->flag_source_term){
@@ -480,9 +493,9 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
         source(l,quadrule->qMp_st,model_pde,&(H[l]),&(S[l]),quadrule->xi_ref_quad_st);
       }  
       
+      get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
       for(int d = 0; d<AMREX_SPACEDIM; ++d){
         //if source ===True, this is duplicate, could avoid redoit
-        get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
         flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
       }   
       
@@ -498,8 +511,8 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
       source(l,quadrule->qMp_st,model_pde,&(H[l]),&(S[l]),quadrule->xi_ref_quad_st);
     }    
     
+    get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
     for(int d = 0; d<AMREX_SPACEDIM; ++d){
-      get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
       flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
 
       get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st,&(H_m[l][d]),&(H_w[l]),quadrule->xi_ref_quad_st_bdm[d]);
@@ -515,7 +528,8 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
     //AverageFineToCoarseFlux(l);
     
     //update corrector
-    update_U_w(l);    
+    update_U_w(l);  
+    
   }
   
 }
@@ -717,7 +731,7 @@ void AmrDG::flux(int lev,int d, int M,
       } 
       for(int q=0 ; q<Q; ++q){
         amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
-        {              
+        {    
           (flux[q])(i,j,k,m) = model_pde->pde_flux(lev,d,q,m,i, j, k, &u, xi[m], mesh);
         });
       }

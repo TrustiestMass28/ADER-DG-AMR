@@ -539,7 +539,6 @@ void Solver<NumericalMethodType>::FillBoundary(amrex::MultiFab* U_ptr,int lev)
 
     U_ptr->FillBoundary(geom_l.periodicity());
 }
-        //U_w[l][q].FillBoundary(geom[l].periodicity());
 
 template <typename NumericalMethodType>
 amrex::Real Solver<NumericalMethodType>::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev){

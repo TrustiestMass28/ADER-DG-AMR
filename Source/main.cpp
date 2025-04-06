@@ -23,18 +23,17 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 1;
+      int p  = 2;
       amrex::Real T = 10.0;
 
       sim.setNumericalSettings(p,T);
 
       //IO
-      int dtn_outplt = -1;
+      int dtn_outplt = 1;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);
 
-      
       //AMR
       int max_level = 0;            // number of levels = max_level + 1
       int dtn_regrid  = 1;          // try regrid every n timesteps
@@ -93,11 +92,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 32;
+            n_cell_x = 8;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 32;
+            n_cell_y = 8;
 
 
             L_z_lo   = 0.0;
