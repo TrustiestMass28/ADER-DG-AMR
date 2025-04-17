@@ -124,8 +124,7 @@ amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
     //Royal Astronomical Society (2015) ,https://doi.org/10.1093/mnras/stv1859
     
     //shape center
-    //amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(5.0,5.0,5.0)};
-    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(9.0,9.0,9.0)};
+    amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(5.0,5.0,5.0)};
     amrex::Real x_shape_ctr = ctr_ptr[0];
     amrex::Real y_shape_ctr = ctr_ptr[1];    
     

@@ -434,7 +434,6 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     //plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
     dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);//use as tolerance dt_outplt, i.e same order of magnitude
-    Print() <<std::abs(std::fmod(t, dt_outplt))<<"\n";
     if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
     else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
 
@@ -523,7 +522,6 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
 
       numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
     } 
-    //FillBoundary(&(U_w[l][q]),l);
 
     //average fine to coarse interface integral numerical flux for conservation
     //AverageFineToCoarseFlux(l);
