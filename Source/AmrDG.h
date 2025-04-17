@@ -121,7 +121,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                 amrex::Vector<amrex::MultiFab>* DF_ptr,
                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
   
-    void numflux_integral(int lev,int d,int M, int N,
+    void numflux(int lev,int d,int M, int N,
                           amrex::Vector<amrex::MultiFab>* U_ptr_m, 
                           amrex::Vector<amrex::MultiFab>* U_ptr_p,
                           amrex::Vector<amrex::MultiFab>* F_ptr_m,
@@ -129,7 +129,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                           amrex::Vector<amrex::MultiFab>* DF_ptr_m,
                           amrex::Vector<amrex::MultiFab>* DF_ptr_p);
 
-    amrex::Real numflux(int d, int m,int i, int j, int k, 
+    amrex::Real LLF_numflux(int d, int m,int i, int j, int k, 
                 amrex::Array4<const amrex::Real> up, 
                 amrex::Array4<const amrex::Real> um, 
                 amrex::Array4<const amrex::Real> fp,
@@ -442,10 +442,10 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     if(T-t<Dt){Dt = T-t;}    
 
     //DEBUG
-    if(n==1)
-    {
-      t=T+1;
-    }
+    //if(n==1)
+    //{
+    //  t=T+1;
+    //}
   }
   
   L1Norm_DG_AMR(model_pde);
@@ -521,9 +521,10 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
       get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st,&(H_p[l][d]),&(H_w[l]),quadrule->xi_ref_quad_st_bdp[d]);
       flux_bd(l,d,quadrule->qMp_st_bd,model_pde,&(H_p[l][d]),&(Fp[l][d]),&(DFp[l][d]),quadrule->xi_ref_quad_st_bdp[d]);
 
-      numflux_integral(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
+      numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
     } 
-      
+    //FillBoundary(&(U_w[l][q]),l);
+
     //average fine to coarse interface integral numerical flux for conservation
     //AverageFineToCoarseFlux(l);
     

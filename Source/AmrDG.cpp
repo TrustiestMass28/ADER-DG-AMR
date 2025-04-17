@@ -522,13 +522,13 @@ void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr,
   }  
 }
 
-void AmrDG::numflux_integral(int lev,int d,int M, int N,
-                            amrex::Vector<amrex::MultiFab>* U_ptr_m, 
-                            amrex::Vector<amrex::MultiFab>* U_ptr_p,
-                            amrex::Vector<amrex::MultiFab>* F_ptr_m,
-                            amrex::Vector<amrex::MultiFab>* F_ptr_p,
-                            amrex::Vector<amrex::MultiFab>* DF_ptr_m,
-                            amrex::Vector<amrex::MultiFab>* DF_ptr_p)
+void AmrDG::numflux(int lev,int d,int M, int N,
+                    amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+                    amrex::Vector<amrex::MultiFab>* U_ptr_p,
+                    amrex::Vector<amrex::MultiFab>* F_ptr_m,
+                    amrex::Vector<amrex::MultiFab>* F_ptr_p,
+                    amrex::Vector<amrex::MultiFab>* DF_ptr_m,
+                    amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
   auto _mesh = mesh.lock();
 
@@ -536,8 +536,6 @@ void AmrDG::numflux_integral(int lev,int d,int M, int N,
   
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
-  amrex::Vector<amrex::MultiFab *> state_fnumm_int(Q);
-  amrex::Vector<amrex::MultiFab *> state_fnump_int(Q);
   
   amrex::Vector<const amrex::MultiFab *> state_fm(Q);
   amrex::Vector<const amrex::MultiFab *> state_fp(Q); 
@@ -557,8 +555,6 @@ void AmrDG::numflux_integral(int lev,int d,int M, int N,
     state_dfp[q] = &((*DF_ptr_p)[q]);
 
     state_fnum[q] = &(Fnum[lev][d][q]); 
-    state_fnumm_int[q] = &(Fnumm_int[lev][d][q]); 
-    state_fnump_int[q] = &(Fnump_int[lev][d][q]); 
   }
     
 #ifdef AMREX_USE_OMP
@@ -593,11 +589,15 @@ void AmrDG::numflux_integral(int lev,int d,int M, int N,
     {
       //externally grown tilebox
       const amrex::Box& bx = mfi.tilebox();
+      //grow the box only in the high-end along dimension d
+      //can be done because each MPI process has up-to date values of outer and inner ghost cells
+      //which are used only to compute the fluxes that will impact the tilebox (ot grown) of that 
+      //process
+      amrex::Box ibx = amrex::growHi(bx, d, 1);
       
       for(int q=0 ; q<Q; ++q){
         fab_fnum[q]=&((*(state_fnum[q]))[mfi]);
-        fab_fnumm_int[q]=&((*(state_fnumm_int[q]))[mfi]);
-        fab_fnump_int[q]=&((*(state_fnump_int[q]))[mfi]);        
+  
         fab_fm[q] = state_fm[q]->fabPtr(mfi);
         fab_fp[q] = state_fp[q]->fabPtr(mfi);
         fab_dfm[q] = state_dfm[q]->fabPtr(mfi);
@@ -606,8 +606,7 @@ void AmrDG::numflux_integral(int lev,int d,int M, int N,
         fab_up[q] = state_up[q]->fabPtr(mfi);
         
         fnum[q]=(*(fab_fnum[q])).array();
-        fnumm_int[q]=(*(fab_fnumm_int[q])).array();
-        fnump_int[q]=(*(fab_fnump_int[q])).array(); 
+
         fm[q] = fab_fm[q]->const_array();
         fp[q] = fab_fp[q]->const_array();
         dfm[q] = fab_dfm[q]->const_array();
@@ -618,11 +617,17 @@ void AmrDG::numflux_integral(int lev,int d,int M, int N,
             
       for(int q=0 ; q<Q; ++q){
         //compute the pointwise evaluations of the numerical flux
-        amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
+        amrex::ParallelFor(ibx, M,[&] (int i, int j, int k, int m) noexcept
         {
           //check which indices it iterate across, i.e if last one is reachd
-          fnum[q](i,j,k,m) = numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
-        });          
+          fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
+        });   
+      }
+    }
+  }
+}
+
+        /*     
         amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
         {
             (fnumm_int[q])(i,j,k,n) = 0.0;
@@ -631,16 +636,13 @@ void AmrDG::numflux_integral(int lev,int d,int M, int N,
         for(int m = 0; m < M; ++m){ 
           amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
           {
+            //Mkbd == [Mkbd_d0_m,Mkbd_d0_p,Mkbd_d1_m,Mkbd_d1_p,Mkbd_d2_m,Mkbd_d2_p]
             (fnumm_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d][n][m])*dvol*Dt);
             (fnump_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d+1][n][m])*dvol*Dt);     
           });
-        }
-      }
-    }
-  }
-}
+        }*/  
 
-amrex::Real AmrDG::numflux(int d, int m,int i, int j, int k, 
+amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k, 
   amrex::Array4<const amrex::Real> up, 
   amrex::Array4<const amrex::Real> um, 
   amrex::Array4<const amrex::Real> fp,
@@ -757,7 +759,7 @@ void AmrDG::update_U_w(int lev)
             });
           }
           //
-          //Mbd_norm =  (dt/(amrex::Real)dx[d]);//TODO: check this. is it aprt of deprecated or not?
+          //Mbd_norm =  (dt/(amrex::Real)dx[d]);
           shift[d] = 1;           
           Mbd_norm =  1.0/vol;
           amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
