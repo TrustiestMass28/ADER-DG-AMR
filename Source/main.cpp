@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 2;
+      int p  = 3;
       amrex::Real T = 10.0;
 
       sim.setNumericalSettings(p,T);

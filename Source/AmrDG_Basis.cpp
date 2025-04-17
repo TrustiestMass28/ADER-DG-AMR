@@ -128,8 +128,8 @@ amrex::Real AmrDG::BasisLegendre::dphi_s(int idx, const amrex::Vector<amrex::Vec
     else
     {
       phi*=(std::assoc_legendre(idx_map[idx][d],1,x[d]))/(std::sqrt(1.0-std::pow(x[d],2.0)));
-      //NB: analytically should have a "-" sign in front, becaue of implementation of assoc_legendre
-      //we dont need
+      //NB: analytically should have a "-" sign in front, becaue of c++ implementation of assoc_legendre
+      //is absed on formula without the ((-1)^m) then I need to omit it from my derivative implementation
     }   
   }
   return phi;
