@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
       sim.setNumericalSettings(p,T);
 
       //IO
-      int dtn_outplt = 1;
+      int dtn_outplt = 10;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);
@@ -92,16 +92,16 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 8;
+            n_cell_x = 16;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 8;
+            n_cell_y = 16;
 
 
             L_z_lo   = 0.0;
             L_z_hi   = 0.0;
-            n_cell_z = 0;   
+            n_cell_z = 16;   
 
             coord = 0;//cartesian, don't touch
       }

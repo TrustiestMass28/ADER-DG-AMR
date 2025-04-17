@@ -530,10 +530,6 @@ void AmrDG::numflux(int lev,int d,int M, int N,
                     amrex::Vector<amrex::MultiFab>* DF_ptr_m,
                     amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
-  auto _mesh = mesh.lock();
-
-  amrex::Real dvol = _mesh->get_dvol(lev,d);
-  
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
   
@@ -626,21 +622,6 @@ void AmrDG::numflux(int lev,int d,int M, int N,
     }
   }
 }
-
-        /*     
-        amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
-        {
-            (fnumm_int[q])(i,j,k,n) = 0.0;
-            (fnump_int[q])(i,j,k,n) = 0.0;        
-        }); 
-        for(int m = 0; m < M; ++m){ 
-          amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
-          {
-            //Mkbd == [Mkbd_d0_m,Mkbd_d0_p,Mkbd_d1_m,Mkbd_d1_p,Mkbd_d2_m,Mkbd_d2_p]
-            (fnumm_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d][n][m])*dvol*Dt);
-            (fnump_int[q])(i,j,k,n)+=((fnum[q](i,j,k,m)*Mkbd[2*d+1][n][m])*dvol*Dt);     
-          });
-        }*/  
 
 amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k, 
   amrex::Array4<const amrex::Real> up, 
@@ -758,30 +739,17 @@ void AmrDG::update_U_w(int lev)
               rhs(i,j,k,n)+=S_norm*(Sk_corr[d][n][m]*((f)[d])(i,j,k,m));
             });
           }
-          //
-          //Mbd_norm =  (dt/(amrex::Real)dx[d]);
-          shift[d] = 1;           
-          Mbd_norm =  1.0/vol;
-          amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
-          {
-            rhs(i,j,k,n)-=(Mbd_norm*((fnump_int)[d])(i+shift[0],j+shift[1],k+shift[2],n));
-            rhs(i,j,k,n)-=(-Mbd_norm*((fnumm_int)[d])(i,j,k,n));          
-          });          
-          shift[d] = 0;    
-
-          //Deprecated, ths step now its done already in the numflux_integral function
-          /*
+          
+          Mbd_norm =  (Dt/(amrex::Real)dx[d]);
           shift[d] = 1;
-          Mbd_norm =  (dt/(amrex::Real)dx[d]);
-          for  (int m = 0; m < qMpbd; ++m){ 
-            amrex::ParallelFor(bx,Np,[&] (int i, int j, int k, int n) noexcept
+          for  (int m = 0; m < quadrule->qMp_st_bd; ++m){ 
+            amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
             {
-              rhs(i,j,k,n)-=(Mbd_norm*(Mkbd[2*d+1][n][m]*((fnum)[d])(i+shift[0],j+shift[1],
-                      k+shift[2],m)-Mkbd[2*d][n][m]*((fnum)[d])(i,j,k,m)));   
+              rhs(i,j,k,n)-=(Mbd_norm*(Mkbd[2*d+1][n][m]*((fnum)[d])(i+shift[0],j+shift[1], k+shift[2],m)
+                                      -Mkbd[2*d][n][m]*((fnum)[d])(i,j,k,m)));   
             });
           }
           shift[d] = 0;
-          */
         }
 
         if(flag_source_term)
