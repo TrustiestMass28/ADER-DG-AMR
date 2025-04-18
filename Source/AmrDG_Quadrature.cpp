@@ -191,7 +191,7 @@ void AmrDG::QuadratureGaussLegendre::NewtonRhapson(amrex::Real& x, int n)
 {
   int niter = 10000000;
     
-  amrex::Real TOL= 1e-30;
+  amrex::Real TOL= 1e-15;
   amrex::Real error;
   amrex::Real x_new = 0.0;
 

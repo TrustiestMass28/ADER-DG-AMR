@@ -174,8 +174,12 @@ void AmrDG::init()
   Mk_corr.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(basefunc->Np_s));
   Sk_corr.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
                 amrex::Vector<amrex::Real>(quadrule->qMp_st)));
-  Mkbd.resize((int)(2*AMREX_SPACEDIM), amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
+  Mkbdm.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
                 amrex::Vector<amrex::Real>(quadrule->qMp_st_bd)));
+
+  Mkbdp.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
+    amrex::Vector<amrex::Real>(quadrule->qMp_st_bd)));
+
   Mk_corr_src.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(quadrule->qMp_st));  
 
   //Initialize generalized Element matrices for ADER predictor
@@ -221,7 +225,7 @@ amrex::Real AmrDG::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcom
     sum+= quadmat[dcomp +comp][m]*bc[m];
   }
 
-  sum /=refMat_phiphi(dcomp + comp,dcomp + comp, false, false);
+  sum /=refMat_phiphi(dcomp + comp,basefunc->basis_idx_s,dcomp + comp,basefunc->basis_idx_s);
 
   return sum;
 }
@@ -753,8 +757,8 @@ void AmrDG::update_U_w(int lev)
           for  (int m = 0; m < quadrule->qMp_st_bd; ++m){ 
             amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
             {
-              rhs(i,j,k,n)-=(Mbd_norm*(Mkbd[2*d+1][n][m]*((fnum)[d])(i+shift[0],j+shift[1], k+shift[2],m)
-                                      -Mkbd[2*d][n][m]*((fnum)[d])(i,j,k,m)));   
+              rhs(i,j,k,n)-=(Mbd_norm*(Mkbdp[d][n][m]*((fnum)[d])(i+shift[0],j+shift[1], k+shift[2],m)
+                                      -Mkbdm[d][n][m]*((fnum)[d])(i,j,k,m)));   
             });
           }
           shift[d] = 0;

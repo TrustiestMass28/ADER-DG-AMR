@@ -46,17 +46,17 @@ void AmrDG::set_ref_element_matrix()
   for(int j=0; j<basefunc->Np_st;++j){
     
     for(int i=0; i<basefunc->Np_st;++i){
-      Mk_h_w[j][i]= refMat_phiphi(i,j,true,false)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
-                    -refMat_tphiDtphi(i,j));  
+      Mk_h_w[j][i]= refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
+                    -refMat_tphiDtphi(j,i));  
                     
       for(int d=0; d<AMREX_SPACEDIM; ++d){
-        Sk_pred[d][j][i]   = refMat_tphitphi(i,j)*refMat_phiDphi(i,j,d);  
+        Sk_pred[d][j][i]   = refMat_tphitphi(j,i)*refMat_phiDphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st,d);  
       }      
-      Mk_pred_src[j][i] =refMat_tphitphi(i,j)*refMat_phiphi(i,j,true,false);
+      Mk_pred_src[j][i] =refMat_tphitphi(j,i)*refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st);
     }
     
     for(int i=0; i<basefunc->Np_s;++i){
-      Mk_pred[j][i] = basefunc->phi_t(j,-1.0)*refMat_phiphi(i,j,true,true);
+      Mk_pred[j][i] = basefunc->phi_t(j,-1.0)*refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_s);
     }
   }
 
@@ -66,55 +66,55 @@ void AmrDG::set_ref_element_matrix()
   Eigen::MatrixXd Sk_predVinv_eigen(basefunc->Np_st,quadrule->qMp_st);
   Eigen::MatrixXd Mk_sVinv_eigen(basefunc->Np_st,quadrule->qMp_st);
   
-  for (int i = 0; i < basefunc->Np_st; ++i) {
-    for (int j = 0; j < quadrule->qMp_st; ++j){
-      Vinv_eigen(i, j) = Vinv[i][j];
+  for (int n = 0; n < basefunc->Np_st; ++n) {
+    for (int m = 0; m < quadrule->qMp_st; ++m){
+      Vinv_eigen(n, m) = Vinv[n][m];
     }
   }
 
-  for(int i=0; i<basefunc->Np_st;++i){
-    for(int j=0; j<basefunc->Np_st;++j){
-      Mk_s_eigen(i,j)=Mk_pred_src[i][j]; 
+  for(int n=0; n<basefunc->Np_st;++n){
+    for(int m=0; m<basefunc->Np_st;++m){
+      Mk_s_eigen(n,m)=Mk_pred_src[n][m]; 
     }
   }
   
   Mk_sVinv_eigen = Mk_s_eigen*Vinv_eigen;
   
-  for (int i = 0; i < basefunc->Np_st; ++i) {
-    for (int j = 0; j < quadrule->qMp_st; ++j) {
-      Mk_pred_srcVinv[i][j] = Mk_sVinv_eigen(i, j);  
+  for (int n = 0; n < basefunc->Np_st; ++n) {
+    for (int m = 0; m < quadrule->qMp_st; ++m) {
+      Mk_pred_srcVinv[n][m] = Mk_sVinv_eigen(n, m);  
     }
   }
 
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    for(int i=0; i<basefunc->Np_st;++i){
-      for(int j=0; j<basefunc->Np_st;++j){
-        Sk_pred_eigen(i,j)=Sk_pred[d][i][j];        
+    for(int n=0; n<basefunc->Np_st;++n){
+      for(int m=0; m<basefunc->Np_st;++m){
+        Sk_pred_eigen(n,m)=Sk_pred[d][n][m];        
       }
     }
     
     Sk_predVinv_eigen = Sk_pred_eigen*Vinv_eigen;
     
-    for (int i = 0; i < basefunc->Np_st; ++i) {
-      for (int j = 0; j < quadrule->qMp_st; ++j) {
-        Sk_predVinv[d][i][j] = Sk_predVinv_eigen(i, j);  
+    for (int n = 0; n < basefunc->Np_st; ++n) {
+      for (int m = 0; m < quadrule->qMp_st; ++m) {
+        Sk_predVinv[d][n][m] = Sk_predVinv_eigen(n, m);  
       }
     }    
   }
 
   Eigen::MatrixXd Mk_h_w_eigen(basefunc->Np_st, basefunc->Np_st);
-  for (int i = 0; i < basefunc->Np_st; ++i) {
-    for (int j = 0; j < basefunc->Np_st; ++j) {
-      Mk_h_w_eigen(i, j) = Mk_h_w[i][j];
+  for (int n = 0; n < basefunc->Np_st; ++n) {
+    for (int m = 0; m < basefunc->Np_st; ++m) {
+      Mk_h_w_eigen(n, m) = Mk_h_w[n][m];
     }
   }
     
   Eigen::MatrixXd Mk_h_w_inv_eigen(basefunc->Np_st, basefunc->Np_st);
   Mk_h_w_inv_eigen = Mk_h_w_eigen.inverse(); 
  
-  for (int i = 0; i < basefunc->Np_st; ++i) {
-    for (int j = 0; j < basefunc->Np_st; ++j) {
-      Mk_h_w_inv[i][j] = Mk_h_w_inv_eigen(i, j);
+  for (int n = 0; n < basefunc->Np_st; ++n) {
+    for (int m = 0; m < basefunc->Np_st; ++m) {
+      Mk_h_w_inv[n][m] = Mk_h_w_inv_eigen(n, m);
     }
   }
   
@@ -129,7 +129,7 @@ void AmrDG::set_ref_element_matrix()
 
   for(int j=0; j<basefunc->Np_s;++j){
     for(int i=0; i<basefunc->Np_s;++i){
-      Mk_corr[j][i] = refMat_phiphi(i,j,false,false);
+      Mk_corr[j][i] = refMat_phiphi(j,basefunc->basis_idx_s,i,basefunc->basis_idx_s);
     }
   }  
   
@@ -156,8 +156,8 @@ void AmrDG::set_ref_element_matrix()
         }
       }
       for(int j=0; j<basefunc->Np_s;++j){
-        Mkbd[2*d][j][i]   = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdm[d][i])*wm;
-        Mkbd[2*d+1][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdp[d][i])*wp;
+        Mkbdm[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdm[d][i])*wm;
+        Mkbdp[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdp[d][i])*wp;
       } 
     }
   }
@@ -184,52 +184,25 @@ void AmrDG::set_ref_element_matrix()
       quadmat[j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s[i])*w;
     }
   }  
-
 }
 
-amrex::Real AmrDG::refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const 
+amrex::Real AmrDG::refMat_phiphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j, 
+                                 int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i) const 
 {
-  //computes M_{ij}=M_{ji}=\int_{[-1,1]^D} \phi_i*\phi_j dx
+  //computes M_{ji}=M_{ij}=\int_{[-1,1]^D} \phi_i*\phi_j dx
+
   amrex::Real m= 1.0;
-  if(is_predictor)
-  {  
-    if(is_mixed_nmodes)
-    {
-      //compute mass matrix for integral of spatial only basis functions 
-      //(which are a tensor product of 1d Legendre polynomials)
-      //utilizes indexing of modified basis function and of classic basis function, 
-      //used in predictor U_w term
-      for(int d=0; d<AMREX_SPACEDIM; ++d){
-        m*=(amrex::Real)kroneckerDelta(basefunc->basis_idx_s[i][d],basefunc->basis_idx_st[j][d])
-            *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_st[j][d]+1.0));
-      }     
-    }
-    else
-    {
-      //compute mass matrix for integral of spatial only basis functions 
-      //(which are a tensor product of 1d Legendre polynomials)
-      //utilizes indexing of modified basis function
-      for(int d=0; d<AMREX_SPACEDIM; ++d){
-        m*=(amrex::Real)kroneckerDelta(basefunc->basis_idx_st[i][d],basefunc->basis_idx_st[j][d])
-            *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_st[j][d]+1.0));
-      } 
-    }
-  }
-  else
-  {
-    //compute mass matrix for integral of spatial only basis functions
-    //(which are a tensor product of 1d Legendre polynomials)
-    //utilizes indexing of classic basis fucntion 
-    for(int d=0; d<AMREX_SPACEDIM; ++d){
-      m*=(amrex::Real)kroneckerDelta(basefunc->basis_idx_s[i][d],basefunc->basis_idx_s[j][d])
-          *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_s[j][d]+1.0));
-    }
-  }
+  for(int d=0; d<AMREX_SPACEDIM; ++d){
+    m*=(amrex::Real)kroneckerDelta(idx_map_i[i][d],idx_map_j[j][d])
+        *(2.0/(2.0*(amrex::Real)idx_map_j[j][d]+1.0));
+  }    
 
   return m;
 }
 
-amrex::Real AmrDG::refMat_phiDphi(int i,int j, int dim) const 
+amrex::Real AmrDG::refMat_phiDphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j,
+                                  int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i,
+                                  int dim) const 
 {
   //computes Sd_{ji}=\int_{[-1,1]^D} \phi_j*d/dx_d \phi_i dx
   
@@ -258,7 +231,6 @@ amrex::Real AmrDG::refMat_phiDphi(int i,int j, int dim) const
   
   //return m1*(m2+m3);
   
-  //
   //computes the integral using gaussian quadrature
   int N = quadrule->qMp_1d;
   amrex::Real w;
@@ -268,18 +240,18 @@ amrex::Real AmrDG::refMat_phiDphi(int i,int j, int dim) const
     w = 1.0;
     amrex::Real phi = 1.0; 
     for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-      phi*=std::legendre(basefunc->basis_idx_st[j][d], quadrule->xi_ref_quad_s[q][d]);
+      phi*=std::legendre(idx_map_j[j][d], quadrule->xi_ref_quad_s[q][d]);
     }
     
     amrex::Real dphi = 1.0;
     for  (int a = 0; a < AMREX_SPACEDIM; ++a){
       if(a!=dim)
       {
-        dphi*=std::legendre(basefunc->basis_idx_st[i][a], quadrule->xi_ref_quad_s[q][a]);
+        dphi*=std::legendre(idx_map_i[i][a], quadrule->xi_ref_quad_s[q][a]);
       }
       else
       {
-        dphi*=(std::assoc_legendre(basefunc->basis_idx_st[i][dim],1,quadrule->xi_ref_quad_s[q][dim]))
+        dphi*=(std::assoc_legendre(idx_map_i[i][dim],1,quadrule->xi_ref_quad_s[q][dim]))
             /(std::sqrt(1.0-std::pow(quadrule->xi_ref_quad_s[q][dim],2.0)));
       }   
     }
@@ -293,7 +265,7 @@ amrex::Real AmrDG::refMat_phiDphi(int i,int j, int dim) const
   return sum; 
 }
 
-amrex::Real AmrDG::refMat_tphitphi(int i,int j) const 
+amrex::Real AmrDG::refMat_tphitphi(int j,int i) const 
 {
   //computes t_M_{ji}=\int_{[-1,1]^D} P_i*P_j dx
   //compute mass matrix for integral of temporal only basis functions
@@ -302,12 +274,14 @@ amrex::Real AmrDG::refMat_tphitphi(int i,int j) const
   //basis function can be implemented here
   //index[-1] indicates time coordinate
   
-  return (amrex::Real)kroneckerDelta(basefunc->basis_idx_t[i][AMREX_SPACEDIM],
-    basefunc->basis_idx_t[j][AMREX_SPACEDIM])
-    *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_t[j][AMREX_SPACEDIM]+1.0));
+  //NB:basis_idx_st[ctr][AMREX_SPACEDIM] == basis_idx_t[ctr][0];  
+
+  return (amrex::Real)kroneckerDelta(basefunc->basis_idx_t[i][0],
+          basefunc->basis_idx_t[j][0])
+          *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_t[j][0]+1.0));
 }
 
-amrex::Real AmrDG::refMat_tphiDtphi(int i,int j) const 
+amrex::Real AmrDG::refMat_tphiDtphi(int j,int i) const 
 {
   //computes Sd_{ji}=\int_{[-1,1]^D} P_i(t)*d/dt P_j(t) dt
   //component of Mh_ji
@@ -361,10 +335,3 @@ Real AmrDG::coefficient_c(int k,int l) const
     return (2.0*(amrex::Real)k+1.0)*(1.0+std::pow(-1.0,k+l));
   }  
 }
-
-/*
-
-
-
-
-*/
