@@ -543,6 +543,8 @@ amrex::Real Compressible_Euler::pde_source(int lev, int q, int m, int i, int j, 
   return s;
 }
 
+
+
 template <typename T>
 amrex::Real Compressible_Euler::Pressure(amrex::Vector<amrex::Array4<T>>* u, 
                                         int i, int j, int k,int m) const
@@ -553,7 +555,13 @@ amrex::Real Compressible_Euler::Pressure(amrex::Vector<amrex::Array4<T>>* u,
     prs+=(std::pow(((*u)[d+1])(i,j,k,m),2.0)/((*u)[0])(i,j,k,m));
   }
   prs*=(-0.5);
+  
+#if(AMREX_SPACEDIM ==2) 
   prs+=((*u)[3])(i,j,k,m);
+#elif(AMREX_SPACEDIM ==3)
+  prs+=((*u)[4])(i,j,k,m);
+#endif
+  
   prs*=(gamma_adiab-1.0);
   return prs;
 }
