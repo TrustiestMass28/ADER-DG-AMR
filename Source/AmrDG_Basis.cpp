@@ -5,6 +5,10 @@ using namespace amrex;
 
 void AmrDG::BasisLegendre::set_number_basis()
 {
+  // Np_s: number of spatial basis functions (degree p, d dimensions)
+  // Np_st: number of space-time basis functions (degree p, d+1 dimensions)
+  // Np_t: number of purely temporal basis functions (optional for ADER)
+
   Np_s = (int)((amrex::Real)factorial(numme->p+AMREX_SPACEDIM)
         /((amrex::Real)factorial(numme->p)*(amrex::Real)factorial(AMREX_SPACEDIM)));
 
@@ -50,11 +54,14 @@ void AmrDG::BasisLegendre::set_idx_mapping_s()
     }
   }
   #endif
+
+  AMREX_ASSERT(ctr == basefunc->Np_s);
 }
 
 //Generate index mapping between modified basis fuction idx and its componetns 
 //individual idxs
 //          basis_idx_st[ctr][NDIM] == basis_idx_t[ctr][0];    
+// Last entry of basis_idx_st is the time index, copied into basis_idx_t for quick access
 void AmrDG::BasisLegendre::set_idx_mapping_st()
 {
   #if (AMREX_SPACEDIM == 1)
@@ -101,13 +108,20 @@ void AmrDG::BasisLegendre::set_idx_mapping_st()
     }
   }
   #endif 
+
+  AMREX_ASSERT(ctr == basefunc->Np_st);
 }
 
-//TODO:: pass pointers to idx_map and x or them directly?
 //spatial basis function, evaluated at x\in [-1,1]^{D}
 amrex::Real AmrDG::BasisLegendre::phi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map, 
                                         const amrex::Vector<amrex::Real>& x) const 
 {
+  AMREX_ASSERT(x.size() == AMREX_SPACEDIM);
+  for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+    AMREX_ASSERT(x[d] >= -1.0 && x[d] <= 1.0);
+  }
+  AMREX_ASSERT(idx < idx_map.size());
+
   amrex::Real phi = 1.0;
   for  (int d = 0; d < AMREX_SPACEDIM; ++d){
     phi*=std::legendre(idx_map[idx][d], x[d]);
@@ -119,6 +133,13 @@ amrex::Real AmrDG::BasisLegendre::phi_s(int idx, const amrex::Vector<amrex::Vect
 amrex::Real AmrDG::BasisLegendre::dphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
                           const amrex::Vector<amrex::Real>& x, int d) const 
 {
+  AMREX_ASSERT(x.size() == AMREX_SPACEDIM);
+  for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+    AMREX_ASSERT(x[d] >= -1.0 && x[d] <= 1.0);
+  }
+  AMREX_ASSERT(d >= 0 && d < AMREX_SPACEDIM);
+  AMREX_ASSERT(idx < idx_map.size());
+
   amrex::Real phi = 1.0;
   for  (int a = 0; a < AMREX_SPACEDIM; ++a){
     if(a!=d)
@@ -145,6 +166,12 @@ amrex::Real AmrDG::BasisLegendre::ddphi_s(int idx, const amrex::Vector<amrex::Ve
   //NB: in C++ std library, when using std::assoc_legendre, the (-1)^{-m} term 
   //is not considered, therefore should not be included 
   //in reverse computations
+
+  AMREX_ASSERT(x.size() == AMREX_SPACEDIM);
+  AMREX_ASSERT(d1 >= 0 && d1 < AMREX_SPACEDIM);
+  AMREX_ASSERT(d2 >= 0 && d2 < AMREX_SPACEDIM);
+  AMREX_ASSERT(idx < idx_map.size());
+
   amrex::Real phi = 1.0;
   for  (int a = 0; a < AMREX_SPACEDIM; ++a){
   
@@ -184,12 +211,18 @@ amrex::Real AmrDG::BasisLegendre::ddphi_s(int idx, const amrex::Vector<amrex::Ve
 //temporal basis function
 amrex::Real AmrDG::BasisLegendre::phi_t(int tidx, amrex::Real tau) const 
 {
+  AMREX_ASSERT(tau >= -1.0 && tau <= 1.0);
+  AMREX_ASSERT(tidx >= 0 && tidx < basis_idx_t.size());
+
   return std::legendre(basis_idx_t[tidx][0], tau); 
 }
 
 //derivative of temporal basis function
 amrex::Real AmrDG::BasisLegendre::dtphi_t(int tidx, amrex::Real tau) const
 {
+  AMREX_ASSERT(tau >= -1.0 && tau <= 1.0);
+  AMREX_ASSERT(tidx >= 0 && tidx < basis_idx_t.size());
+
   return (std::assoc_legendre(basis_idx_t[tidx][0],1,tau))
           /(std::sqrt(1.0-std::pow(tau,2))); 
 }

@@ -198,13 +198,16 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     //Element Matrix and Quadrature Matrix
     void set_ref_element_matrix();
 
-    amrex::Real refMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
+    amrex::Real refMat_phiphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j, 
+                              int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i) const ;
 
-    amrex::Real refMat_phiDphi(int i,int j, int dim) const;   
+    amrex::Real refMat_phiDphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j,
+                              int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i,
+                              int dim) const ;
     
-    amrex::Real refMat_tphitphi(int i,int j) const;
+    amrex::Real refMat_tphitphi(int j,int i) const;
     
-    amrex::Real refMat_tphiDtphi(int i,int j) const;
+    amrex::Real refMat_tphiDtphi(int j,int i) const;
       
     amrex::Real coefficient_c(int k,int l) const;     
 
@@ -246,7 +249,9 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_corr;
 
     //Mass boundary element matrix for ADER-DG corrector and predictor
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbd;
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbdm;
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbdp;
+
 
     //Mass element matrix for source term (corrector step)
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr_src;
@@ -343,7 +348,7 @@ amrex::Real AmrDG::set_initial_condition_U_w(std::shared_ptr<ModelEquation<Equat
     sum+= set_initial_condition_U(model_pde,lev,q,i,j,k,quadrule->xi_ref_quad_s[m])*quadmat[n][m];   
   }
   
-  return (sum/(refMat_phiphi(n,n, false, false)));  
+  return (sum/(refMat_phiphi(n,basefunc->basis_idx_s,n,basefunc->basis_idx_s)));  
 }
 
 template <typename EquationType> 
