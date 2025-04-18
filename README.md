@@ -1,17 +1,16 @@
-# -------------------------
-CURRENTLY UNDER MAINTENANCE.
-I'M RESTRUCTURING THE CODE 
-CURRENTLY WORKS ONLY ON SINGLE LAYER
-AMR PART IS GETTING REWORKED
-# -------------------------
+# --------------------------------------------------
+CURRENTLY UNDER MAINTENANCE, I'M RESTRUCTURING THE CODE.
+
+CURRENTLY WORKS ONLY ON SINGLE LAYER, THE AMR PART IS GETTING REWORKED.
+# --------------------------------------------------
 
 # ADER-DG-AMR  
 
 This thesis introduces a block-structured Adaptive Mesh Refinement (AMR) software framework designed for solving general multi-dimensional systems of hyperbolic partial differential equations (PDEs) with high accuracy in both space and time. The framework employs a modal Discontinuous Galerkin (DG) method combined with Arbitrary Derivative (ADER) time integration, enabling efficient and precise numerical solutions.
 
-The implementation features a numerical solver based on the ADER-DG method with AMR, allowing dynamic mesh refinement to capture fine-scale features while optimizing computational efficiency. Additionally, the provided base classes offer flexibility for extending the framework to other numerical methods, such as Finite Volume Methods (FVM) and Finite Difference Methods (FDM).
+The implementation features a numerical solver based on the ADER-DG method with AMR, allowing dynamic mesh refinement to capture fine-scale features while optimizing computational efficiency. Additionally, the provided base classes offer flexibility for extending the framework to other numerical methods, such as Finite Volume Methods (FVM) and Finite Difference Methods (FDM). Most of the classes make use of the curiously recurring template pattern (CRTP) and compile time polymorphism.
 
-For efficient mesh operations and distributed data management, the framework leverages AMReX, a high-performance library tailored for massively parallel, block-structured AMR applications.
+For efficient mesh operations and distributed data management, the framework leverages AMReX, a high-performance library tailored for massively parallel, block-structured AMR applications. Currently it supports MPI,OMP and MPI+OMP computations.
 
 ---
 
