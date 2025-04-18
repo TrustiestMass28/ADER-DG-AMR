@@ -470,10 +470,8 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
   //iterate from finest level to coarsest
   for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     //apply BC
-  
     FillBoundaryCells(bdcond,&(U_w[l]), l, time);
-    //DEBUG_print_MFab();
-    
+
     //set predictor initial guess
     set_predictor(&(U_w[l]), &(H_w[l]));  
     
@@ -540,25 +538,25 @@ void AmrDG::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
   for (int l = 0; l <= _mesh->get_finest_lev(); ++l)
   {
     const auto dx = _mesh->get_dx(l);
+
     //compute average mesh size
     amrex::Real dx_avg = 0.0;
     for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      dx_avg+=((amrex::Real)dx[d]/(amrex::Real)AMREX_SPACEDIM);
+      dx_avg+=(amrex::Real)dx[d];
     }
-      
-    //evaluate modes at cell center pt
-    //1 quadrature poitn to use for evaluation
-    get_U_from_U_w(1, basefunc->Np_s,&(U_center[l]),&(U_w[l]), quadrule->xi_ref_quad_s_center);
-           
-    //vector to accumulate all the min dt computed by this rank
-    amrex::Vector<amrex::Real> rank_min_dt;
+    dx_avg /= (amrex::Real)AMREX_SPACEDIM;
+
+    //get solution evaluated at cells
+    get_U_from_U_w(quadrule->qMp_s, basefunc->Np_s,&(U[l]),&(U_w[l]), quadrule->xi_ref_quad_s);
 
     amrex::Vector<const amrex::MultiFab *> state_uc(Q);
-
     for(int q=0; q<Q; ++q){
-      state_uc[q]= &(U_center[l][q]);
+      state_uc[q]= &(U[l][q]);
     } 
     
+    //vector to accumulate all the min dt of all cells of given layer computed by this rank
+    amrex::Vector<amrex::Real> rank_min_dt;
+
 #ifdef AMREX_USE_OMP
 #pragma omp parallel 
 #endif
@@ -566,28 +564,28 @@ void AmrDG::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
       amrex::Vector<const amrex::FArrayBox *> fab_uc(Q);
       amrex::Vector<amrex::Array4<const amrex::Real>> uc(Q);
     
-      #ifdef AMREX_USE_OMP  
-      for (MFIter mfi(U_center[l][0],MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-      #else
-      for (MFIter mfi(U_center[l][0],true); mfi.isValid(); ++mfi)
-      #endif 
+    #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(U[l][0],MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
+    #else
+      for (MFIter mfi(U[l][0],true); mfi.isValid(); ++mfi)
+    #endif 
       {
         const amrex::Box& bx = mfi.tilebox();
         
         for(int q=0; q<Q; ++q){
           fab_uc[q] = state_uc[q]->fabPtr(mfi);
           uc[q] =fab_uc[q]->const_array();
-        }              
+        }     
+
         amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
         {
           //compute max signal velocity lambda_max(for scalar case is derivative 
           //of flux, for system case is eigenvalue of flux jacobian
           amrex::Real lambda_max = 0.0;
-
           amrex::Vector<amrex::Real> lambda_d(AMREX_SPACEDIM);
           for(int d = 0; d < AMREX_SPACEDIM; ++d){  
-            //compute at cell center so m==0
-            lambda_d.push_back(model_pde->pde_cfl_lambda(d,0,i,j,k,&uc));
+            //compute use cell avg so m==0
+            lambda_d[d]= model_pde->pde_cfl_lambda(d,0,i,j,k,&uc);
           }
           //find max signal speed across the dimensions
           auto lambda_max_  = std::max_element(lambda_d.begin(),lambda_d.end());
@@ -596,14 +594,18 @@ void AmrDG::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
           //general CFL formulation
           amrex::Real CFL = (1.0/(2.0*(amrex::Real)p+1.0))*(1.0/(amrex::Real)AMREX_SPACEDIM);
           amrex::Real dt_cfl = CFL*(dx_avg/lambda_max);
-                        
+        
+        #ifdef AMREX_USE_OMP
           #pragma omp critical
+        #endif
           {
-            rank_min_dt.push_back(0.6*dt_cfl);
+            rank_min_dt.push_back(dt_cfl);
           }
         });         
       }
     }   
+
+    //Find min dt across all cells of layer l
     amrex::Real rank_lev_dt_min= 1.0;
     if (!rank_min_dt.empty()) {
       //compute the min in this rank for this level   
@@ -613,10 +615,15 @@ void AmrDG::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
         rank_lev_dt_min = static_cast<amrex::Real>(*rank_lev_dt_min_);
       }
     }
+  
+
+    //Find min for across MPI processes
+    ParallelDescriptor::Barrier();
     ParallelDescriptor::ReduceRealMin(rank_lev_dt_min);//, dt_tmp.size());
     dt_tmp[l] = rank_lev_dt_min;
-    
   }
+
+  //Find min dt across all layers
   amrex::Real dt_min = 1.0;
   if (!dt_tmp.empty()) {
     //min across levels
@@ -626,9 +633,10 @@ void AmrDG::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
       dt_min = (amrex::Real)(*dt_min_);//static_cast<amrex::Real>(*dt_min_); 
     }
   }
+
+  ParallelDescriptor::Barrier();
   ParallelDescriptor::ReduceRealMin(dt_min);
   Dt = dt_min; 
-  
 }
 
 template <typename EquationType>

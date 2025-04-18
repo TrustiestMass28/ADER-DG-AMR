@@ -595,6 +595,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       //which are used only to compute the fluxes that will impact the tilebox (ot grown) of that 
       //process
       amrex::Box ibx = amrex::growHi(bx, d, 1);
+      //
       
       for(int q=0 ; q<Q; ++q){
         fab_fnum[q]=&((*(state_fnum[q]))[mfi]);
@@ -643,6 +644,8 @@ amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k,
   //  L | R      
   //    |
   //---------
+  //uL(idx) == up(idx-1)
+  //uR(idx) == um(idx)
 
   amrex::Real C;
   int shift[] = {0,0,0};
