@@ -82,24 +82,26 @@ Simulation<NumericalMethodType,EquationType>::~Simulation() {
 template <typename NumericalMethodType,typename EquationType>
 void Simulation<NumericalMethodType,EquationType>::run()
 {
-  std::string results_dir = "../Results";
-  std::string simulation_data_dir = results_dir + "/Simulation Data";
-  if (!std::filesystem::exists(results_dir)) {
-      std::filesystem::create_directories(results_dir);
-  }
-  if (!std::filesystem::exists(simulation_data_dir)) {
-    std::filesystem::create_directories(simulation_data_dir);
-  }
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    std::string results_dir = "../Results";
+    std::string simulation_data_dir = results_dir + "/Simulation Data";
+    if (!std::filesystem::exists(results_dir)) {
+        std::filesystem::create_directories(results_dir);
+    }
+    if (!std::filesystem::exists(simulation_data_dir)) {
+      std::filesystem::create_directories(simulation_data_dir);
+    }
 
-  // Iterate through all files in the directory
-  for (const auto& entry : std::filesystem::directory_iterator(simulation_data_dir)) {
-    // Check if the filename contains out_name_prefix
-    if (entry.path().filename().string().find(out_name_prefix) != std::string::npos) {
-        //std::cout << "Deleting file: " << entry.path() << std::endl;
-        std::filesystem::remove_all(entry.path());  // Delete the file
+    // Iterate through all files in the directory
+    for (const auto& entry : std::filesystem::directory_iterator(simulation_data_dir)) {
+      // Check if the filename contains out_name_prefix
+      if (entry.path().filename().string().find(out_name_prefix) != std::string::npos) {
+          //std::cout << "Deleting file: " << entry.path() << std::endl;
+          std::filesystem::remove_all(entry.path());  // Delete the file
+      }
     }
   }
-
+  
   mesh->init(solver);
   
   solver->init(model,mesh,dtn_outplt,dt_outplt,out_name_prefix);

@@ -12,7 +12,10 @@ void AmrDG::DEBUG_print_MFab()
   int q = 0;
   int lev = 0;
   int dim = 0;
-  int nproc = 0;
+
+  int nproc = amrex::ParallelDescriptor::MyProc();
+  int nprocs = amrex::ParallelDescriptor::NProcs();
+  AllPrint() << nproc<<"\n";
   amrex::MultiFab& state_c = U_w[lev][q];
   //amrex::MultiFab& state_c = H_w[lev][q];
   //amrex::MultiFab& state_c = Fnum[lev][dim][q];
@@ -38,14 +41,16 @@ void AmrDG::DEBUG_print_MFab()
           //for(int n = 0; n<qMpbd; ++n) {
           //for(int n = 0; n<basefunc->Np_s; ++n) {
           for(int n = 0; n<2; ++n) {
-            Print(nproc) <<i<<","<<j<<"  | w="<<n<<"| "<<uc(i,j,k,n)<<"\n";
+            amrex::Print(nproc) << "Rank " << nproc << ": " 
+                                << "i=" << i << ", j=" << j << ", k=" << k
+                                << ", w=" << n << ", val=" << uc(i,j,k,n) << "\n";
           }       
         } 
       }       
     }
   }
-  
-  Print() <<"        "<<"\n";
+  // Barrier to make sure output is clean
+  amrex::ParallelDescriptor::Barrier();
 }
 
 void AmrDG::settings(int _p, amrex::Real _T) {
@@ -80,7 +85,7 @@ void AmrDG::init()
 
   // Loop through the vector and print each line
   for (const auto& line : logo) {
-      std::cout << line << std::endl;
+    Print() << line << std::endl;
   }
 
   auto _mesh = mesh.lock();

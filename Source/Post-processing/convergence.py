@@ -12,26 +12,21 @@ def main_convergence():
     D = 2
     v = 2**D
     #V_ary   = np.square(np.array([v,v]))
-    N   =  np.array([16,32,64])
+    N   =  np.array([16,32,64,128])
     #h   = np.power(np.divide(V_ary,N), np.array([1.0/D,1.0/D]))
-
-    L = 2
     p = 1
-
-
+    L = 2
+    
     #p_E=[p0_E,p1_E,p2_E,p3_E] pk_E=[E_N_0,E_N_1,...]
     flag_plot = False
     if L==1:       
         p_E = []
-   
+    
     elif L==2:       
-        p_E = [ np.array([0.0]),
-                np.array([0.0093045371506814308,0.0077500867145786955,0.015523436302138051])
-               ]
+        p_E = {0: [], 1:[0.012723042539771219,0.0037520311879360949,0.0025053903332453477, 0.0013936300901864704]}
         
     for i in range(len(N)-1):
         alpha = abs((np.log10(p_E[p][i])-np.log10(p_E[p][i+1]))/(np.log10(N[i])-np.log10(N[i+1])))
-        print(alpha)
     slope, intercept, r_value, p_value, std_err = linregress(np.log10(N), np.log10(p_E[p]))
     print("EOC p"+str(p)+": "+str(abs(slope)))  
     print("TOC p"+str(p)+": "+str(p+1))  
@@ -56,6 +51,5 @@ def main_convergence():
         plt.savefig("plots/2d_advectionx_grid_convergence.png")
     """""
 if __name__ == "__main__":
-    #tmp_func()
     main_convergence()
 

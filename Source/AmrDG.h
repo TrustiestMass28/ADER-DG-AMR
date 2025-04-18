@@ -374,16 +374,14 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   dt_plt = (dt_outplt > 0);
   if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
 
+  //Output t=0 norm
   L1Norm_DG_AMR(model_pde);
   L2Norm_DG_AMR(model_pde);
   
-  //NormDG();
-    
   set_Dt(model_pde);
-  //Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
-  //Print(*ofs)<<"------------------------------------------------"<<"\n";
-  
-  //time stepping
+
+  Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
+  Print()<<"------------------------------------------------"<<"\n";
   
   while(t<T)
   {  
@@ -428,8 +426,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
 
     Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
     Print()<<"------------------------------------------------"<<"\n";
-    //Print(*ofs).SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< dt<<"\n";
-    //Print(*ofs)<<"------------------------------------------------"<<"\n";
+    //Print(*ofs)
     
     //plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
@@ -447,11 +444,9 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     //}
   }
   
+  //Output t=T norm
   L1Norm_DG_AMR(model_pde);
   L2Norm_DG_AMR(model_pde);
-  //NormDG();
-
-
 }
 
 template <typename EquationType>
@@ -604,7 +599,7 @@ void AmrDG::set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde)
                         
           #pragma omp critical
           {
-            rank_min_dt.push_back(dt_cfl);
+            rank_min_dt.push_back(0.6*dt_cfl);
           }
         });         
       }
