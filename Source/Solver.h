@@ -636,6 +636,7 @@ void Solver<NumericalMethodType>::PlotFile(std::shared_ptr<ModelEquation<Equatio
                                             amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
                                             int tstep, amrex::Real time) const
 {   
+
     auto varNames = model_pde->getModelVarNames();
 
     auto _mesh = mesh.lock();
@@ -682,6 +683,7 @@ void Solver<NumericalMethodType>::PlotFile(std::shared_ptr<ModelEquation<Equatio
         amrex::WriteMultiLevelPlotfile(pltfile_name, _mesh->get_finest_lev()+1, mf_out, plot_var_name,
                                 _mesh->get_Geom(), time, lvl_tstep, _mesh->get_refRatio());
     }
+    
 } 
 
 #endif 
