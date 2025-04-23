@@ -64,33 +64,24 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
   //}
 }
 
+//Make a new level using provided BoxArray and DistributionMapping and fill with 
+//interpolated coarse level data.
 void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
                                     const amrex::BoxArray& ba, 
                                     const amrex::DistributionMapping& dm)
 {
+  //create new level MFabs defined on new ba,dm
+  set_init_data_system(lev,ba,dm); 
 
+  for(int q=0 ; q<Q; ++q){
+    //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
+    //FillPatchGhostFC(lev,time,q);
+  }
 }
 
 
 
 /*
-
-
-//Make a new level using provided BoxArray and DistributionMapping and fill with 
-//interpolated coarse level data.
-void AmrDG::MakeNewLevelFromCoarse (int lev, amrex::Real time, const amrex::BoxArray& ba, 
-  const amrex::DistributionMapping& dm)
-{
-//Print(*ofs) << "make new level from coarse :   "<< lev<< "\n";
-InitData_system(lev,ba,dm); 
-for(int q=0 ; q<Q; ++q){
-FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
-FillPatchGhostFC(lev,time,q);
-}
-}
-
-
-
 //Fillpatch operations fill all cells, valid and ghost, from actual valid data at 
 //that level, space-time interpolated data from the next-coarser level, 
 //neighboring grids at the same level, and domain boundary conditions 
