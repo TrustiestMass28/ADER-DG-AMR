@@ -78,6 +78,11 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     template <typename EquationType>
     void set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde);
 
+    void AMR_clear_level_data(int lev);
+
+    void AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, 
+                                amrex::Real time, int ngrow);
+
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
 
@@ -467,6 +472,9 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
                   std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond,
                   amrex::Real time)
 {
+  //this fucntion applies ADER time integration to evolve the solution
+  //from time-step n->n+1
+
   //NB:this function  expectes the incoming MFabs (solution) internal ghost cells
   //to be already synchronized. This is ensured by startign from IC that is fully sync
   //and then after everytime-step, sync the updated data
@@ -521,14 +529,11 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
       numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
     } 
 
-    //average fine to coarse interface integral numerical flux for conservation
-    //AverageFineToCoarseFlux(l);
-    
     //update corrector
     update_U_w(l);  
-    
   }
   
+  amrex::ParallelDescriptor::Barrier();
 }
 
 //compute minimum time step size s.t CFL condition is met
@@ -1206,179 +1211,5 @@ void AmrDG::L2Norm_DG_AMR(std::shared_ptr<ModelEquation<EquationType>> model_pde
   LpNorm_DG_AMR(model_pde,2, GLquadptsL2norm,2*(quadrule->qMp_1d));
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-///////////////////////////////////////////////////////////////////////////
-
-
-/*
-class AmrDG : public amrex::AmrCore, public NumericalMethod
-{
-  public: 
-
-    AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, int _coord, 
-          Vector<IntVect> const& _ref_ratios, Array<int,AMREX_SPACEDIM> const& _is_per,
-          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
-          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
-          amrex::Vector<amrex::Vector<int>> _bc_lo_type,
-          amrex::Vector<amrex::Vector<int>> _bc_hi_type, amrex::Real _T,
-          amrex::Real _CFL, int _p,
-          int _t_regrid, int _t_outplt//, 
-          //std::string _limiter_type, amrex::Real _TVB_M, 
-          //amrex::Vector<amrex::Real> _AMR_TVB_C,
-          //amrex::Vector<amrex::Real> _AMR_curl_C, 
-          //amrex::Vector<amrex::Real> _AMR_div_C, 
-          //amrex::Vector<amrex::Real> _AMR_grad_C, 
-          //amrex::Vector<amrex::Real> _AMR_sec_der_C,
-          //amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
-          , int _t_limit);
-
-///////////////////////////////////////////////////////////////////////////
-    //DG 
-    //Initial Conditions, and level initialization
-    void InitialCondition(int lev);
-    
-    amrex::Real Initial_Condition_U_w(int lev,int q,int n,int i,int j,int k) const;
-    
-    amrex::Real Initial_Condition_U(int lev,int q,int i,int j,int k,
-                                    amrex::Vector<amrex::Real> xi) const;
- 
-      //Modal expansion
-    void get_U_from_U_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-                        amrex::Vector<amrex::MultiFab>* U_ptr,
-                        amrex::Vector<amrex::Real> xi, bool is_predictor);
-                                                          
-    void get_u_from_u_w(int c, int i, int j, int k,
-                        amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                        amrex::Vector<amrex::Array4< amrex::Real>>* u ,
-                        amrex::Vector<amrex::Real> xi); 
-                        
-    void get_u_from_u_w(int c, int i, int j, int k,
-                        amrex::Vector<amrex::Array4< amrex::Real>>* uw, 
-                        amrex::Vector<amrex::Array4< amrex::Real>>* u ,
-                        amrex::Vector<amrex::Real> xi);      
-  
-                                    
-///////////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////////
-//LIMTIING/TAGGING
-
-    amrex::Real minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
-                        bool &troubled_flag, int l) const;
-    
-    amrex::Real minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
-                        bool &troubled_flag) const;  
-
-
-    void Limiter_w(int lev); //, amrex::TagBoxArray& tags, char tagval
-    
-    void Limiter_linear_tvb(int i, int j, int k, 
-                              amrex::Vector<amrex::Array4<amrex::Real>>* uw, 
-                              amrex::Vector<amrex::Array4<amrex::Real>>* um,
-                              amrex::Vector<amrex::Array4<amrex::Real>>* up, 
-                              amrex::Vector<amrex::Array4<amrex::Real>>* vw,
-                              //amrex::Vector<amrex::Array4<amrex::Real>>* um_cpy,
-                              int lev);  
-
-    void AMRIndicator_tvb(int i, int j, int k,
-                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                          amrex::Vector<amrex::Array4<amrex::Real>>* um,
-                          amrex::Vector<amrex::Array4<amrex::Real>>* up,
-                          int l, amrex::Array4<char> const& tag,char tagval, 
-                          bool& any_trouble); 
-                          
-    void AMRIndicator_second_derivative(int i, int j, int k, 
-                                        amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                                        int l,amrex::Array4<char> const& tag,
-                                        char tagval, bool& any_trouble);    
-                                        
-    void AMRIndicator_curl(int i, int j, int k,
-                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                          amrex::Array4<amrex::Real> const & curl_indicator,int l, 
-                          bool flag_local,amrex::Array4<char> const& tag,
-                          char tagval,bool& any_trouble);
-                          
-    void AMRIndicator_div(int i, int j, int k,
-                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                          amrex::Array4<amrex::Real> const & div_indicator,int l, 
-                          bool flag_local,amrex::Array4<char> const& tag,
-                          char tagval,bool& any_trouble);
-                          
-    void AMRIndicator_grad(int i, int j, int k,
-                          amrex::Vector<amrex::Array4<const  amrex::Real>>* uw, 
-                          amrex::Array4<amrex::Real> const & grad_indicator,int l, 
-                          bool flag_local,amrex::Array4<char> const& tag,
-                          char tagval,bool& any_trouble);
-
-
-    
-    //Model Equation/Simulation settings and variables    
-    
-    int t_limit;
-    std::string limiter_type;
-
-
-    amrex::Vector<amrex::Real> AMR_C;
-    
-    amrex::Real AMR_curl_indicator;
-    amrex::Vector<amrex::Real> AMR_curl_C;
-    amrex::Vector<amrex::MultiFab> idc_curl_K;
-
-    amrex::Real AMR_div_indicator;
-    amrex::Vector<amrex::Real> AMR_div_C;
-    amrex::Vector<amrex::MultiFab> idc_div_K;
-    
-    amrex::Real AMR_grad_indicator;
-    amrex::Vector<amrex::Real> AMR_grad_C;
-    amrex::Vector<amrex::MultiFab> idc_grad_K;    
-    
-    amrex::Real AMR_sec_der_indicator;
-    amrex::Vector<amrex::Real> AMR_sec_der_C;
-    
-    amrex::Real TVB_M;
-    amrex::Vector<amrex::Real> AMR_TVB_C;
-///////////////////////////////////////////////////////////////////////////
-
-
-  
-  private: 
-
-
-    void Predictor_set(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-                      amrex::Vector<amrex::MultiFab>* H_w_ptr);
-
-    
-    //Non-linear fluxes, Numerical fluxes
-
-    //I/O and MISC
-    void NormDG();//TODO:
-    
-
-    
-    void DEBUG_print_MFab();
-    
-    void Conservation(int lev, int M, amrex::Vector<amrex::Vector<amrex::Real>> xi, int d);
-};
-   
-extern AMREX_EXPORT AmrDG::DGprojInterp custom_interp;
-*/
 #endif
 

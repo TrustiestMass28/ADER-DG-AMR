@@ -136,6 +136,13 @@ class Solver
         //declare and init data structures holding single equation 
         void set_init_data_component(int lev,const BoxArray& ba, 
                                         const DistributionMapping& dm, int q);
+
+        //clear all data of the MFabs at specified level
+        void AMR_clear_level_data(int lev);
+
+        //tag cells for refinement based on implemented metric
+        void AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, 
+                                    amrex::Real time, int ngrow);
         
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
@@ -434,6 +441,18 @@ template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh)
 {
     mesh = _mesh;
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::AMR_clear_level_data(int lev)
+{
+    static_cast<NumericalMethodType*>(this)->AMR_clear_level_data(lev);
+}
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, 
+                                                        amrex::Real time, int ngrow)
+{
+    static_cast<NumericalMethodType*>(this)->AMR_tag_cell_refinement(lev,tags,time,ngrow);
 }
 
 template <typename NumericalMethodType>
