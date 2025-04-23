@@ -83,6 +83,9 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, 
                                 amrex::Real time, int ngrow);
 
+    void AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
+                          const amrex::DistributionMapping& dm);
+
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
 
@@ -395,19 +398,21 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   
   while(t<T)
   {  
+  
+    //TODO:SOLUTION SYNCH HERE?
+
+    //Remake existing levels and create new fine levels from coarse
+    if ((_mesh->L > 0) && (n>0))
+    {
+      if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
+        //TODO: adapt boolena condition to handle physical time
+        //interval dt_regrid
+        _mesh->regrid(0, t);
+      }
+    }  
+
+    //TODO:SOLUTION SYNCH HERE?
     
-    //if ((max_level > 0) && (n>0))
-    //{
-    //  if((t_regrid > 0) && (n % t_regrid == 0)){
-    //    regrid(0, t);
-    ////    MakeNewGrids
-    ////    RemakeLevel
-    ////    MakeNewLevelFromCoarse
-    ////    ClearLevel
-    //  }
-    //}  
-    
-    //Print(*ofs) << "ADER Time Integraton"<< "\n";
     //advance solution by one time-step.
     time_integration(model_pde,bdcond,t);
 
