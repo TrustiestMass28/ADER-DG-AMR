@@ -230,6 +230,42 @@ AmrDG::~AmrDG(){
   //delete quadrule;
 }
 
+void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
+                            const amrex::DistributionMapping& dm) 
+{
+  //Remake level based on new geometry. Only the evolved solution vector
+  //has to be preserved, i.e only U_w. The data transfer from old MFab
+  //to new MFab (differend distribution mapping) of U_w is handled by 
+  //FillPatch. All the other vector of MFab are cleared and re-filled
+  //with new MFabs based on new geometry and distr.map
+
+  auto _mesh = mesh.lock();
+
+  amrex::Vector<amrex::MultiFab> _mf;
+  _mf.resize(Q);
+  for(int q=0 ; q<Q; ++q){
+    _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
+    _mf[q].setVal(0.0);    
+    //FillPatch(lev, time, _mf[q], 0, basefunc->Np_s,q);  //TODO
+  } 
+     
+  //clear existing level MFabs defined on old ba,dm
+  _mesh->ClearLevel(lev);
+
+  //create new level MFabs defined on new ba,dm
+  set_init_data_system(lev,ba,dm); 
+    
+  //swap old solution MFab with newly created one
+  for(int q=0 ; q<Q; ++q){
+    std::swap(U_w[lev][q],_mf[q]);  
+  }
+  
+  //TODO: is step below needed?
+  //for(int q=0 ; q<Q; ++q){
+  //  FillPatchGhostFC(lev,time, q);
+  //}
+}
+
 void AmrDG::AMR_clear_level_data(int lev)
 {
   //Delete level data

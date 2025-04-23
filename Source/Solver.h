@@ -143,6 +143,10 @@ class Solver
         //tag cells for refinement based on implemented metric
         void AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, 
                                     amrex::Real time, int ngrow);
+
+
+        void AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
+                                const amrex::DistributionMapping& dm);
         
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
@@ -504,6 +508,13 @@ void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEqu
     //depending on implementation of num method
     //avg_down_initial_condition()
     //static_cast<NumericalMethodType*>(this)->avg_down_initial_condition(lev);
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
+                                                    const amrex::DistributionMapping& dm) 
+{
+   static_cast<NumericalMethodType*>(this)->AMR_remake_level(lev,time,ba,dm);
 }
 
 template <typename NumericalMethodType>

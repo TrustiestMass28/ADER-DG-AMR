@@ -102,7 +102,7 @@ class Mesh : public amrex::AmrCore
         //Number of ghost cells
         int nghost= 1;    
 
-        //Refinement criteria coefficient/multiplier/scalar
+        //Refinement criteria coefficient/level multiplier
         amrex::Vector<amrex::Real> amr_c;
 
     private:
@@ -163,13 +163,19 @@ void Mesh<NumericalMethodType>::ErrorEst (int lev, amrex::TagBoxArray& tags,
 }
 
 template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
+                        const amrex::DistributionMapping& dm) 
+{
+    auto _solver = solver.lock();
+    _solver->AMR_remake_level(lev,time,ba,dm);     
+}
+
+template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::MakeNewLevelFromCoarse(int lev, amrex::Real time,
                                     const amrex::BoxArray& ba, 
                                     const amrex::DistributionMapping& dm) {}
 
-template <typename NumericalMethodType>
-void Mesh<NumericalMethodType>::RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
-                        const amrex::DistributionMapping& dm) {}
+
 
 template <typename NumericalMethodType>
 int Mesh<NumericalMethodType>::get_finest_lev()
@@ -257,66 +263,6 @@ ADAPTIVE MESH REFINEMENT (GEOMETRY BASED OPERATIONS)
     void AMR_settings_tune();
 
 AMR INTERPOLATOR
-
-
- 
-    //AMR Coarse>->Fine projection custom implementation
-    class DGprojInterp : public Interpolater
-    {
-      public:
-        
-        Box CoarseBox (const Box& fine, int ratio) override;
-        
-        Box CoarseBox (const Box& fine, const IntVect& ratio) override;
-            
-        void interp (const FArrayBox& crse, int crse_comp,FArrayBox& fine,
-                    int  fine_comp,int ncomp, const Box& fine_region, 
-                    const IntVect&   ratio, const Geometry& crse_geom, 
-                    const Geometry& fine_geom,Vector<BCRec> const& bcr,
-                    int actual_comp,int actual_state, RunOn runon) override;
-                           
-        void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
-                        int fcomp, Array4<Real const> const& crse, int ccomp, 
-                        int ncomp, IntVect const& ratio) noexcept;
-                                            
-        void average_down(const MultiFab& S_fine, MultiFab& S_crse,
-                         int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
-                         const int lev_coarse, int d=0, bool flag_flux=false);
-                  
-        void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
-                        Array4<Real const> const& fine,int ccomp, 
-                        int fcomp, IntVect const& ratio) noexcept;
-                     
-        //void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-        //                                  Array4<Real const> const& fine,int ccomp, 
-        //                                  int fcomp, IntVect const& ratio) noexcept;                               
-        void getouterref(AmrDG* _amrdg);  
-        
-        void interp_proj_mat();
-        
-        void average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
-                                      int scomp, int ncomp, const IntVect& ratio, 
-                                      const int lev_fine, const int lev_coarse, 
-                                      int d, bool flag_flux);
-                                      
-         void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-                                          Array4<Real> const& fine,int ccomp, 
-                                          int fcomp, IntVect const& ratio) noexcept;
-
-      //amrex::Real RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
-
-      private:     
-        friend class NumericalMethod;
-          
-        AmrDG* amrdg;     
-        
-        amrex::Vector<amrex::Vector<int >> amr_projmat_int;
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_scatter;
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_gather;        
-    };
-
-
-
 */
 /*
 ///////////////////////////////////////////////////////////////////////
