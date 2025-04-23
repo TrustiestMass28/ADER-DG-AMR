@@ -86,6 +86,10 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
                           const amrex::DistributionMapping& dm);
 
+    void AMR_make_new_fine_level(int lev, amrex::Real time,
+                                const amrex::BoxArray& ba, 
+                                const amrex::DistributionMapping& dm);
+
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
 

@@ -173,9 +173,11 @@ void Mesh<NumericalMethodType>::RemakeLevel(int lev, amrex::Real time, const amr
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::MakeNewLevelFromCoarse(int lev, amrex::Real time,
                                     const amrex::BoxArray& ba, 
-                                    const amrex::DistributionMapping& dm) {}
-
-
+                                    const amrex::DistributionMapping& dm)
+{
+    auto _solver = solver.lock();
+    _solver->AMR_make_new_fine_level(lev,time,ba,dm);    
+}
 
 template <typename NumericalMethodType>
 int Mesh<NumericalMethodType>::get_finest_lev()

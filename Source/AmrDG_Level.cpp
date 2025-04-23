@@ -1,62 +1,80 @@
+#include "AmrDG.h"
+
+using namespace amrex;
+
+void AmrDG::AMR_clear_level_data(int lev)
+{
+  //Delete level data
+
+  U_w[lev].clear();  
+  U[lev].clear();  
+  if(flag_source_term){S[lev].clear();}
+  U_center[lev].clear();  
+
+  F[lev].clear();
+  Fm[lev].clear();
+  Fp[lev].clear();
+
+  DF[lev].clear();
+  DFm[lev].clear();
+  DFp[lev].clear();
+
+  Fnum[lev].clear();   
+
+  H_w[lev].clear();  
+  H[lev].clear();  
+
+  H_p[lev].clear(); 
+  H_m[lev].clear();
+}
+
+void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
+                            const amrex::DistributionMapping& dm) 
+{
+  //Remake level based on new geometry. Only the evolved solution vector
+  //has to be preserved, i.e only U_w. The data transfer from old MFab
+  //to new MFab (differend distribution mapping) of U_w is handled by 
+  //FillPatch. All the other vector of MFab are cleared and re-filled
+  //with new MFabs based on new geometry and distr.map
+
+  auto _mesh = mesh.lock();
+
+  amrex::Vector<amrex::MultiFab> _mf;
+  _mf.resize(Q);
+  for(int q=0 ; q<Q; ++q){
+    _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
+    _mf[q].setVal(0.0);    
+    //FillPatch(lev, time, _mf[q], 0, basefunc->Np_s,q);  //TODO
+  } 
+
+  //clear existing level MFabs defined on old ba,dm
+  _mesh->ClearLevel(lev);
+
+  //create new level MFabs defined on new ba,dm
+  set_init_data_system(lev,ba,dm); 
+
+  //swap old solution MFab with newly created one
+  for(int q=0 ; q<Q; ++q){
+    std::swap(U_w[lev][q],_mf[q]);  
+  }
+
+  //TODO: is step below needed?
+  //for(int q=0 ; q<Q; ++q){
+  //  FillPatchGhostFC(lev,time, q);
+  //}
+}
+
+void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
+                                    const amrex::BoxArray& ba, 
+                                    const amrex::DistributionMapping& dm)
+{
+
+}
+
+
+
 /*
 
-
-
-void AmrDG::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba, 
-                                    const DistributionMapping& dm)
-{ 
-  //Print(*ofs) <<"AmrDG::MakeNewLevelFromScratch() "<< lev<<"\n";
-  //create a new level from scratch, e.g when regrid criteria for finer level 
-  //reached for the first time
-  //called when initializing the simulation
-  InitData_system(lev,ba,dm);  
-  
-  if(lev ==0)
-  {
-    //init both valid and ghost data
-    InitialCondition(lev);
-  }
-  else
-  {
-    //init valid and ghost data by scattering from coarse
-
-    for(int q=0 ; q<Q; ++q){
-      FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
-      //for ghost at fine-coarseinterface just copy from coarse
-      FillPatchGhostFC(lev,time,q);
-    }        
-  }  
-}
-
-
-//Remake an existing level using provided BoxArray and DistributionMapping and 
-//fill with existing fine and coarse data.
-void AmrDG::RemakeLevel (int lev, amrex::Real time, const amrex::BoxArray& ba,
-                        const amrex::DistributionMapping& dm)
-{
-  //Print(*ofs) << "RemakeLevel   "<< lev<<"\n";
-  
-  amrex::Vector<amrex::MultiFab> new_mf;
-  new_mf.resize(Q);
-  for(int q=0 ; q<Q; ++q){
-    new_mf[q].define(ba, dm, Np, nghost);
-    new_mf[q].setVal(0.0);    
-    FillPatch(lev, time, new_mf[q], 0, Np,q);  
-  } 
-     
-  //clear existing level MFabs defined on old ba,dm
-  ClearLevel(lev);
-  //create new level MFabs defined on new ba,dm
-  InitData_system(lev,ba,dm); 
-    
-  for(int q=0 ; q<Q; ++q){
-    std::swap(U_w[lev][q],new_mf[q]);  
-  }
-  
-  for(int q=0 ; q<Q; ++q){
-    FillPatchGhostFC(lev,time, q);
- }
-}
 
 //Make a new level using provided BoxArray and DistributionMapping and fill with 
 //interpolated coarse level data.
@@ -71,41 +89,7 @@ FillPatchGhostFC(lev,time,q);
 }
 }
 
-//Delete level data
-void AmrDG::ClearLevel(int lev) 
-{
-  //Print(*ofs) << "ClearLevel   "<< lev<<"\n";
 
-  //ADER SPECIFIC
-  H_w[lev].clear();  
-  H[lev].clear();  
-  for(int d=0; d<AMREX_SPACEDIM; ++d){
-    H_p[lev][d].clear(); 
-    H_m[lev][d].clear();
-  }
-  //SOLVER
-  U_w[lev].clear();  
-  U[lev].clear();  
-
-  if(model_pde->flag_source_term){S[lev].clear();}
-  U_center[lev].clear();  
-  
-  idc_curl_K[lev].clear();
-  idc_div_K[lev].clear();
-  idc_grad_K[lev].clear();
-  
-  for(int d=0; d<AMREX_SPACEDIM; ++d){
-    F[lev][d].clear();
-    DF[lev][d].clear();
-    Fm[lev][d].clear();
-    Fp[lev][d].clear();
-    DFm[lev][d].clear();
-    DFp[lev][d].clear();
-    Fnum[lev][d].clear();   
-    Fnumm_int[lev][d].clear();
-    Fnump_int[lev][d].clear();
-  }
-}
 
 //Fillpatch operations fill all cells, valid and ghost, from actual valid data at 
 //that level, space-time interpolated data from the next-coarser level, 

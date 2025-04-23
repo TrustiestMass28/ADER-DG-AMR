@@ -147,6 +147,10 @@ class Solver
 
         void AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
                                 const amrex::DistributionMapping& dm);
+
+        void AMR_make_new_fine_level(int lev, amrex::Real time,
+                                    const amrex::BoxArray& ba, 
+                                    const amrex::DistributionMapping& dm);
         
         void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
             ofs = _ofs;
@@ -457,6 +461,14 @@ void Solver<NumericalMethodType>::AMR_tag_cell_refinement(int lev, amrex::TagBox
                                                         amrex::Real time, int ngrow)
 {
     static_cast<NumericalMethodType*>(this)->AMR_tag_cell_refinement(lev,tags,time,ngrow);
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::AMR_make_new_fine_level(int lev, amrex::Real time,
+                                                        const amrex::BoxArray& ba, 
+                                                        const amrex::DistributionMapping& dm)
+{
+    static_cast<NumericalMethodType*>(this)->AMR_make_new_fine_level(lev,time,ba,dm);    
 }
 
 template <typename NumericalMethodType>

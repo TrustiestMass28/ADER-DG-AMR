@@ -1,5 +1,7 @@
 #include "AmrDG.h"
 
+using namespace amrex;
+
 //NB: uw needs to be a const MFab in this function
 void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow)
 {
