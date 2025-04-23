@@ -1,0 +1,5 @@
+.vscode/
+
+#Dont ignore gitignore
+
+!.gitignore
