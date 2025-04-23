@@ -19,10 +19,8 @@ void AmrDG::DEBUG_print_MFab()
   amrex::MultiFab& state_c = U_w[lev][q];
   //amrex::MultiFab& state_c = H_w[lev][q];
   //amrex::MultiFab& state_c = Fnum[lev][dim][q];
-  //amrex::MultiFab& state_c = Fnumm_int[lev][dim][q];
   //amrex::MultiFab& state_c = Fp[lev][dim][q];
   //amrex::MultiFab& state_c = H_m[lev][dim][q];
-  //auto ba_tmp = Fnumm_int[lev][dim][q].boxArray();
 
   for (MFIter mfi(state_c); mfi.isValid(); ++mfi){
 
@@ -105,8 +103,6 @@ void AmrDG::init()
   DFp.resize(_mesh->L);
 
   Fnum.resize(_mesh->L);
-  Fnumm_int.resize(_mesh->L);
-  Fnump_int.resize(_mesh->L);
 
   H_w.resize(_mesh->L); 
   H.resize(_mesh->L); 
@@ -134,7 +130,6 @@ void AmrDG::init()
 
   basefunc->set_idx_mapping_st();
 
-  
   //Set-up quadrature rule
   quadrule = std::make_shared<QuadratureGaussLegendre>();
 
@@ -235,6 +230,32 @@ AmrDG::~AmrDG(){
   //delete quadrule;
 }
 
+void AmrDG::AMR_clear_level_data(int lev)
+{
+  //Delete level data
+
+  U_w[lev].clear();  
+  U[lev].clear();  
+  if(flag_source_term){S[lev].clear();}
+  U_center[lev].clear();  
+  
+  F[lev].clear();
+  Fm[lev].clear();
+  Fp[lev].clear();
+
+  DF[lev].clear();
+  DFm[lev].clear();
+  DFp[lev].clear();
+
+  Fnum[lev].clear();   
+
+  H_w[lev].clear();  
+  H[lev].clear();  
+  
+  H_p[lev].clear(); 
+  H_m[lev].clear();
+}
+
 void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
                                   const DistributionMapping& dm)
 {
@@ -248,6 +269,7 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
   
   H_w[lev].resize(Q); 
   H[lev].resize(Q);  
+
   H_p[lev].resize(AMREX_SPACEDIM);
   H_m[lev].resize(AMREX_SPACEDIM);
 
@@ -259,8 +281,6 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
   DFp[lev].resize(AMREX_SPACEDIM);
 
   Fnum[lev].resize(AMREX_SPACEDIM);
-  Fnumm_int[lev].resize(AMREX_SPACEDIM);
-  Fnump_int[lev].resize(AMREX_SPACEDIM);
 
   for(int d=0; d<AMREX_SPACEDIM; ++d){
     F[lev][d].resize(Q);
@@ -270,8 +290,6 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
     DFm[lev][d].resize(Q);
     DFp[lev][d].resize(Q);
     Fnum[lev][d].resize(Q);
-    Fnumm_int[lev][d].resize(Q);
-    Fnump_int[lev][d].resize(Q);
 
     H_p[lev][d].resize(Q);
     H_m[lev][d].resize(Q);
@@ -336,13 +354,7 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
     DFp[lev][d][q].setVal(0.0);
 
     Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
-    Fnum[lev][d][q].setVal(0.0);  
-
-    Fnumm_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
-    Fnumm_int[lev][d][q].setVal(0.0);
-
-    Fnump_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
-    Fnump_int[lev][d][q].setVal(0.0);     
+    Fnum[lev][d][q].setVal(0.0);    
   }
 }
 
@@ -568,10 +580,6 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   {
     amrex::Vector<amrex::FArrayBox *> fab_fnum(Q);
     amrex::Vector< amrex::Array4<amrex::Real> > fnum(Q);
-    amrex::Vector<amrex::FArrayBox *> fab_fnumm_int(Q);
-    amrex::Vector< amrex::Array4<amrex::Real> > fnumm_int(Q);
-    amrex::Vector<amrex::FArrayBox *> fab_fnump_int(Q);
-    amrex::Vector< amrex::Array4<amrex::Real> > fnump_int(Q);
     
     amrex::Vector<const amrex::FArrayBox *> fab_fm(Q);
     amrex::Vector< amrex::Array4< const amrex::Real> > fm(Q);
@@ -686,14 +694,10 @@ void AmrDG::update_U_w(int lev)
     
     amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
     amrex::Vector<const amrex::MultiFab *> state_fnum(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnumm_int(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnump_int(AMREX_SPACEDIM); 
-    
+
     for(int d = 0; d < AMREX_SPACEDIM; ++d){
       state_f[d]=&(F[lev][d][q]); 
       state_fnum[d]=&(Fnum[lev][d][q]); 
-      state_fnumm_int[d]=&(Fnumm_int[lev][d][q]); 
-      state_fnump_int[d]=&(Fnump_int[lev][d][q]); 
     }
     
 #ifdef AMREX_USE_OMP
@@ -702,12 +706,10 @@ void AmrDG::update_U_w(int lev)
     {
       amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
       amrex::Vector<const amrex::FArrayBox *> fab_fnum(AMREX_SPACEDIM);
-      amrex::Vector<const amrex::FArrayBox *> fab_fnumm_int(AMREX_SPACEDIM);
-      amrex::Vector<const amrex::FArrayBox *> fab_fnump_int(AMREX_SPACEDIM);
+
       amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);   
       amrex::Vector<amrex::Array4<const amrex::Real> > fnum(AMREX_SPACEDIM); 
-      amrex::Vector<amrex::Array4<const amrex::Real> > fnumm_int(AMREX_SPACEDIM); 
-      amrex::Vector<amrex::Array4<const amrex::Real> > fnump_int(AMREX_SPACEDIM); 
+
       
       #ifdef AMREX_USE_OMP  
       for (MFIter mfi(state_u_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
@@ -726,13 +728,9 @@ void AmrDG::update_U_w(int lev)
         for(int d = 0; d < AMREX_SPACEDIM; ++d){
           fab_f[d]=state_f[d]->fabPtr(mfi);
           fab_fnum[d]=state_fnum[d]->fabPtr(mfi);
-          fab_fnumm_int[d]=state_fnumm_int[d]->fabPtr(mfi);
-          fab_fnump_int[d]=state_fnump_int[d]->fabPtr(mfi);
           
           f[d]= fab_f[d]->const_array();
           fnum[d]= fab_fnum[d]->const_array();
-          fnumm_int[d]= fab_fnumm_int[d]->const_array();
-          fnump_int[d]= fab_fnump_int[d]->const_array();
         } 
 
         amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
@@ -885,7 +883,139 @@ void AmrDG::update_H_w(int lev)
 }
 
 
+///////////////////////////////////////////////////////////////////////////
 
+
+/*
+class AmrDG : public amrex::AmrCore, public NumericalMethod
+{
+  public: 
+
+    AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, int _coord, 
+          Vector<IntVect> const& _ref_ratios, Array<int,AMREX_SPACEDIM> const& _is_per,
+          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
+          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
+          amrex::Vector<amrex::Vector<int>> _bc_lo_type,
+          amrex::Vector<amrex::Vector<int>> _bc_hi_type, amrex::Real _T,
+          amrex::Real _CFL, int _p,
+          int _t_regrid, int _t_outplt//, 
+          //std::string _limiter_type, amrex::Real _TVB_M, 
+          //amrex::Vector<amrex::Real> _AMR_TVB_C,
+          //amrex::Vector<amrex::Real> _AMR_curl_C, 
+          //amrex::Vector<amrex::Real> _AMR_div_C, 
+          //amrex::Vector<amrex::Real> _AMR_grad_C, 
+          //amrex::Vector<amrex::Real> _AMR_sec_der_C,
+          //amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
+          , int _t_limit);
+
+///////////////////////////////////////////////////////////////////////////
+    //DG 
+    //Initial Conditions, and level initialization
+    void InitialCondition(int lev);
+    
+    amrex::Real Initial_Condition_U_w(int lev,int q,int n,int i,int j,int k) const;
+    
+    amrex::Real Initial_Condition_U(int lev,int q,int i,int j,int k,
+                                    amrex::Vector<amrex::Real> xi) const;
+ 
+      //Modal expansion
+    void get_U_from_U_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                        amrex::Vector<amrex::MultiFab>* U_ptr,
+                        amrex::Vector<amrex::Real> xi, bool is_predictor);
+                                                          
+    void get_u_from_u_w(int c, int i, int j, int k,
+                        amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
+                        amrex::Vector<amrex::Array4< amrex::Real>>* u ,
+                        amrex::Vector<amrex::Real> xi); 
+                        
+    void get_u_from_u_w(int c, int i, int j, int k,
+                        amrex::Vector<amrex::Array4< amrex::Real>>* uw, 
+                        amrex::Vector<amrex::Array4< amrex::Real>>* u ,
+                        amrex::Vector<amrex::Real> xi);      
+  
+                                    
+///////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////
+//LIMTIING/TAGGING
+
+    amrex::Real minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
+                        bool &troubled_flag, int l) const;
+    
+    amrex::Real minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
+                        bool &troubled_flag) const;  
+
+
+    void Limiter_w(int lev); //, amrex::TagBoxArray& tags, char tagval
+    
+    void Limiter_linear_tvb(int i, int j, int k, 
+                              amrex::Vector<amrex::Array4<amrex::Real>>* uw, 
+                              amrex::Vector<amrex::Array4<amrex::Real>>* um,
+                              amrex::Vector<amrex::Array4<amrex::Real>>* up, 
+                              amrex::Vector<amrex::Array4<amrex::Real>>* vw,
+                              //amrex::Vector<amrex::Array4<amrex::Real>>* um_cpy,
+                              int lev);  
+
+    void AMRIndicator_tvb(int i, int j, int k,
+                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
+                          amrex::Vector<amrex::Array4<amrex::Real>>* um,
+                          amrex::Vector<amrex::Array4<amrex::Real>>* up,
+                          int l, amrex::Array4<char> const& tag,char tagval, 
+                          bool& any_trouble); 
+                          
+    void AMRIndicator_second_derivative(int i, int j, int k, 
+                                        amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
+                                        int l,amrex::Array4<char> const& tag,
+                                        char tagval, bool& any_trouble);    
+                                        
+    void AMRIndicator_curl(int i, int j, int k,
+                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
+                          amrex::Array4<amrex::Real> const & curl_indicator,int l, 
+                          bool flag_local,amrex::Array4<char> const& tag,
+                          char tagval,bool& any_trouble);
+                          
+    void AMRIndicator_div(int i, int j, int k,
+                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
+                          amrex::Array4<amrex::Real> const & div_indicator,int l, 
+                          bool flag_local,amrex::Array4<char> const& tag,
+                          char tagval,bool& any_trouble);
+                          
+    void AMRIndicator_grad(int i, int j, int k,
+                          amrex::Vector<amrex::Array4<const  amrex::Real>>* uw, 
+                          amrex::Array4<amrex::Real> const & grad_indicator,int l, 
+                          bool flag_local,amrex::Array4<char> const& tag,
+                          char tagval,bool& any_trouble);
+
+
+    
+    //Model Equation/Simulation settings and variables    
+    
+    int t_limit;
+    std::string limiter_type;
+
+
+    amrex::Vector<amrex::Real> AMR_C;
+    
+    amrex::Real AMR_curl_indicator;
+    amrex::Vector<amrex::Real> AMR_curl_C;
+    amrex::Vector<amrex::MultiFab> idc_curl_K;
+
+    amrex::Real AMR_div_indicator;
+    amrex::Vector<amrex::Real> AMR_div_C;
+    amrex::Vector<amrex::MultiFab> idc_div_K;
+    
+    amrex::Real AMR_grad_indicator;
+    amrex::Vector<amrex::Real> AMR_grad_C;
+    amrex::Vector<amrex::MultiFab> idc_grad_K;    
+    
+    amrex::Real AMR_sec_der_indicator;
+    amrex::Vector<amrex::Real> AMR_sec_der_C;
+    
+    amrex::Real TVB_M;
+    amrex::Vector<amrex::Real> AMR_TVB_C;
+///////////////////////////////////////////////////////////////////////////
+};
+*/
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /*
 
@@ -939,51 +1069,4 @@ LIMITING AND REFINING ADVANCED
   idc_curl_K.resize(L);
   idc_div_K.resize(L);
   idc_grad_K.resize(L);
-
-///////////////////////////////////////////////////////////////////////
-AMR
-  int _t_regrid, , 
- t_regrid = _t_regrid;
-
-   //Refinement parameters fine tuning
-  AMR_settings_tune();
-
-
-///////////////////////////////////////////////////////////////////////
-Mesh Interpolation
-
-
-  //Interpolation coarse<->fine data scatter/gather
-  custom_interp.getouterref(this); 
-  custom_interp.interp_proj_mat();
-  
 */
-
-
-/*
-
-
-
-
-
-//std::swap(U_w[lev][q],new_mf);    
-
-/*
-  //amrex::MultiFab new_mf;
-//new_mf.define(ba, dm, Np, nghost);
-//new_mf.setVal(0.0);    
-  amrex::FillPatchTwoLevels(new_mf, time, cmf, ctime, fmf, ftime,0, 0, Np, 
-                          geom[lev-1], geom[lev],coarse_physbcf, 0, fine_physbcf, 
-                          0, refRatio(lev-1),mapper, bc_w[q], 0);
-                          
-                          
-fillpatcher = std::make_unique<FillPatcher<MultiFab>>(ba, dm, geom[lev],
-parent->boxArray(level-1), parent->DistributionMap(level-1), geom_crse,
-IntVect(nghost), desc.nComp(), desc.interp(scomp));
-
-
-fillpatcher->fill(mf, IntVect(nghost), time,
-    smf_crse, stime_crse, smf_fine, stime_fine,
-    scomp, dcomp, ncomp,
-    physbcf_crse, scomp, physbcf_fine, scomp,
-    desc.getBCs(), scomp);*/

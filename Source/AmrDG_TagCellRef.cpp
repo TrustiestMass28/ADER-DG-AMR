@@ -1,29 +1,13 @@
-#include <AMReX_ParallelDescriptor.H>
-#include <AMReX_ParmParse.H>
-#include <AMReX_MultiFab.H>
-#include <AMReX_MultiFabUtil.H>
-#include <AMReX_FillPatchUtil.H>
-#include <AMReX_PlotFileUtil.H>
-#include <AMReX_VisMF.H>
-#include <AMReX_PhysBCFunct.H>
-#include <AMReX_Print.H>
-#include <cmath>
-#include <math.h>
-#ifdef AMREX_MEM_PROFILING
-#include <AMReX_MemProfiler.H>
-#endif
-
 #include "AmrDG.h"
-#include "ModelEquation.h"
-#include <AMReX_Array4.H>
 
 //NB: uw needs to be a const MFab in this function
-void AmrDG::ErrorEst (int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow)
+void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow)
 {
   //Print(sim->ofs) <<"AmrDG::ErrorEst"<<"\n";
   //check and flag cells where regridding criteria is met
   const int   tagval = TagBox::SET;
    
+  /*
   amrex::Vector<amrex::MultiFab> tmp_U_p(Q);
   amrex::Vector<amrex::MultiFab> tmp_U_m(Q);
   for(int q=0 ; q<Q; ++q){
@@ -37,33 +21,33 @@ void AmrDG::ErrorEst (int lev, amrex::TagBoxArray& tags, amrex::Real time, int n
   amrex::MultiFab& state_curl_indicator =idc_curl_K[lev];
   amrex::MultiFab& state_div_indicator =idc_div_K[lev];
   amrex::MultiFab& state_grad_indicator =idc_grad_K[lev];
-    
-  bool any_trouble = false;//flag used to indicate if any troubled cells have been found at all
   
+
+  bool any_trouble = false;//flag used to indicate if any troubled cells have been found at all
+
   amrex::Vector<amrex::MultiFab *> state_tmp_um(Q);
   amrex::Vector<amrex::MultiFab *> state_tmp_up(Q);
+  */
   amrex::Vector<const amrex::MultiFab *> state_uw(Q);
-  //amrex::Vector<amrex::MultiFab *> state_uw(Q);
-   
+
   for(int q=0; q<Q; ++q){
-    state_tmp_um[q]=&(tmp_U_m[q]);
-    state_tmp_up[q]=&(tmp_U_p[q]);
+    //state_tmp_um[q]=&(tmp_U_m[q]);
+    //state_tmp_up[q]=&(tmp_U_p[q]);
     state_uw[q]=&(U_w[lev][q]); 
   }
 #ifdef AMREX_USE_OMP
 #pragma omp parallel 
 #endif
   {
-  
+    /*
     amrex::Vector< amrex::FArrayBox *> fab_tmp_um(Q);
     amrex::Vector< amrex::Array4<amrex::Real> > tmp_um(Q);
     amrex::Vector< amrex::FArrayBox *> fab_tmp_up(Q);
     amrex::Vector< amrex::Array4<  amrex::Real> > tmp_up(Q);
+    */
     amrex::Vector<const amrex::FArrayBox *> fab_uw(Q);
     amrex::Vector< amrex::Array4< const amrex::Real> > uw(Q);   
-    //amrex::Vector<amrex::FArrayBox *> fab_uw(Q);
-    //amrex::Vector< amrex::Array4< amrex::Real> > uw(Q); 
-  
+
     #ifdef AMREX_USE_OMP  
     for (MFIter mfi(*(state_uw[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
     #else
@@ -72,29 +56,30 @@ void AmrDG::ErrorEst (int lev, amrex::TagBoxArray& tags, amrex::Real time, int n
     {
       const amrex::Box& bx = mfi.tilebox();  
       const auto tagfab  = tags.array(mfi);
+
+      /*
       amrex::FArrayBox& fab_curl_indicator = state_curl_indicator[mfi];
       amrex::FArrayBox& fab_div_indicator = state_div_indicator[mfi];
-      amrex::FArrayBox& fab_grad_indicator = state_div_indicator[mfi];
+      amrex::FArrayBox& fab_grad_indicator = state_div_indicator[mfi];*/
           
       for(int q=0 ; q<Q; ++q){
-        fab_tmp_um[q] = &((*(state_tmp_um[q]))[mfi]);
-        fab_tmp_up[q] = &((*(state_tmp_up[q]))[mfi]);
+        //fab_tmp_um[q] = &((*(state_tmp_um[q]))[mfi]);
+        //fab_tmp_up[q] = &((*(state_tmp_up[q]))[mfi]);
         fab_uw[q] = state_uw[q]->fabPtr(mfi);
         
-        tmp_um[q] = (*(fab_tmp_um[q])).array();
-        tmp_up[q] = (*(fab_tmp_up[q])).array();
+        //tmp_um[q] = (*(fab_tmp_um[q])).array();
+        //tmp_up[q] = (*(fab_tmp_up[q])).array();
         uw[q] = fab_uw[q]->const_array();
-        //uw[q] = fab_uw[q]->array();
       }
               
-      amrex::Array4<Real> const& curl_indicator = fab_curl_indicator.array();
-      amrex::Array4<Real> const& div_indicator = fab_div_indicator.array();
-      amrex::Array4<Real> const& grad_indicator = fab_grad_indicator.array();
+      //amrex::Array4<Real> const& curl_indicator = fab_curl_indicator.array();
+      //amrex::Array4<Real> const& div_indicator = fab_div_indicator.array();
+      //amrex::Array4<Real> const& grad_indicator = fab_grad_indicator.array();
       
       amrex::Dim3 lo = lbound(bx);
       amrex::Dim3 hi = ubound(bx);
-      AMR_curl_indicator = 0.0;
-      AMR_div_indicator = 0.0;
+      //AMR_curl_indicator = 0.0;
+      //AMR_div_indicator = 0.0;
       
       amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
       {
@@ -104,7 +89,7 @@ void AmrDG::ErrorEst (int lev, amrex::TagBoxArray& tags, amrex::Real time, int n
         //AMRIndicator_grad(i, j, k, &uw, grad_indicator, lev, true , tagfab, tagval, any_trouble);
         //AMRIndicator_second_derivative(i, j, k,&uw, lev , tagfab, tagval, any_trouble);
         //if(uw[0](i,j,k,0)<=AMR_C[lev])
-        if(uw[0](i,j,k,0)<=AMR_C[lev])
+        if(uw[0](i,j,k,0)<=1.0)//AMR_C[lev]
         {
           tagfab(i,j,k)=tagval;
         }
@@ -140,6 +125,7 @@ void AmrDG::ErrorEst (int lev, amrex::TagBoxArray& tags, amrex::Real time, int n
   }
 }
     
+/*
 void AmrDG::AMRIndicator_tvb(int i, int j, int k,
                             amrex::Vector<amrex::Array4<const amrex::Real>>* uw,
                             amrex::Vector<amrex::Array4<amrex::Real>>* um,
@@ -406,3 +392,4 @@ void AmrDG::AMRIndicator_grad(int i, int j, int k,
     }  
   } 
 }
+*/

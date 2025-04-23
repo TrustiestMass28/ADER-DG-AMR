@@ -27,7 +27,7 @@
 #include <Eigen/Eigenvalues>
 
 AmrDG::DGprojInterp custom_interp;
-
+//extern AMREX_EXPORT AmrDG::DGprojInterp custom_interp;
 void AmrDG::DGprojInterp::getouterref(AmrDG* _amrdg)
 {
   amrdg= _amrdg;

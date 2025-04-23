@@ -143,6 +143,21 @@ void Mesh<NumericalMethodType>::MakeNewLevelFromScratch(int lev, amrex::Real tim
 }
 
 template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::ClearLevel(int lev)
+{
+    auto _solver = solver.lock();
+    _solver->AMR_clear_level_data(lev);   
+}
+
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::ErrorEst (int lev, amrex::TagBoxArray& tags, 
+                                        amrex::Real time, int ngrow)
+{
+    auto _solver = solver.lock();
+    _solver->AMR_tag_cell_refinement(lev,tags,time,ngrow);   
+}
+
+template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::MakeNewLevelFromCoarse(int lev, amrex::Real time,
                                     const amrex::BoxArray& ba, 
                                     const amrex::DistributionMapping& dm) {}
@@ -150,13 +165,6 @@ void Mesh<NumericalMethodType>::MakeNewLevelFromCoarse(int lev, amrex::Real time
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
                         const amrex::DistributionMapping& dm) {}
-
-template <typename NumericalMethodType>
-void Mesh<NumericalMethodType>::ErrorEst (int lev, amrex::TagBoxArray& tags, 
-                    amrex::Real time, int ngrow) {}
-
-template <typename NumericalMethodType>
-void Mesh<NumericalMethodType>::ClearLevel (int lev) {}
 
 template <typename NumericalMethodType>
 int Mesh<NumericalMethodType>::get_finest_lev()
@@ -305,5 +313,43 @@ AMR INTERPOLATOR
 
 
 */
+/*
+///////////////////////////////////////////////////////////////////////
+Mesh Interpolation
 
+
+  //Interpolation coarse<->fine data scatter/gather
+  custom_interp.getouterref(this); 
+  custom_interp.interp_proj_mat();
+  
+*/
+
+
+/*
+
+
+
+
+
+//std::swap(U_w[lev][q],new_mf);    
+
+/*
+  //amrex::MultiFab new_mf;
+//new_mf.define(ba, dm, Np, nghost);
+//new_mf.setVal(0.0);    
+  amrex::FillPatchTwoLevels(new_mf, time, cmf, ctime, fmf, ftime,0, 0, Np, 
+                          geom[lev-1], geom[lev],coarse_physbcf, 0, fine_physbcf, 
+                          0, refRatio(lev-1),mapper, bc_w[q], 0);
+                          
+                          
+fillpatcher = std::make_unique<FillPatcher<MultiFab>>(ba, dm, geom[lev],
+parent->boxArray(level-1), parent->DistributionMap(level-1), geom_crse,
+IntVect(nghost), desc.nComp(), desc.interp(scomp));
+
+
+fillpatcher->fill(mf, IntVect(nghost), time,
+    smf_crse, stime_crse, smf_fine, stime_fine,
+    scomp, dcomp, ncomp,
+    physbcf_crse, scomp, physbcf_fine, scomp,
+    desc.getBCs(), scomp);*/
 #endif 
