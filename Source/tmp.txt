@@ -161,14 +161,7 @@
             
       //Default AMR refinement criteria based on value
       amrex::Vector<amrex::Real> AMR_C(max_level+1);
-      for(int l=0; l<max_level+1;++l)
-      {
-        //code here if you want different coefficients for each level of refinement
-        //AMR_C[l] = 1.0+l*0.25; 
-        if(l==0){AMR_C[l] = 0.7;}
-        else if(l==1){AMR_C[l] = 1.7;}
-        else if(l==2){AMR_C[l] = 1.8;}
-      }
+
  
       //Velocity curl (3D only)
       amrex::Vector<amrex::Real> AMR_curl_C(max_level+1);

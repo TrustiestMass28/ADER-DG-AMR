@@ -6,6 +6,8 @@ void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Re
   //Print(sim->ofs) <<"AmrDG::ErrorEst"<<"\n";
   //check and flag cells where regridding criteria is met
   const int   tagval = TagBox::SET;
+
+  auto _mesh = mesh.lock();
    
   /*
   amrex::Vector<amrex::MultiFab> tmp_U_p(Q);
@@ -89,7 +91,7 @@ void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Re
         //AMRIndicator_grad(i, j, k, &uw, grad_indicator, lev, true , tagfab, tagval, any_trouble);
         //AMRIndicator_second_derivative(i, j, k,&uw, lev , tagfab, tagval, any_trouble);
         //if(uw[0](i,j,k,0)<=AMR_C[lev])
-        if(uw[0](i,j,k,0)<=1.0)//AMR_C[lev]
+        if(uw[0](i,j,k,0)<=_mesh->amr_c[lev])
         {
           tagfab(i,j,k)=tagval;
         }

@@ -39,6 +39,17 @@ int main(int argc, char* argv[])
       int dtn_regrid  = 1;          // try regrid every n timesteps
       int nghost = 1;               //number of ghost cells, dont change
       amrex::Real dt_regrid = -1;    //regrid every dt time, negative wont use it
+                              
+      amrex::Vector<amrex::Real> amr_c(max_level+1);  //AMR refinement criteria based on value
+      for(int l=0; l<max_level+1;++l)
+      {
+        //code here if you want different coefficients 
+        //for each level of refinement
+        amr_c[l] = 1.0+l*0.25; 
+        //if(l==0){amr_c[l] = 0.7;}
+        //else if(l==1){amr_c[l] = 1.7;}
+        //else if(l==2){amr_c[l] = 1.8;}
+      }
 
       //BOUNDARY CONDITION
       int Q = sim.getQ();
@@ -118,7 +129,8 @@ int main(int argc, char* argv[])
         
       }
 
-      sim.setGeometrySettings(domain,max_level,n_cell,coord,amr_ratio, is_periodic,dtn_regrid,dt_regrid,nghost); 
+      sim.setGeometrySettings(domain,max_level,n_cell,coord,amr_ratio, is_periodic,amr_c,
+                              dtn_regrid,dt_regrid,nghost); 
 
 
       
