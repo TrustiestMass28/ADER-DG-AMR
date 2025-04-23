@@ -37,8 +37,9 @@ class Mesh : public amrex::AmrCore
     public:
         Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
             int _coord, Vector<IntVect> const& _ref_ratios,  
-            Array<int,AMREX_SPACEDIM> const& _is_per, int _dtn_regrid = 0, 
-            amrex::Real _dt_regrid = 0, int _nghost= 1);
+            Array<int,AMREX_SPACEDIM> const& _is_per, 
+            amrex::Vector<amrex::Real> _amr_c,
+            int _dtn_regrid = 0,amrex::Real _dt_regrid = 0, int _nghost= 1);
 
         ~Mesh() = default;   
 
@@ -101,6 +102,9 @@ class Mesh : public amrex::AmrCore
         //Number of ghost cells
         int nghost= 1;    
 
+        //Refinement criteria coefficient/multiplier/scalar
+        amrex::Vector<amrex::Real> amr_c;
+
     private:
         
         void setSolver(std::shared_ptr<Solver<NumericalMethodType>> _solver);
@@ -111,14 +115,15 @@ class Mesh : public amrex::AmrCore
 template <typename NumericalMethodType>
 Mesh<NumericalMethodType>::Mesh(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, 
             int _coord, Vector<IntVect> const& _ref_ratios,  
-            Array<int,AMREX_SPACEDIM> const& _is_per, int _dtn_regrid , 
-            amrex::Real _dt_regrid,int _nghost) 
+            Array<int,AMREX_SPACEDIM> const& _is_per, amrex::Vector<amrex::Real> _amr_c,
+            int _dtn_regrid, amrex::Real _dt_regrid,int _nghost) 
     :  AmrCore (_rb, _max_level, _n_cell, _coord, _ref_ratios, _is_per) 
 {
     L = _max_level+1;
     dtn_regrid = _dtn_regrid;
     dt_regrid = _dt_regrid;
     nghost= _nghost;
+    amr_c = _amr_c;
 }
 
 template <typename NumericalMethodType>
