@@ -173,6 +173,13 @@ class Solver
         //Transformations to BC cell vlaues before being set as final value
         amrex::Real setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev);
 
+        //Creat a dummy BC vector, usefull in palces of the code where cannot access
+        //custom boundary object and don't want to apply BC, but amrex functions require to
+        //pass a BC object
+        amrex::Vector<amrex::Vector<amrex::BCRec>> get_null_BC_vct(int ncomp, int q);
+
+        amrex::Vector<amrex::BCRec> get_null_BC(int ncomp);
+
         //General class for numerical methods that use basis decomposition of the solution
         //can maange spatial,temporal and mixed basis functions
         //TODO: use CRTP
@@ -406,6 +413,36 @@ class Solver
         void setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
 };
+
+template <typename NumericalMethodType>
+amrex::Vector<amrex::BCRec> Solver<NumericalMethodType>::get_null_BC(int ncomp)
+{
+    amrex::Vector<amrex::BCRec> _bc(ncomp);
+    for (int n = 0; n < ncomp; ++n) {
+        _bc[n].setLo(AMREX_D_DECL(amrex::BCType::bogus,
+                                amrex::BCType::bogus,
+                                amrex::BCType::bogus));
+
+        _bc[n].setHi(AMREX_D_DECL(amrex::BCType::bogus,
+                                amrex::BCType::bogus,
+                                amrex::BCType::bogus));
+    }
+    
+    return _bc;
+}
+  
+template <typename NumericalMethodType>
+amrex::Vector<amrex::Vector<amrex::BCRec>> Solver<NumericalMethodType>::get_null_BC_vct(int ncomp, int q)
+{
+    amrex::Vector<amrex::Vector<amrex::BCRec>> _bc(q, amrex::Vector<amrex::BCRec> (ncomp));
+
+    for(int q=0 ; q<Q; ++q){
+        _bc[q] = get_null_BC(ncomp);
+    }
+
+    return _bc;
+}
+
 
 template <typename NumericalMethodType>
 template <typename EquationType>

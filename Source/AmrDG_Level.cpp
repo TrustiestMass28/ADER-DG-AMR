@@ -73,15 +73,74 @@ void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
   //create new level MFabs defined on new ba,dm
   set_init_data_system(lev,ba,dm); 
 
-  for(int q=0 ; q<Q; ++q){
-    //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
-    //FillPatchGhostFC(lev,time,q);
-  }
+  AMR_FillCoarsePatch(lev, time, U_w[lev], 0, basefunc->Np_s);
+  //FillPatchGhostFC(lev,time,q);//TODO
+  //
 }
 
+// fill an entire multifab by interpolating from the coarser level
+// this comes into play when a new level of refinement appears
+//also fills ghost cells
+void AmrDG::AMR_FillCoarsePatch (int lev, Real time, amrex::Vector<amrex::MultiFab>& fmf, 
+                                int icomp,int ncomp)
+{   
+  auto _mesh = mesh.lock();
 
+  //NB: in theory we would need access to boundary conditions if we wanted to apply them here
+  //because of code structure, we dont have access to BC object, therefore we need to create a tmp
+  //BC dummy amrex::Vector<amrex::BCRec> dummy_bc. After projection and levlec reation, the BCs will be applied
+  //to all levels at the beginning of the time-step
+  amrex::CpuBndryFuncFab bcf(nullptr);
+  auto dummy_bc = get_null_BC(ncomp);
+
+  amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
+  amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
+
+  //amrex::Interpolater* mapper = &custom_interp;//TODO
+
+  for(int q=0 ; q<Q; ++q){                            
+    amrex::Vector<MultiFab*> cmf;
+    amrex::Vector<Real> ctime;
+
+    //Store tmp data of the coarse MFab
+    //GetData(lev-1,q, time, cmf, ctime);
+    cmf.clear();
+    ctime.clear();
+    cmf.push_back(&(U_w[lev-1][q]));
+    ctime.push_back(time);
+
+    //TODO
+    //amrex::InterpFromCoarseLevel(fmf[q], time, *cmf[0], 0, icomp, ncomp, geom[lev-1], 
+    //    geom[lev], coarse_physbcf, 0, fine_physbcf, 0, 
+    //    refRatio(lev-1),mapper, bc_w[q], 0);      
+  }                         
+}
 
 /*
+void AmrDG::GetData (int lev, int q, Real time, Vector<MultiFab*>& data, 
+                      Vector<Real>& datatime)
+{
+  data.clear();
+  datatime.clear();
+  data.push_back(&(U_w[lev][q]));
+  datatime.push_back(time);
+}
+*/
+
+/*
+//averages cell centered data from finer cells to the respective covered coarse cell
+void AmrDG::AverageFineToCoarse()
+{  
+//Print(*ofs) << "AverageFineToCoarse()"<< "\n";
+
+for (int l = finest_level; l > 0; --l){  
+for(int q=0; q<Q; ++q){   
+custom_interp.average_down(U_w[l][q], U_w[l-1][q],0,U_w[l-1][q].nComp(), 
+              refRatio(l-1), l,l-1);
+}
+} 
+}
+
 //Fillpatch operations fill all cells, valid and ghost, from actual valid data at 
 //that level, space-time interpolated data from the next-coarser level, 
 //neighboring grids at the same level, and domain boundary conditions 
@@ -163,47 +222,7 @@ void AmrDG::FillPatchGhostFC(int lev,amrex::Real time,int q)
                                       0,0,Np,coarse_physbcf,0,bc_w[q],0);                        
 }	    
 	    
-// fill an entire multifab by interpolating from the coarser level
-// this comes into play when a new level of refinement appears
-//also fills ghost cells
-void AmrDG::FillCoarsePatch (int lev, Real time, amrex::MultiFab& mf, 
-                            int icomp,int ncomp, int q)
-{                               
-  amrex::Vector<MultiFab*> cmf;
-  amrex::Vector<Real> ctime;
-  GetData(lev-1,q, time, cmf, ctime);
-  
-  amrex::Interpolater* mapper = &custom_interp;
-  amrex::CpuBndryFuncFab bcf(nullptr);
-  amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(geom[lev-1],bc_w[q],bcf);
-  amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(geom[lev],bc_w[q],bcf);
-  
-  amrex::InterpFromCoarseLevel(mf, time, *cmf[0], 0, icomp, ncomp, geom[lev-1], 
-                              geom[lev], coarse_physbcf, 0, fine_physbcf, 0, 
-                              refRatio(lev-1),mapper, bc_w[q], 0);                               
-}
 
-void AmrDG::GetData (int lev, int q, Real time, Vector<MultiFab*>& data, 
-                    Vector<Real>& datatime)
-{
-  data.clear();
-  datatime.clear();
-  data.push_back(&(U_w[lev][q]));
-  datatime.push_back(time);
-}
-
-//averages cell centered data from finer cells to the respective covered coarse cell
-void AmrDG::AverageFineToCoarse()
-{  
-  //Print(*ofs) << "AverageFineToCoarse()"<< "\n";
-  
-  for (int l = finest_level; l > 0; --l){  
-    for(int q=0; q<Q; ++q){   
-      custom_interp.average_down(U_w[l][q], U_w[l-1][q],0,U_w[l-1][q].nComp(), 
-                                refRatio(l-1), l,l-1);
-    }
-  } 
-}
 
 //averages face centered data from finer cells to the respective covered coarse cell
 void AmrDG::AverageFineToCoarseFlux(int lev)
