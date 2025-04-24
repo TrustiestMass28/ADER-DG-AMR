@@ -184,7 +184,6 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
   
   setMesh(_mesh);
   
-
   //TODO: use solver ptr to pass reference of bc, bc_w
   _solver->init_bc(bc,n_comp);
 

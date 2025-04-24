@@ -90,6 +90,9 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                                 const amrex::BoxArray& ba, 
                                 const amrex::DistributionMapping& dm);
 
+    void AMR_FillCoarsePatch (int lev, Real time, amrex::Vector<amrex::MultiFab>& fmf, 
+                              int icomp,int ncomp);
+
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
 
