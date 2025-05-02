@@ -327,6 +327,20 @@ class Solver
                     std::shared_ptr<NumericalMethodType> numme;
             };
 
+            class AMR_Interpolation : public Interpolater
+            {
+                public:
+                AMR_Interpolation();
+
+                ~AMR_Interpolation() = default;
+
+                void setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme);
+
+                protected:
+                    //Ptr used to access numerical method and solver data
+                    std::shared_ptr<NumericalMethodType> numme;
+            };
+
             //number of points at which boundary conditions are
             //need to be set by the NumericalMethodType, called
             //by BoundaryCondition. Set in init_bc
@@ -413,6 +427,10 @@ class Solver
         void setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
 };
+
+template <typename NumericalMethodType>
+Solver<NumericalMethodType>::AMR_Interpolation::AMR_Interpolation() : Interpolater()
+{}
 
 template <typename NumericalMethodType>
 amrex::Vector<amrex::BCRec> Solver<NumericalMethodType>::get_null_BC(int ncomp)
@@ -534,29 +552,22 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEquation<EquationType>> model_pde)
 {
+    //There are two stratgies to initialize level mesh
+    //  Method 1: init coarse level, prolongate to fine
+    //  Method 2: init all levels, restrict from fine to coarse
+    //            this is more flexible since it works with multiple solver types
+    //            and mantain higher order ifo from ifne cells inside coarse
+    //            just need to ensure restriction is conservative
+
     //loop over levels
     auto _mesh = mesh.lock();
     for(int l=0; l<_mesh->L; ++l){
-        if(l == 0)
-        {
-            static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,l);
-        }
-        else
-        {   
-            for(int q=0 ; q<Q; ++q){//TODO
-                //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
-                //for ghost at fine-coarseinterface just copy from coarse
-                //FillPatchGhostFC(lev,time,q);
-                //TODO: should possible avg down be put here?
-              }  
-        }
+        //Define IC on coarsest mesh
+        static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,l);
     }
 
-    //TODO:average down, (after Initfromscartch should avg down fine->coarse)
-    //TODO:check if this is really needed in AMRDG, in any case, should be done 
-    //depending on implementation of num method
-    //avg_down_initial_condition()
-    //static_cast<NumericalMethodType*>(this)->avg_down_initial_condition(lev);
+    //Restrict solution from fine to coarse level
+    //static_cast<NumericalMethodType*>(this)->avg_down_initial_condition(lev);//TODO
 }
 
 template <typename NumericalMethodType>
