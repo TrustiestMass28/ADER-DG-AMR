@@ -90,8 +90,10 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                                 const amrex::BoxArray& ba, 
                                 const amrex::DistributionMapping& dm);
 
-    void AMR_FillCoarsePatch (int lev, Real time, amrex::Vector<amrex::MultiFab>& fmf, 
+    void AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::MultiFab>& fmf, 
                               int icomp,int ncomp);
+
+    void AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf,int icomp, int ncomp);
 
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
@@ -204,7 +206,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         void NewtonRhapson(amrex::Real &x, int n); 
     };
-      
+  
   private:
 
     //Vandermonde matrix for mapping modes<->quadrature points
@@ -303,6 +305,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     std::shared_ptr<QuadratureGaussLegendre> quadrule;  //TODO:maybe doe snot need to be shared
 
+    std::shared_ptr<L2ProjInterp> amr_interpolator;
+
     void DEBUG_print_MFab();
 };
 
@@ -333,9 +337,7 @@ void AmrDG::set_initial_condition(std::shared_ptr<ModelEquation<EquationType>> m
     for (MFIter mfi(*(state_uw[0]),true); mfi.isValid(); ++mfi)
     #endif   
     {
-      const amrex::Box& bx = mfi.growntilebox();
-      //we wil lfill also ghost cells at fine coarse itnerface of fine lvl
-      //therefore no need to then call FillPatch
+      const amrex::Box& bx = mfi.tilebox();
 
       for(int q=0 ; q<Q; ++q){
         fab_uw[q]=&((*(state_uw[q]))[mfi]);
@@ -405,9 +407,6 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   
   while(t<T)
   {  
-  
-    //TODO:SOLUTION SYNCH HERE?
-
     //Remake existing levels and create new fine levels from coarse
     if ((_mesh->L > 0) && (n>0))
     {
@@ -418,8 +417,23 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
       }
     }  
 
-    //TODO:SOLUTION SYNCH HERE?
+    //Synch ghost cells inside same level across MPI processes
+    //(during init ghost are not filled)
+    for(int l=0; l<=_mesh->get_finest_lev(); ++l){
+      for(int q=0; q<Q; ++q){ 
+        FillBoundary(&(U_w[l][q]),l);
+      }
+    }
     
+    /*
+                for(int q=0 ; q<Q; ++q){//TODO
+                //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
+                //for ghost at fine-coarseinterface just copy from coarse
+                //FillPatchGhostFC(lev,time,q);
+                //TODO: should possible avg down be put here?Otherwise all this block
+                //to put inside ADER function ebfore time-stepping
+              }  
+    */
     //advance solution by one time-step.
     time_integration(model_pde,bdcond,t);
 
@@ -428,17 +442,25 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     //gather valid fine cell solutions U_w into valid coarse cells
     //AverageFineToCoarse();   
     
-    //prepare data for next time step
+    //Prepare inner ghost cell data for next time step
+    //for grids at same level and fine-coarse interface
+    //fine grids ghost cells inteprolated from coarse
     for(int l=0; l<=_mesh->get_finest_lev(); ++l){
-      for(int q=0; q<Q; ++q){ 
-        //FillPatch(l, t, U_w[l][q], 0, Np,q); //TODO:inside Mesh
+      amrex::Vector<amrex::MultiFab> _mf;
+      _mf.resize(Q);
 
-        //Sync internal ghost cells between MPI processes 
-        //(also paply periodic BC)
-        FillBoundary(&(U_w[l][q]),l);
-        //if(l>0){FillPatchGhostFC(l,0,q);}
-        //FillBoundary will be repeated also for FillPatchGHost, but there there
-        //is not info about periodic BC
+      for(int q=0 ; q<Q; ++q){
+        const amrex::BoxArray& ba = U_w[l][q].boxArray();
+        const amrex::DistributionMapping& dm = U_w[l][q].DistributionMap();
+
+        _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
+        _mf[q].setVal(0.0);    
+      } 
+      
+      AMR_FillPatch(l, t, _mf, 0, basefunc->Np_s);
+      
+      for(int q=0 ; q<Q; ++q){
+        std::swap(U_w[l][q],_mf[q]);  
       }
     }
     
