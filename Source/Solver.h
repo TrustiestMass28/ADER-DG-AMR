@@ -327,14 +327,30 @@ class Solver
                     std::shared_ptr<NumericalMethodType> numme;
             };
 
-            class AMR_Interpolation : public Interpolater
+            template <typename InterpolationType>
+            class AMR_Interpolation : public amrex::Interpolater
             {
                 public:
-                AMR_Interpolation();
+                    AMR_Interpolation() = default;
 
-                ~AMR_Interpolation() = default;
+                    ~AMR_Interpolation() = default;
 
-                void setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme);
+                    //Override pure virtual function from Interpolater
+                    void interp (const FArrayBox& crse,
+                                int              crse_comp,
+                                FArrayBox&       fine,
+                                int              fine_comp,
+                                int              ncomp,
+                                const Box&       fine_region,
+                                const IntVect&   ratio,
+                                const Geometry&  crse_geom,
+                                const Geometry&  fine_geom,
+                                Vector<BCRec> const& bcr,
+                                int              actual_comp,
+                                int              actual_state,
+                                RunOn            runon) override;
+
+                    void setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme);
 
                 protected:
                     //Ptr used to access numerical method and solver data
@@ -427,10 +443,6 @@ class Solver
         void setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
 
 };
-
-template <typename NumericalMethodType>
-Solver<NumericalMethodType>::AMR_Interpolation::AMR_Interpolation() : Interpolater()
-{}
 
 template <typename NumericalMethodType>
 amrex::Vector<amrex::BCRec> Solver<NumericalMethodType>::get_null_BC(int ncomp)
@@ -600,6 +612,37 @@ Solver<NumericalMethodType>::Quadrature::~Quadrature()
 {
     //delete numme;
 }
+
+template <typename NumericalMethodType>
+template <typename InterpolationType>
+void Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme)
+{
+    numme = _numme;
+}
+
+template <typename NumericalMethodType>
+template <typename InterpolationType>
+void Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::interp(const FArrayBox& crse,
+                                                            int              crse_comp,
+                                                            FArrayBox&       fine,
+                                                            int              fine_comp,
+                                                            int              ncomp,
+                                                            const Box&       fine_region,
+                                                            const IntVect&   ratio,
+                                                            const Geometry&  crse_geom,
+                                                            const Geometry&  fine_geom,
+                                                            Vector<BCRec> const& bcr,
+                                                            int              actual_comp,
+                                                            int              actual_state,
+                                                            RunOn            runon) 
+{
+    // Forward call to derived class
+    static_cast<InterpolationType*>(this)->interp(crse, crse_comp, fine, fine_comp,
+                                                    ncomp, fine_region, ratio,
+                                                    crse_geom, fine_geom, bcr,
+                                                    actual_comp, actual_state, runon);
+}
+
 
 template <typename NumericalMethodType>
 template <typename EquationType>
