@@ -195,6 +195,9 @@ void AmrDG::init()
   set_ref_element_matrix();
   
   //TODO:Set-up mesh interpolation
+  //amr_interpolator = std::make_shared<L2ProjInterp>();
+
+  //amr_interpolator->setNumericalMethod(shared_from_this());
 
   //TODO::Set-up limiting
 

@@ -206,6 +206,29 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         void NewtonRhapson(amrex::Real &x, int n); 
     };
+
+    class L2ProjInterp : public AMR_Interpolation<L2ProjInterp>
+    {
+      public:
+        L2ProjInterp() = default;
+
+        ~L2ProjInterp() = default;
+
+        void interp(const FArrayBox& crse,
+                    int              crse_comp,
+                    FArrayBox&        fine,
+                    int              fine_comp,
+                    int              ncomp,
+                    const Box&        fine_region,
+                    const IntVect&    ratio,
+                    const Geometry&   crse_geom,
+                    const Geometry&   fine_geom,
+                    Vector<BCRec> const& bcr,
+                    int              actual_comp,
+                    int              actual_state,
+                    RunOn             runon);
+
+    };
   
   private:
 
