@@ -226,7 +226,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                     Vector<BCRec> const& bcr,
                     int              actual_comp,
                     int              actual_state,
-                    RunOn             runon);
+                    RunOn             runon) override;
 
     };
   

@@ -1,94 +1,70 @@
+#include <AMReX_ParallelDescriptor.H>
+#include <AMReX_ParmParse.H>
+#include <AMReX_MultiFab.H>
+#include <AMReX_MultiFabUtil.H>
+#include <AMReX_FillPatchUtil.H>
+#include <AMReX_PlotFileUtil.H>
+#include <AMReX_VisMF.H>
+#include <AMReX_PhysBCFunct.H>
+#include <AMReX_Print.H>
+#include <cmath>
+#include <math.h>
+#ifdef AMREX_MEM_PROFILING
+#include <AMReX_MemProfiler.H>
+#endif
+
 #include "AmrDG.h"
 
-
-using namespace amrex;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#include <AMReX_FArrayBox.H>
+#include <AMReX_IArrayBox.H>
+#include <AMReX_Geometry.H>
+#include <AMReX_Interpolater.H>
+#include <AMReX_Interp_C.H>
+#include <AMReX_MFInterp_C.H>
+#include <climits>
+#include <Eigen/Core>
+#include <Eigen/SVD>
+#include <Eigen/Eigenvalues>
 
 /*
-    //AMR Coarse>->Fine projection custom implementation
-    class DGprojInterp : public Interpolater
-    {
-      public:
-        
-        Box CoarseBox (const Box& fine, int ratio) override;
-        
-        Box CoarseBox (const Box& fine, const IntVect& ratio) override;
-            
-        void interp (const FArrayBox& crse, int crse_comp,FArrayBox& fine,
-                    int  fine_comp,int ncomp, const Box& fine_region, 
-                    const IntVect&   ratio, const Geometry& crse_geom, 
-                    const Geometry& fine_geom,Vector<BCRec> const& bcr,
-                    int actual_comp,int actual_state, RunOn runon) override;
-                           
-        void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
-                        int fcomp, Array4<Real const> const& crse, int ccomp, 
-                        int ncomp, IntVect const& ratio) noexcept;
-                                            
-        void average_down(const MultiFab& S_fine, MultiFab& S_crse,
-                         int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
-                         const int lev_coarse, int d=0, bool flag_flux=false);
-                  
-        void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
-                        Array4<Real const> const& fine,int ccomp, 
-                        int fcomp, IntVect const& ratio) noexcept;
-                     
-        //void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-        //                                  Array4<Real const> const& fine,int ccomp, 
-        //                                  int fcomp, IntVect const& ratio) noexcept;                               
-        void getouterref(AmrDG* _amrdg);  
-        
-        void interp_proj_mat();
-        
-        void average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
-                                      int scomp, int ncomp, const IntVect& ratio, 
-                                      const int lev_fine, const int lev_coarse, 
-                                      int d, bool flag_flux);
-                                      
-         void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-                                          Array4<Real> const& fine,int ccomp, 
-                                          int fcomp, IntVect const& ratio) noexcept;
+///////////////////////////////////////////////////////////////////////
+Mesh Interpolation
 
-      //amrex::Real RefMat_phiphi(int i,int j, bool is_predictor, bool is_mixed_nmodes) const;
 
-      private:     
-        friend class NumericalMethod;
-          
-        AmrDG* amrdg;     
-        
-        amrex::Vector<amrex::Vector<int >> amr_projmat_int;
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_scatter;
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_gather;        
-    };
+  //Interpolation coarse<->fine data scatter/gather
+  custom_interp.getouterref(this); 
+  custom_interp.interp_proj_mat();
+
 */
+//std::swap(U_w[lev][q],new_mf);    
 
 /*
+  //amrex::MultiFab new_mf;
+//new_mf.define(ba, dm, Np, nghost);
+//new_mf.setVal(0.0);    
+  amrex::FillPatchTwoLevels(new_mf, time, cmf, ctime, fmf, ftime,0, 0, Np, 
+                          geom[lev-1], geom[lev],coarse_physbcf, 0, fine_physbcf, 
+                          0, refRatio(lev-1),mapper, bc_w[q], 0);
+                          
+                          
+fillpatcher = std::make_unique<FillPatcher<MultiFab>>(ba, dm, geom[lev],
+parent->boxArray(level-1), parent->DistributionMap(level-1), geom_crse,
+IntVect(nghost), desc.nComp(), desc.interp(scomp));
+
+
+fillpatcher->fill(mf, IntVect(nghost), time,
+    smf_crse, stime_crse, smf_fine, stime_fine,
+    scomp, dcomp, ncomp,
+    physbcf_crse, scomp, physbcf_fine, scomp,
+    desc.getBCs(), scomp);
+    */
+
+
 AmrDG::DGprojInterp custom_interp;
+
 //extern AMREX_EXPORT AmrDG::DGprojInterp custom_interp;
-void AmrDG::DGprojInterp::getouterref(AmrDG* _amrdg)
-{
-  amrdg= _amrdg;
-}
+
+
 
 void AmrDG::DGprojInterp::interp_proj_mat()
 {
@@ -354,14 +330,14 @@ void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
           {
             amr_gather(i,j,k,n,crsearr,finearr,scomp,scomp,ratio);
           });    
-        }
-        //else
-        //{ 
-        //  AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
-        //  { 
-        //    amr_gather_flux(i,j,k,n,d,crsearr,finearr,scomp,scomp,ratio);
-        //  });         
-        }
+        }/*
+        else
+        { 
+          AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
+          { 
+            amr_gather_flux(i,j,k,n,d,crsearr,finearr,scomp,scomp,ratio);
+          });         
+        }*/
       }
     }
   }    
@@ -389,14 +365,14 @@ void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
             amr_gather(i,j,k,n,crsearr,finearr,0,scomp,ratio);      
           });  
         }/*
-        //else
-        //{
-        //
-        //  AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
-        //  { 
-        //    amr_gather_flux(i,j,k,n,d,crsearr,finearr,0,scomp,ratio);      
-        //  });         
-        //}
+        else
+        {
+
+          AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
+          { 
+            amr_gather_flux(i,j,k,n,d,crsearr,finearr,0,scomp,ratio);      
+          });         
+        }*/
       }
     }
 
@@ -587,12 +563,12 @@ void AmrDG::DGprojInterp::average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
   }
 }
 
-
-//AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-//void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-//                                          Array4<Real const> const& fine,int ccomp, 
-//                                          int fcomp, IntVect const& ratio) noexcept
-
+/*
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
+                                          Array4<Real const> const& fine,int ccomp, 
+                                          int fcomp, IntVect const& ratio) noexcept
+*/
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
                                           Array4<Real> const& fine,int ccomp, 
@@ -701,4 +677,3 @@ void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Arra
 
 }
 
-*/
