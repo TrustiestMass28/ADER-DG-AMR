@@ -333,9 +333,10 @@ class Solver
                 public:
                     AMR_Interpolation() = default;
 
-                    ~AMR_Interpolation() = default;
+                    virtual ~AMR_Interpolation() = default; // Good practice
 
                     //Override pure virtual function from Interpolater
+                    /*
                     void interp (const FArrayBox& crse,
                                 int              crse_comp,
                                 FArrayBox&       fine,
@@ -348,7 +349,7 @@ class Solver
                                 Vector<BCRec> const& bcr,
                                 int              actual_comp,
                                 int              actual_state,
-                                RunOn            runon) override;
+                                RunOn            runon) override;*/
 
                     void setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme);
 
@@ -620,6 +621,7 @@ void Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::setNumer
     numme = _numme;
 }
 
+/*
 template <typename NumericalMethodType>
 template <typename InterpolationType>
 void Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::interp(const FArrayBox& crse,
@@ -641,7 +643,7 @@ void Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::interp(c
                                                     ncomp, fine_region, ratio,
                                                     crse_geom, fine_geom, bcr,
                                                     actual_comp, actual_state, runon);
-}
+}*/
 
 
 template <typename NumericalMethodType>
