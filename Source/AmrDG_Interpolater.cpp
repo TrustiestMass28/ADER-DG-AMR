@@ -4,18 +4,34 @@
 using namespace amrex;
 
 
+Box AmrDG::L2ProjInterp::CoarseBox (const Box& fine,
+                                    int        ratio)
+{
+    return amrex::coarsen(fine,ratio);//TODO:placeholder code
+}
 
+Box AmrDG::L2ProjInterp::CoarseBox (const Box&     fine,
+                                    const IntVect& ratio)
+{
+    return amrex::coarsen(fine,ratio);//TODO:placeholder code
+}
 
-
-
-
-
-
-
-
-
-
-
+void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
+            int              crse_comp,
+            FArrayBox&       fine,
+            int              fine_comp,
+            int              ncomp,
+            const Box&       fine_region,
+            const IntVect&   ratio,
+            const Geometry&  crse_geom,
+            const Geometry&  fine_geom,
+            Vector<BCRec> const& bcr,
+            int              actual_comp,
+            int              actual_state,
+            RunOn            runon)
+{
+  //TODO:placeholder code
+}
 
 
 
