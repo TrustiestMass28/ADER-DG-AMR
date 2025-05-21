@@ -202,7 +202,7 @@ void AmrDG::init()
   //TODO::Set-up limiting
 
 }
-
+/*
 void AmrDG::L2ProjInterp::interp(const FArrayBox& crse,
                                   int              crse_comp,
                                   FArrayBox&        fine,
@@ -218,7 +218,7 @@ void AmrDG::L2ProjInterp::interp(const FArrayBox& crse,
                                   RunOn             runon)
 {
 
-}
+}*/
 
 
 void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)

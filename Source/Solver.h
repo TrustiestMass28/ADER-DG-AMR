@@ -336,7 +336,6 @@ class Solver
                     virtual ~AMR_Interpolation() = default; // Good practice
 
                     //Override pure virtual function from Interpolater
-                    /*
                     void interp (const FArrayBox& crse,
                                 int              crse_comp,
                                 FArrayBox&       fine,
@@ -349,8 +348,14 @@ class Solver
                                 Vector<BCRec> const& bcr,
                                 int              actual_comp,
                                 int              actual_state,
-                                RunOn            runon) override;*/
+                                RunOn            runon) override;
 
+                    Box CoarseBox (const Box& fine, int ratio) override;
+
+
+                    Box CoarseBox (const Box& fine, const IntVect& ratio) override;
+
+                    
                     void setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme);
 
                 protected:
@@ -621,29 +626,41 @@ void Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::setNumer
     numme = _numme;
 }
 
-/*
 template <typename NumericalMethodType>
 template <typename InterpolationType>
 void Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::interp(const FArrayBox& crse,
-                                                            int              crse_comp,
-                                                            FArrayBox&       fine,
-                                                            int              fine_comp,
-                                                            int              ncomp,
-                                                            const Box&       fine_region,
-                                                            const IntVect&   ratio,
-                                                            const Geometry&  crse_geom,
-                                                            const Geometry&  fine_geom,
-                                                            Vector<BCRec> const& bcr,
-                                                            int              actual_comp,
-                                                            int              actual_state,
-                                                            RunOn            runon) 
+                                                                                int              crse_comp,
+                                                                                FArrayBox&        fine,
+                                                                                int              fine_comp,
+                                                                                int              ncomp,
+                                                                                const Box&        fine_region,
+                                                                                const IntVect&    ratio,
+                                                                                const Geometry&   crse_geom,
+                                                                                const Geometry&   fine_geom,
+                                                                                Vector<BCRec> const& bcr,
+                                                                                int              actual_comp,
+                                                                                int              actual_state,
+                                                                                RunOn             runon)
 {
-    // Forward call to derived class
     static_cast<InterpolationType*>(this)->interp(crse, crse_comp, fine, fine_comp,
                                                     ncomp, fine_region, ratio,
                                                     crse_geom, fine_geom, bcr,
                                                     actual_comp, actual_state, runon);
-}*/
+}
+
+template <typename NumericalMethodType>
+template <typename InterpolationType>
+Box Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::CoarseBox (const Box& fine, int ratio) 
+{
+    return static_cast<InterpolationType*>(this)->CoarseBox(fine, ratio);
+}
+
+template <typename NumericalMethodType>
+template <typename InterpolationType>
+Box Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::CoarseBox (const Box& fine, const IntVect& ratio) 
+{
+    return static_cast<InterpolationType*>(this)->CoarseBox(fine, ratio);
+}
 
 
 template <typename NumericalMethodType>
