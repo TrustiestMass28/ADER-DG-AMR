@@ -202,24 +202,6 @@ void AmrDG::init()
   //TODO::Set-up limiting
 
 }
-/*
-void AmrDG::L2ProjInterp::interp(const FArrayBox& crse,
-                                  int              crse_comp,
-                                  FArrayBox&        fine,
-                                  int              fine_comp,
-                                  int              ncomp,
-                                  const Box&        fine_region,
-                                  const IntVect&    ratio,
-                                  const Geometry&   crse_geom,
-                                  const Geometry&   fine_geom,
-                                  Vector<BCRec> const& bcr,
-                                  int              actual_comp,
-                                  int              actual_state,
-                                  RunOn             runon)
-{
-
-}*/
-
 
 void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
 {
