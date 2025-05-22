@@ -229,9 +229,44 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                     int              actual_state,
                     RunOn            runon);
 
+        //AMR scatter MUST be called from interp
+        void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
+                        int fcomp, Array4<Real const> const& crse, int ccomp, 
+                        int ncomp, IntVect const& ratio) noexcept;
+                                            
+        void average_down(const MultiFab& S_fine, MultiFab& S_crse,
+                        int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
+                        const int lev_coarse) noexcept;
+        
+        //AMR gater MUST be called from average down
+        void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
+                        Array4<Real const> const& fine,int ccomp, 
+                        int fcomp, IntVect const& ratio) noexcept;
+        /*
+        void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
+                                        Array4<Real const> const& fine,int ccomp, 
+                                        int fcomp, IntVect const& ratio) noexcept;   
+
+        void average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
+                            int scomp, int ncomp, const IntVect& ratio, 
+                            const int lev_fine, const int lev_coarse, 
+                            int d, bool flag_flux);
+                                    
+        */
+
         Box CoarseBox (const Box& fine, int ratio);
 
         Box CoarseBox (const Box& fine, const IntVect& ratio);
+
+        void interp_proj_mat();
+        
+      private:
+        amrex::Vector<amrex::Vector<int >> amr_projmat_int;
+
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_scatter;
+
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_gather;      
+          
     };
   
   private:

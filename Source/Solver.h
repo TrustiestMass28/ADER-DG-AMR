@@ -350,6 +350,31 @@ class Solver
                                 int              actual_state,
                                 RunOn            runon) override;
 
+                    //AMR scatter MUST be called from interp
+                    void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
+                                    int fcomp, Array4<Real const> const& crse, int ccomp, 
+                                    int ncomp, IntVect const& ratio) noexcept;
+                                                        
+                    void average_down(const MultiFab& S_fine, MultiFab& S_crse,
+                                    int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
+                                    const int lev_coarse) noexcept;
+                    
+                    //AMR gater MUST be called from average down
+                    void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
+                                    Array4<Real const> const& fine,int ccomp, 
+                                    int fcomp, IntVect const& ratio) noexcept;
+                    /*
+                    void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
+                                                    Array4<Real const> const& fine,int ccomp, 
+                                                    int fcomp, IntVect const& ratio) noexcept;   
+
+                    void average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
+                                        int scomp, int ncomp, const IntVect& ratio, 
+                                        const int lev_fine, const int lev_coarse, 
+                                        int d, bool flag_flux);
+                                                
+                    */
+
                     Box CoarseBox (const Box& fine, int ratio) override;
 
 
@@ -661,6 +686,40 @@ Box Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::CoarseBox
 {
     return static_cast<InterpolationType*>(this)->CoarseBox(fine, ratio);
 }
+
+template <typename NumericalMethodType>
+template <typename InterpolationType>
+void  Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
+                                                                                    int fcomp, Array4<Real const> const& crse, int ccomp, 
+                                                                                    int ncomp, IntVect const& ratio) noexcept
+{
+    return static_cast<InterpolationType*>(this)->amr_scatter(i, j, k, n, fine,
+                                                               fcomp, crse, ccomp,
+                                                               ncomp, ratio);
+}
+   
+template <typename NumericalMethodType>
+template <typename InterpolationType>
+void  Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::average_down(const MultiFab& S_fine, MultiFab& S_crse,
+                                                                                        int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
+                                                                                        const int lev_coarse) noexcept
+{
+    return static_cast<InterpolationType*>(this)->average_down(S_fine, S_crse,
+                                                                scomp, ncomp, ratio, lev_fine,
+                                                                lev_coarse);
+}
+
+template <typename NumericalMethodType>
+template <typename InterpolationType>
+void  Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
+                                                                                    Array4<Real const> const& fine,int ccomp, 
+                                                                                    int fcomp, IntVect const& ratio) noexcept
+{
+    return static_cast<InterpolationType*>(this)->amr_gather(i, j, k, n, crse,
+                                                              fcomp, ccomp,
+                                                              ratio);
+}
+
 
 
 template <typename NumericalMethodType>
