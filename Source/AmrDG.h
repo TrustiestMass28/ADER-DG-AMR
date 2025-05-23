@@ -211,7 +211,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     class L2ProjInterp : public AMR_Interpolation<L2ProjInterp>
     {
       public:
-        L2ProjInterp() = default;
+        L2ProjInterp();
 
         ~L2ProjInterp() = default;
 
@@ -257,17 +257,26 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         Box CoarseBox (const Box& fine, int ratio);
 
         Box CoarseBox (const Box& fine, const IntVect& ratio);
-
-        void interp_proj_mat();
         
-      private:
+      private:        
+      
+        void interp_proj_mat();
+
         amrex::Vector<amrex::Vector<int >> amr_projmat_int;
 
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_scatter;
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_cf;
 
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_gather;      
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_fc;      
+
+        amrex::Vector<amrex::Vector<amrex::Real>> M_c;
+
+        amrex::Vector<amrex::Vector<amrex::Real>> M_f;
           
     };
+
+  protected:
+
+      int kroneckerDelta(int a, int b) const;
   
   private:
 
@@ -289,8 +298,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     amrex::Real refMat_tphiDtphi(int j,int i) const;
       
     amrex::Real coefficient_c(int k,int l) const;     
-
-    int kroneckerDelta(int a, int b) const;
 
     void set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                       amrex::Vector<amrex::MultiFab>* H_w_ptr);

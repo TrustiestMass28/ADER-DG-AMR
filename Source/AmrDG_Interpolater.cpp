@@ -1,8 +1,82 @@
 #include "AmrDG.h"
-
+#include <Eigen/Core>
 
 using namespace amrex;
 
+
+AmrDG::L2ProjInterp::L2ProjInterp()
+{
+  interp_proj_mat();
+}
+
+void AmrDG::L2ProjInterp::interp_proj_mat()
+{ 
+  //custom interpolation data structures
+  amr_projmat_int.resize(std::pow(2,AMREX_SPACEDIM),amrex::Vector<int >(AMREX_SPACEDIM));
+  
+  //coarse->fine projection matrix
+  P_cf.resize((int)std::pow(2,AMREX_SPACEDIM),
+            amrex::Vector<amrex::Vector<amrex::Real>>(numme->basefunc->Np_s,
+            amrex::Vector<amrex::Real>(numme->basefunc->Np_s)));
+  
+  //fine->coarse projection matrix
+  P_fc.resize((int)std::pow(2,AMREX_SPACEDIM),
+            amrex::Vector<amrex::Vector<amrex::Real>>(numme->basefunc->Np_s,
+            amrex::Vector<amrex::Real>(numme->basefunc->Np_s)));
+  
+  //coarse mass matrix
+  M_c.resize(numme->basefunc->Np_s,amrex::Vector<amrex::Real>(numme->basefunc->Np_s));
+
+  //fine mass matrix
+  M_f.resize(numme->basefunc->Np_s,amrex::Vector<amrex::Real>(numme->basefunc->Np_s));
+
+  //K=[-1,1]->amr->Km=[-1,0] u Kp=[0,1]
+  //need all combinations of sub itnervalls that are obtained when refining. 
+  //for simplificy just store the sing, i.e +,-
+ 
+  amrex::Vector<int> Kpm_int = {-1,1}; //=={Km,Kp}
+  //NB: the product of the plus [0,1] minus [-1,0] intervalls defined in each 
+  //entry of amr_projmat_int[idx] define completely
+  //a finer cell. e.g amr_projmat_int[idx] = [-1,1,-1] ==> [-1,0]x[0,1]x[-1,0]
+
+  #if (AMREX_SPACEDIM == 1)
+  for(int i=0; i<2;++i){
+    amr_projmat_int[i][0]= Kpm_int[i];
+  }   
+  #elif (AMREX_SPACEDIM == 2)
+  for(int i=0; i<2;++i){
+    for(int j=0; j<2;++j){
+      amr_projmat_int[2*i+j][0]= Kpm_int[i];
+      amr_projmat_int[2*i+j][1]= Kpm_int[j];
+    }
+  }  
+  #elif (AMREX_SPACEDIM == 3)
+  for(int i=0; i<2;++i){
+    for(int j=0; j<2;++j){
+      for(int k=0; k<2;++k){
+        amr_projmat_int[2*2*i+2*j+k][0]= Kpm_int[i];
+        amr_projmat_int[2*2*i+2*j+k][1]= Kpm_int[j];
+        amr_projmat_int[2*2*i+2*j+k][2]= Kpm_int[k];
+      }
+    }
+  }  
+  #endif
+  
+  for(int idx=0; idx<std::pow(2,AMREX_SPACEDIM); ++idx)
+  { 
+    //Define coordinate mapping between coarse cell and fine cell. 
+    //depending on intervalls of fine cell in each dimension we need to shift differently
+    //xi_f = 0.5*xi_c +-0.5 ==> "-":[-1,1]->[-1,0]  ,  "+":[-1,1]->[0,1]
+    //since we store intervalls just as +1,-1 , we can directly use that value to get correct shift   
+    //Construct mass matrix (identical do DG mass matrix, just cast it to Eigen)     
+    amrex::Real shift[AMREX_SPACEDIM]={AMREX_D_DECL(0.5*amr_projmat_int[idx][0],
+                                        0.5*amr_projmat_int[idx][1],
+                                        0.5*amr_projmat_int[idx][2])};
+
+    //TODO: construct matrices
+
+  }
+}
 
 Box AmrDG::L2ProjInterp::CoarseBox (const Box& fine,
                                     int        ratio)
@@ -54,152 +128,7 @@ void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
   //TODO:placeholder code
 }
 
-
 /*
-AmrDG::DGprojInterp custom_interp;
-//extern AMREX_EXPORT AmrDG::DGprojInterp custom_interp;
-void AmrDG::DGprojInterp::getouterref(AmrDG* _amrdg)
-{
-  amrdg= _amrdg;
-}
-
-void AmrDG::DGprojInterp::interp_proj_mat()
-{
-  //custom interpolation data structures
-  amr_projmat_int.resize(std::pow(2,AMREX_SPACEDIM),amrex::Vector<int >(AMREX_SPACEDIM));
-  
-  P_scatter.resize((int)std::pow(2,AMREX_SPACEDIM),
-            amrex::Vector<amrex::Vector<amrex::Real>>(amrdg->Np,
-            amrex::Vector<amrex::Real>(amrdg->Np)));
-            
-  P_gather.resize((int)std::pow(2,AMREX_SPACEDIM),
-            amrex::Vector<amrex::Vector<amrex::Real>>(amrdg->Np,
-            amrex::Vector<amrex::Real>(amrdg->Np)));
-  
-  //K=[-1,1]->amr->Km=[-1,0] u Kp=[0,1]
-  //need all combinations of sub itnervalls that are obtained when refining. 
- 
-  amrex::Vector<int> Kpm_int = {-1,1}; //=={Km,Kp}
-  //NB: the product of the plus [0,1] minus [-1,0] intervalls defined in each 
-  //entry of amr_projmat_int[idx] define completely
-  //a finer cell. e.g amr_projmat_int[idx] = [-1,1,-1] ==> [-1,0]x[0,1]x[-1,0]
-
-  #if (AMREX_SPACEDIM == 1)
-  for(int i=0; i<2;++i){
-    amr_projmat_int[i][0]= Kpm_int[i];
-  }   
-  #elif (AMREX_SPACEDIM == 2)
-  for(int i=0; i<2;++i){
-    for(int j=0; j<2;++j){
-      amr_projmat_int[2*i+j][0]= Kpm_int[i];
-      amr_projmat_int[2*i+j][1]= Kpm_int[j];
-    }
-  }  
-  #elif (AMREX_SPACEDIM == 3)
-  for(int i=0; i<2;++i){
-    for(int j=0; j<2;++j){
-      for(int k=0; k<2;++k){
-        amr_projmat_int[2*2*i+2*j+k][0]= Kpm_int[i];
-        amr_projmat_int[2*2*i+2*j+k][1]= Kpm_int[j];
-        amr_projmat_int[2*2*i+2*j+k][2]= Kpm_int[k];
-      }
-    }
-  }  
-  #endif
-  
-  for(int idx=0; idx<std::pow(2,AMREX_SPACEDIM); ++idx)
-  { 
-    //Define coordinate mapping between coarse cell and fine cell. 
-    //depending on intervalls of fine cell in each dimension we need to shift differently
-    //xi_f = 0.5*xi_c +-0.5 ==> "-":[-1,1]->[-1,0]  ,  "+":[-1,1]->[0,1]
-    //since we store intervalls just as +1,-1 , we can directly use that value to get correct shift   
-    //Construct mass matrix (identical do DG mass matrix, just cast it to Eigen)     
-    amrex::Real shift[AMREX_SPACEDIM]={AMREX_D_DECL(0.5*amr_projmat_int[idx][0],
-                                        0.5*amr_projmat_int[idx][1],
-                                        0.5*amr_projmat_int[idx][2])};
-
-    //Mass matrix
-    Eigen::MatrixXd M(amrdg->Np, amrdg->Np);
-    for (int i = 0; i < amrdg->Np; ++i){
-      for (int j = 0; j < amrdg->Np; ++j){
-        amrex::Real val = 1.0;
-        for(int d=0; d<AMREX_SPACEDIM; ++d){
-          val*=(amrex::Real)amrdg->KroneckerDelta(amrdg->mat_idx_s[i][d],amrdg->mat_idx_s[j][d])
-              *(2.0/(2.0*(amrex::Real)amrdg->mat_idx_s[i][d]+1.0));
-        }
-        M(i,j)=val; 
-      }
-    }
-    
-    //Stiffness matrix
-    Eigen::MatrixXd S(amrdg->Np, amrdg->Np);
-    for (int i = 0; i < amrdg->Np; ++i) {
-      for (int j = 0; j < amrdg->Np; ++j) {
-        amrex::Real sum = 0.0;
-        for(int q=0; q<amrdg->qMp_L2proj; ++q)
-        {
-          amrex::Real xi_ref_GLquad_L2proj_mod[AMREX_SPACEDIM];
-          for(int d=0; d<AMREX_SPACEDIM; ++d){
-            xi_ref_GLquad_L2proj_mod[d]=0.5*(amrdg->xi_ref_GLquad_L2proj[q][d])+shift[d];
-          }  
-          
-          amrex::Real phi_shift = 1.0;
-          for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-            phi_shift*=std::legendre(amrdg->mat_idx_s[j][d], xi_ref_GLquad_L2proj_mod[d]);
-          }
-
-          //compute quadrature weight
-          amrex::Real w=1.0;
-          int N = amrdg->qMp_1d; 
-          for(int d=0; d<AMREX_SPACEDIM; ++d){
-            w*=2.0/std::pow(std::assoc_legendre(N,1,amrdg->xi_ref_GLquad_L2proj[q][d]),2.0);
-          }
-          
-          amrex::Real phi = 1.0;
-          for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-            phi*=std::legendre(amrdg->mat_idx_s[i][d], amrdg->xi_ref_GLquad_L2proj[q][d]);
-          }           
-          
-          sum+=(phi_shift*phi*w); 
-        }
-        S(i,j)=sum;
-      }
-    }
-    
-    Eigen::MatrixXd Ps(amrdg->Np, amrdg->Np);
-    Ps= (M.inverse())*S;    
-    for (int i = 0; i < amrdg->Np; ++i) {
-      for (int j = 0; j < amrdg->Np; ++j) {
-        P_scatter[idx][i][j] =  (amrex::Real)Ps(i,j);    
-      }
-    }
-    
-    Eigen::MatrixXd Pg(amrdg->Np, amrdg->Np);
-    Pg = ((M.inverse())*(S.transpose()))*(1.0/std::pow(2.0,AMREX_SPACEDIM));//
-    for (int i = 0; i < amrdg->Np; ++i) {
-      for (int j = 0; j < amrdg->Np; ++j) {
-        P_gather[idx][i][j] = (amrex::Real)Pg(i,j); 
-      }
-    }
-  }
-
-}
-
-amrex::Box AmrDG::DGprojInterp::CoarseBox (const Box& fine, int ratio)
-{  
-  Box crse(amrex::coarsen(fine,ratio));
-  //crse.grow(1);
-  return crse; 
-
-}
-
-amrex::Box AmrDG::DGprojInterp::CoarseBox (const Box& fine, const IntVect& ratio)
-{ 
-  Box crse(amrex::coarsen(fine,ratio));
-  //crse.grow(1);
-  return crse; 
-}
-
 void AmrDG::DGprojInterp::interp (const FArrayBox& crse, int  crse_comp, FArrayBox&  fine, 
                                   int  fine_comp,int   ncomp,const Box&  fine_region, 
                                   const IntVect&  ratio, const Geometry& crse_geom, 
