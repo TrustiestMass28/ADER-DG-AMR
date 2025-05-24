@@ -268,16 +268,20 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_fc;      
 
-        amrex::Vector<amrex::Vector<amrex::Real>> M_c;
+        amrex::Vector<amrex::Vector<amrex::Real>> M;
 
-        amrex::Vector<amrex::Vector<amrex::Real>> M_f;
-          
     };
 
   protected:
 
-      int kroneckerDelta(int a, int b) const;
-  
+    int kroneckerDelta(int a, int b) const;
+
+    amrex::Real refMat_phiphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j, 
+                              int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i) const ;
+
+    //L2 projection quadrature matrix
+    amrex::Vector<amrex::Vector<amrex::Real>> quadmat;
+
   private:
 
     //Vandermonde matrix for mapping modes<->quadrature points
@@ -285,9 +289,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     //Element Matrix and Quadrature Matrix
     void set_ref_element_matrix();
-
-    amrex::Real refMat_phiphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j, 
-                              int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i) const ;
 
     amrex::Real refMat_phiDphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j,
                               int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i,
@@ -324,9 +325,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     amrex::Vector<amrex::Vector<amrex::Real>> V;
     //  inverse
     amrex::Vector<amrex::Vector<amrex::Real>> Vinv;   
-
-    //L2 projection quadrature matrix
-    amrex::Vector<amrex::Vector<amrex::Real>> quadmat;
 
     //Mass element matrix for ADER-DG corrector
     amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr;

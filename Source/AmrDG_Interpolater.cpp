@@ -24,16 +24,13 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
             amrex::Vector<amrex::Vector<amrex::Real>>(numme->basefunc->Np_s,
             amrex::Vector<amrex::Real>(numme->basefunc->Np_s)));
   
-  //coarse mass matrix
-  M_c.resize(numme->basefunc->Np_s,amrex::Vector<amrex::Real>(numme->basefunc->Np_s));
-
-  //fine mass matrix
-  M_f.resize(numme->basefunc->Np_s,amrex::Vector<amrex::Real>(numme->basefunc->Np_s));
+  //mass matrix (if multiplied by jacobian we get fine mass matrix, coarse mass matrix)
+  //jacobian is simolified in formulation and only added when doing actual interpolation
+  M.resize(numme->basefunc->Np_s,amrex::Vector<amrex::Real>(numme->basefunc->Np_s));
 
   //K=[-1,1]->amr->Km=[-1,0] u Kp=[0,1]
   //need all combinations of sub itnervalls that are obtained when refining. 
   //for simplificy just store the sing, i.e +,-
- 
   amrex::Vector<int> Kpm_int = {-1,1}; //=={Km,Kp}
   //NB: the product of the plus [0,1] minus [-1,0] intervalls defined in each 
   //entry of amr_projmat_int[idx] define completely
@@ -61,20 +58,54 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
     }
   }  
   #endif
-  
-  for(int idx=0; idx<std::pow(2,AMREX_SPACEDIM); ++idx)
+
+  //Compute mass matrices
+  for(int j=0; j<numme->basefunc->Np_s;++j){
+    for(int n=0; n<numme->basefunc->Np_s;++n){
+      M[j][n]= numme->refMat_phiphi(j,numme->basefunc->basis_idx_s,n,numme->basefunc->basis_idx_s);
+    }
+  }
+
+  //Compute projection matrices for each sub-cell (indicated by idx)
+  for(int l=0; l<std::pow(2,AMREX_SPACEDIM); ++l)
   { 
     //Define coordinate mapping between coarse cell and fine cell. 
     //depending on intervalls of fine cell in each dimension we need to shift differently
     //xi_f = 0.5*xi_c +-0.5 ==> "-":[-1,1]->[-1,0]  ,  "+":[-1,1]->[0,1]
     //since we store intervalls just as +1,-1 , we can directly use that value to get correct shift   
     //Construct mass matrix (identical do DG mass matrix, just cast it to Eigen)     
-    amrex::Real shift[AMREX_SPACEDIM]={AMREX_D_DECL(0.5*amr_projmat_int[idx][0],
-                                        0.5*amr_projmat_int[idx][1],
-                                        0.5*amr_projmat_int[idx][2])};
+    amrex::Real shift[AMREX_SPACEDIM]={AMREX_D_DECL(0.5*amr_projmat_int[l][0],
+                                        0.5*amr_projmat_int[l][1],
+                                        0.5*amr_projmat_int[l][2])};
 
-    //TODO: construct matrices
+    for(int j=0; j<numme->basefunc->Np_s;++j){
+      for(int m=0; m<numme->basefunc->Np_s;++m){
 
+        //loop over quadrature points
+        amrex::Real sum_cf = 0.0;
+        amrex::Real sum_fc = 0.0;
+        for(int q=0; q<numme->quadrule->qMp_s; ++q)
+        {
+          //Shift the quadrature point
+          amrex::Real _xi_ref_shift[AMREX_SPACEDIM];
+          for(int d=0; d<AMREX_SPACEDIM; ++d){
+            _xi_ref_shift[d]=0.5*(numme->quadrule->xi_ref_quad_s[q][d])+shift[d];
+          }  
+
+          // Convert to const amrex::Vector<amrex::Real>
+          const amrex::Vector<amrex::Real> xi_ref_shift(_xi_ref_shift, _xi_ref_shift + AMREX_SPACEDIM);
+          
+          //Use pre-computed QuadratureMatrix quadmat
+          sum_cf += (numme->quadmat[j][q]*numme->basefunc->phi_s(m,numme->basefunc->basis_idx_s,xi_ref_shift));
+          sum_fc += (numme->quadmat[m][q]*numme->basefunc->phi_s(j,numme->basefunc->basis_idx_s,xi_ref_shift));
+        }
+
+        P_cf[l][j][m]= sum_cf;
+
+        P_fc[l][j][m]= sum_fc;
+
+      }
+    }
   }
 }
 
