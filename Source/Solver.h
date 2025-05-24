@@ -351,9 +351,12 @@ class Solver
                                 RunOn            runon) override;
 
                     //AMR scatter MUST be called from interp
-                    void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
-                                    int fcomp, Array4<Real const> const& crse, int ccomp, 
-                                    int ncomp, IntVect const& ratio) noexcept;
+                    //void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
+                    //                int fcomp, Array4<Real const> const& crse, int ccomp, 
+                    //                int ncomp, IntVect const& ratio) noexcept;
+
+                    void amr_scatter(int i, int j, int k, Eigen::VectorXd& u_fine,
+                                      Eigen::VectorXd& u_coarse, const amrex::IntVect& ratio) noexcept;
                                                         
                     void average_down(const MultiFab& S_fine, MultiFab& S_crse,
                                     int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
@@ -686,7 +689,7 @@ Box Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::CoarseBox
 {
     return static_cast<InterpolationType*>(this)->CoarseBox(fine, ratio);
 }
-
+/*
 template <typename NumericalMethodType>
 template <typename InterpolationType>
 void  Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
@@ -696,7 +699,16 @@ void  Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::amr_sca
     return static_cast<InterpolationType*>(this)->amr_scatter(i, j, k, n, fine,
                                                                fcomp, crse, ccomp,
                                                                ncomp, ratio);
-}
+}*/
+
+template <typename NumericalMethodType>
+template <typename InterpolationType>
+void  Solver<NumericalMethodType>::AMR_Interpolation<InterpolationType>::amr_scatter(int i, int j, int k, Eigen::VectorXd& u_fine,
+                                                                                    Eigen::VectorXd& u_coarse, const amrex::IntVect& ratio) noexcept
+{
+      return static_cast<InterpolationType*>(this)->amr_scatter(i, j, k,  u_fine,
+                                                               u_coarse, ratio);  
+}                                                                                    
    
 template <typename NumericalMethodType>
 template <typename InterpolationType>

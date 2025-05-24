@@ -1,5 +1,7 @@
 #include "AmrDG.h"
 #include <Eigen/Core>
+#include <Eigen/SVD>
+#include <Eigen/Eigenvalues>
 
 using namespace amrex;
 
@@ -11,22 +13,29 @@ AmrDG::L2ProjInterp::L2ProjInterp()
 
 void AmrDG::L2ProjInterp::interp_proj_mat()
 { 
+  int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
+
   //custom interpolation data structures
-  amr_projmat_int.resize(std::pow(2,AMREX_SPACEDIM),amrex::Vector<int >(AMREX_SPACEDIM));
+  amr_projmat_int.resize(num_overlap_cells,amrex::Vector<int >(AMREX_SPACEDIM));
   
   //coarse->fine projection matrix
-  P_cf.resize((int)std::pow(2,AMREX_SPACEDIM),
-            amrex::Vector<amrex::Vector<amrex::Real>>(numme->basefunc->Np_s,
-            amrex::Vector<amrex::Real>(numme->basefunc->Np_s)));
+  P_cf.resize(num_overlap_cells);
+  for (int i = 0; i < num_overlap_cells; ++i) {
+      P_cf[i].resize(numme->basefunc->Np_s, numme->basefunc->Np_s);
+      P_cf[i].setZero();
+  } 
   
   //fine->coarse projection matrix
-  P_fc.resize((int)std::pow(2,AMREX_SPACEDIM),
-            amrex::Vector<amrex::Vector<amrex::Real>>(numme->basefunc->Np_s,
-            amrex::Vector<amrex::Real>(numme->basefunc->Np_s)));
-  
+  P_fc.resize((int)std::pow(2,AMREX_SPACEDIM));
+  for (int i = 0; i < num_overlap_cells; ++i) {
+      P_fc[i].resize(numme->basefunc->Np_s, numme->basefunc->Np_s);
+      P_fc[i].setZero();
+  } 
+
   //mass matrix (if multiplied by jacobian we get fine mass matrix, coarse mass matrix)
   //jacobian is simolified in formulation and only added when doing actual interpolation
-  M.resize(numme->basefunc->Np_s,amrex::Vector<amrex::Real>(numme->basefunc->Np_s));
+  M.resize(numme->basefunc->Np_s,numme->basefunc->Np_s);
+  M.setZero();
 
   //K=[-1,1]->amr->Km=[-1,0] u Kp=[0,1]
   //need all combinations of sub itnervalls that are obtained when refining. 
@@ -62,9 +71,14 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
   //Compute mass matrices
   for(int j=0; j<numme->basefunc->Np_s;++j){
     for(int n=0; n<numme->basefunc->Np_s;++n){
-      M[j][n]= numme->refMat_phiphi(j,numme->basefunc->basis_idx_s,n,numme->basefunc->basis_idx_s);
+      M(j,n)= numme->refMat_phiphi(j,numme->basefunc->basis_idx_s,n,numme->basefunc->basis_idx_s);
     }
   }
+
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  Eigen::VectorXd singularValues = svd.singularValues();  
+  Eigen::MatrixXd Minv = svd.matrixV() * singularValues.asDiagonal().inverse() 
+                              * svd.matrixU().transpose();
 
   //Compute projection matrices for each sub-cell (indicated by idx)
   for(int l=0; l<std::pow(2,AMREX_SPACEDIM); ++l)
@@ -100,9 +114,9 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
           sum_fc += (numme->quadmat[m][q]*numme->basefunc->phi_s(j,numme->basefunc->basis_idx_s,xi_ref_shift));
         }
 
-        P_cf[l][j][m]= sum_cf;
+        P_cf[l](j, m)= sum_cf;
 
-        P_fc[l][j][m]= sum_fc;
+        P_fc[l](j, m)= sum_fc;
 
       }
     }
@@ -112,13 +126,17 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
 Box AmrDG::L2ProjInterp::CoarseBox (const Box& fine,
                                     int        ratio)
 {
-    return amrex::coarsen(fine,ratio);//TODO:placeholder code
+    Box crse(amrex::coarsen(fine,ratio));
+    //crse.grow(1);
+    return crse; 
 }
 
 Box AmrDG::L2ProjInterp::CoarseBox (const Box&     fine,
                                     const IntVect& ratio)
 {
-    return amrex::coarsen(fine,ratio);//TODO:placeholder code
+    Box crse(amrex::coarsen(fine,ratio));
+    //crse.grow(1);
+    return crse; 
 }
 
 void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
@@ -135,58 +153,43 @@ void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
             int              actual_state,
             RunOn            runon)
 {
-  //TODO:placeholder code
-}
-  
-void AmrDG::L2ProjInterp::amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
-                int fcomp, Array4<Real const> const& crse, int ccomp, 
-                int ncomp, IntVect const& ratio) noexcept
-{
-  //TODO:placeholder code
-}
-                                    
-void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
-                int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
-                const int lev_coarse) noexcept
-{
-  //TODO:placeholder code
-}
-
-void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
-                Array4<Real const> const& fine,int ccomp, 
-                int fcomp, IntVect const& ratio) noexcept
-{
-  //TODO:placeholder code
-}
-
-/*
-void AmrDG::DGprojInterp::interp (const FArrayBox& crse, int  crse_comp, FArrayBox&  fine, 
-                                  int  fine_comp,int   ncomp,const Box&  fine_region, 
-                                  const IntVect&  ratio, const Geometry& crse_geom, 
-                                  const Geometry& fine_geom,  Vector<BCRec> const& bcr,
-                                  int actual_comp, int  actual_state,RunOn runon)
-{
   Array4<Real const> const& crsearr = crse.const_array();
   Array4<Real> const& finearr = fine.array();
   Box bx_c = crse.box();
   Box bx_c_ref = bx_c.refine(ratio);
 
   Box fb = fine.box()& fine_region;
+  //fine.box(): returns the Box that represents the entire memory allocated for the FArrayBox named fine. 
+  //This Box will include the valid region of fine and any ghost cells it might have.
+  //creates the intersection of the FArrayBox's memory region (fine.box()) 
+  //and the requested region to fill (fine_region). 
+  //This ensures you only write to the target fine_region within the allocated fine array.
 
-  AMREX_HOST_DEVICE_PARALLEL_FOR_4D_FLAG(runon,fb, ncomp, i, j, k, n,
+  //AMREX_PARALLEL_FOR_3D(runon,fb, i, j, k,
+  amrex::ParallelFor(fb,[&] (int i, int j, int k) noexcept
   {  
-    amr_scatter(i,j,k,n, finearr, fine_comp, crsearr, crse_comp, ncomp, ratio);
+    
+    Eigen::VectorXd u_fine(ncomp);
+    Eigen::VectorXd u_coarse(ncomp);
+
+    //Loop over the components
+    for(int n=0; n<ncomp;++n){
+      u_fine[n] = finearr(i,j,k,fine_comp+n);
+      u_coarse[n] =crsearr(i,j,k,crse_comp+n);
+    }
+
+    amr_scatter(i,j,k,u_fine,u_coarse, ratio);
+
+    for(int n=0; n<ncomp;++n){
+      finearr(i,j,k,fine_comp+n) = u_fine[n];
+    }
+
   });  
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void AmrDG::DGprojInterp::amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine,
-                                      int fcomp,  Array4<Real const> const& crse, int ccomp, 
-                                      int ncomp, IntVect const& ratio) noexcept
+void AmrDG::L2ProjInterp::amr_scatter(int i, int j, int k, Eigen::VectorXd& u_fine,
+                                      Eigen::VectorXd& u_coarse, const amrex::IntVect& ratio) noexcept
 {
-  //mesh loop is over fine indices, we anyway compute our own fine idx (again) 
-  //so that we can then comapre them and select 
-  //appropriate idx of projection matrix  
 #if (AMREX_SPACEDIM == 1)
   int i_c = amrex::coarsen(i,ratio[0]);
   int j_c = 0;
@@ -229,7 +232,7 @@ void AmrDG::DGprojInterp::amr_scatter(int i, int j, int k, int n, Array4<Real> c
   else if(k_c>=0 && k == 2*k_c+1){sk=1;}
 #endif
 
-  
+  //Retrieve fine sub-cell idx
   int idx;
   for(int _idx=0; _idx<std::pow(2,AMREX_SPACEDIM); ++_idx)
   {
@@ -247,15 +250,25 @@ void AmrDG::DGprojInterp::amr_scatter(int i, int j, int k, int n, Array4<Real> c
     }
   }
 
-  //Scatter data from coarse to fine
-  amrex::Real sum=0.0;
-  for(int m=0; m<(amrdg->Np);++m){
-    sum+= (P_scatter[idx][n][m]*crse(i_c,j_c,k_c,m));
-  } 
-  
-  fine(i,j,k,n)= sum; 
+  u_fine = Minv*P_cf[idx]*u_coarse;
+
+}
+                                 
+void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
+                int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
+                const int lev_coarse) noexcept
+{
+  //TODO:placeholder code
 }
 
+void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
+                Array4<Real const> const& fine,int ccomp, 
+                int fcomp, IntVect const& ratio) noexcept
+{
+  //TODO:placeholder code
+}
+
+/*
 void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
                                       int scomp, int ncomp, const IntVect& ratio, 
                                       const int lev_fine, const int lev_coarse, 
@@ -453,185 +466,7 @@ void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
 #endif  
 }
 
-void AmrDG::DGprojInterp::average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
-                                      int scomp, int ncomp, const IntVect& ratio, 
-                                      const int lev_fine, const int lev_coarse, 
-                                      int d, bool flag_flux)
-{
-  //average down not! applied to ghost cells. Only to valid cells
-  // Coarsen() the fine stuff on processors owning the fine data.
-  const BoxArray& fine_BA = S_fine.boxArray();
-  const DistributionMapping& fine_dm = S_fine.DistributionMap();
-  BoxArray crse_S_fine_BA = fine_BA;
-  crse_S_fine_BA.coarsen(ratio);
-  
-  
-  if (crse_S_fine_BA == S_crse.boxArray() && S_fine.DistributionMap() == S_crse.DistributionMap())
-  {     
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-    {
-      for (MFIter mfi(S_crse,TilingIfNotGPU()); mfi.isValid(); ++mfi)
-      {
-        //  NOTE: The tilebox is defined at the coarse level.
-        const Box& bx = mfi.tilebox();
-        Array4<amrex::Real> const& crsearr = S_crse.array(mfi);
-        Array4<amrex::Real > const& finearr = S_fine.array(mfi);
-        
-
-          AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
-          { 
-            amr_gather_flux(i,j,k,n,d,crsearr,finearr,scomp,scomp,ratio);
-          });         
-        
-      }
-    }
-  }    
-  else
-  {
-    MultiFab crse_S_fine(crse_S_fine_BA,fine_dm,ncomp,0,MFInfo(),FArrayBoxFactory());
-      
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-    {
-      for (MFIter mfi(crse_S_fine,TilingIfNotGPU()); mfi.isValid(); ++mfi)
-      {
-        //  NOTE: The tilebox is defined at the coarse level.
-        const Box& bx = mfi.tilebox();
-        Array4<amrex::Real> const& crsearr = crse_S_fine.array(mfi);
-        Array4<amrex::Real> const& finearr = S_fine.array(mfi);
-
-        //  NOTE: We copy from component scomp of the fine fab into component 0 of the crse fab
-        //        because the crse fab is a temporary which was made starting at comp 0, it is
-        //        not part of the actual crse multifab which came in.
 
 
-          AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
-          { 
-            amr_gather_flux(i,j,k,n,d,crsearr,finearr,0,scomp,ratio);      
-          });         
-        
-      }
-    }
-
-    S_crse.ParallelCopy(crse_S_fine,0,scomp,ncomp);
-  }
-}
-
-
-//AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-//void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-//                                          Array4<Real const> const& fine,int ccomp, 
-//                                          int fcomp, IntVect const& ratio) noexcept
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void AmrDG::DGprojInterp::amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-                                          Array4<Real> const& fine,int ccomp, 
-                                          int fcomp, IntVect const& ratio) noexcept
-{
-  //TODO: should skip coarse indices that are not at fine coarse interface
-  //  get boxArray max and min indices and compare i,j,k
-  //should be dimension dependent, i.e if d==0 then take all j and msut be min(i) or max(i)
-  //can be done before function call
-
-#if (AMREX_SPACEDIM == 1)  
-  const int faci = ratio[0]; 
-  const int ii = i*faci;
-
-  int i_f,j_f,k_f; 
-  
-  if(d==0)
-  {
-    crse(i,j,k,n+ccomp) = 0.0;
-      i_f=ii;
-      j_f= 0;
-      k_f = 0;
-      crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
-  }
-
-#elif (AMREX_SPACEDIM == 2)   
-  const int faci = ratio[0];
-  const int facj = ratio[1];
-  
-  const int ii = i*faci;
-  const int jj = j*facj;
-  
-  int i_f,j_f,k_f; 
-  
-  if(d==0)
-  {
-    crse(i,j,k,n+ccomp) = 0.0;
-    for (int jref = 0; jref < facj; ++jref){
-      i_f=ii;
-      j_f=jj+jref;
-      k_f = 0;
-      crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
-    }
-  }
-  else if(d==1)
-  {
-    crse(i,j,k,n+ccomp) = 0.0;
-    for (int iref = 0; iref < faci; ++iref){
-      i_f = ii+iref;
-      j_f = jj;
-      k_f =0;
-      
-      crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
-    }    
-  }  
-#elif (AMREX_SPACEDIM == 3) 
-  const int faci = ratio[0];
-  const int facj = ratio[1];
-  const int fack = ratio[2];
-  
-  const int ii = i*faci;
-  const int jj = j*facj;
-  const int kk = k*fack;
-  
-  int i_f,j_f,k_f; 
-  
-  if(d==0)
-  {
-    crse(i,j,k,n+ccomp) = 0.0;
-    for (int kref = 0; kref < fack; ++kref){
-      for (int jref = 0; jref < facj; ++jref){
-        i_f=ii;
-        j_f=jj+jref;
-        k_f = kk+kref;
-        crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
-      }
-    }
-  }
-  else if(d==1)
-  {
-    crse(i,j,k,n+ccomp) = 0.0;
-    for (int kref = 0; kref < fack; ++kref){
-      for (int iref = 0; iref < faci; ++iref){
-        i_f = ii+iref;
-        j_f = jj;
-        k_f =kk+kref;
-        
-        crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
-      }  
-    }
-  }
-  else if(d==2)
-  {
-    crse(i,j,k,n+ccomp) = 0.0;
-    for (int jref = 0; jref < facj; ++jref){
-      for (int iref = 0; iref < faci; ++iref){
-        i_f = ii+iref;
-        j_f = jj+jref;
-        k_f =kk;
-        
-        crse(i,j,k,n+ccomp)+=(fine(i_f,j_f,k_f,n+fcomp));
-      }  
-    }
-  } 
-#endif  
-
-}
 
 */
