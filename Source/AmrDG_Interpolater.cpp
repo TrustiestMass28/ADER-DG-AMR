@@ -168,111 +168,13 @@ void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
   //AMREX_PARALLEL_FOR_3D(runon,fb, i, j, k,
   amrex::ParallelFor(fb,[&] (int i, int j, int k) noexcept
   {  
-    
-    Eigen::VectorXd u_fine(ncomp);
-    Eigen::VectorXd u_coarse(ncomp);
-
-    //Loop over the components
-    for(int n=0; n<ncomp;++n){
-      u_fine[n] = finearr(i,j,k,fine_comp+n);
-      u_coarse[n] =crsearr(i,j,k,crse_comp+n);
-    }
-
-    amr_scatter(i,j,k,u_fine,u_coarse, ratio);
-
-    for(int n=0; n<ncomp;++n){
-      finearr(i,j,k,fine_comp+n) = u_fine[n];
-    }
-
+    amr_scatter(i,j,k,finearr,fine_comp,crsearr,crse_comp,ncomp,ratio);
   });  
 }
 
-void AmrDG::L2ProjInterp::amr_scatter(int i, int j, int k, Eigen::VectorXd& u_fine,
-                                      Eigen::VectorXd& u_coarse, const amrex::IntVect& ratio) noexcept
-{
-#if (AMREX_SPACEDIM == 1)
-  int i_c = amrex::coarsen(i,ratio[0]);
-  int j_c = 0;
-  int k_c = 0;
-#elif (AMREX_SPACEDIM == 2)
-  int i_c = amrex::coarsen(i,ratio[0]);
-  int j_c = amrex::coarsen(j,ratio[1]);
-  int k_c = 0;
-#elif (AMREX_SPACEDIM == 3)  
-  int i_c = amrex::coarsen(i,ratio[0]);
-  int j_c = amrex::coarsen(j,ratio[1]);
-  int k_c = amrex::coarsen(j,ratio[2]);
-#endif
-
-  //Retrieve idx of subcell given fine and coarse idx relation
-  int si,sj,sk;
-#if (AMREX_SPACEDIM == 1)
-  if(i_c<0 && i == i_c){si=1;}
-  else if(i_c>=0 && i == 2*i_c){si=-1;}
-  else if(i_c>=0 && i == 2*i_c+1){si=1;}
-#elif (AMREX_SPACEDIM == 2)
-  if(i_c<0){si=1;}
-  else if(i_c>=0 && i == 2*i_c){si=-1;}
-  else if(i_c>=0 && i == 2*i_c+1){si=1;}
-  
-  if(j_c<0){sj=1;}
-  else if(j_c>=0 && j == 2*j_c){sj=-1;}
-  else if(j_c>=0 && j == 2*j_c+1){sj=1;}  
-#elif (AMREX_SPACEDIM == 3) 
-  if(i_c<0 && i == i_c){si=1;}
-  else if(i_c>=0 && i == 2*i_c){si=-1;}
-  else if(i_c>=0 && i == 2*i_c+1){si=1;}
-  
-  if(j_c<0 && j == j_c){sj=1;}
-  else if(j_c>=0 && j == 2*j_c){sj=-1;}
-  else if(j_c>=0 && j == 2*j_c+1){sj=1;}  
-  
-  if(k_c<0 && k == k_c){sk=1;}
-  else if(k_c>=0 && k == 2*k_c){sk=-1;}
-  else if(k_c>=0 && k == 2*k_c+1){sk=1;}
-#endif
-
-  //Retrieve fine sub-cell idx
-  int idx;
-  for(int _idx=0; _idx<std::pow(2,AMREX_SPACEDIM); ++_idx)
-  {
-  #if (AMREX_SPACEDIM == 1)
-    if((si ==amr_projmat_int[_idx][0]))
-  #elif (AMREX_SPACEDIM == 2)
-    if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1]))
-  #elif (AMREX_SPACEDIM == 3) 
-    if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1])
-        && (sj ==amr_projmat_int[_idx][2]))
-  #endif
-    {
-      idx=_idx;
-      break;
-    }
-  }
-
-  u_fine = Minv*P_cf[idx]*u_coarse;
-
-}
-                                 
-void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
-                int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
-                const int lev_coarse) noexcept
-{
-  //TODO:placeholder code
-}
-
-void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
-                Array4<Real const> const& fine,int ccomp, 
-                int fcomp, IntVect const& ratio) noexcept
-{
-  //TODO:placeholder code
-}
-
-/*
-void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
-                                      int scomp, int ncomp, const IntVect& ratio, 
-                                      const int lev_fine, const int lev_coarse, 
-                                      int d, bool flag_flux)
+void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, int fine_comp, MultiFab& S_crse, 
+                                      int crse_comp, int ncomp, const IntVect& ratio, 
+                                      const int lev_fine, const int lev_coarse) noexcept
 {
   //average down not! applied to ghost cells. Only to valid cells
   // Coarsen() the fine stuff on processors owning the fine data.
@@ -280,7 +182,6 @@ void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
   const DistributionMapping& fine_dm = S_fine.DistributionMap();
   BoxArray crse_S_fine_BA = fine_BA;
   crse_S_fine_BA.coarsen(ratio);
-  
   
   if (crse_S_fine_BA == S_crse.boxArray() && S_fine.DistributionMap() == S_crse.DistributionMap())
   {     
@@ -295,19 +196,10 @@ void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
         Array4<amrex::Real> const& crsearr = S_crse.array(mfi);
         Array4<amrex::Real const> const& finearr = S_fine.const_array(mfi);
         
-        if(!flag_flux){
-          AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
-          {
-            amr_gather(i,j,k,n,crsearr,finearr,scomp,scomp,ratio);
-          });    
-        }
-        //else
-        //{ 
-        //  AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
-        //  { 
-        //    amr_gather_flux(i,j,k,n,d,crsearr,finearr,scomp,scomp,ratio);
-        //  });         
-        }
+        amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
+        {  
+          amr_gather(i,j,k,finearr,fine_comp,crsearr,crse_comp,ncomp,ratio);
+        });  
       }
     }
   }    
@@ -329,39 +221,161 @@ void AmrDG::DGprojInterp::average_down(const MultiFab& S_fine, MultiFab& S_crse,
         //  NOTE: We copy from component scomp of the fine fab into component 0 of the crse fab
         //        because the crse fab is a temporary which was made starting at comp 0, it is
         //        not part of the actual crse multifab which came in.
-        if(!flag_flux){
-          AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
-          {
-            amr_gather(i,j,k,n,crsearr,finearr,0,scomp,ratio);      
-          });  
-        }/*
-        //else
-        //{
-        //
-        //  AMREX_HOST_DEVICE_PARALLEL_FOR_4D(bx, ncomp, i, j, k, n,
-        //  { 
-        //    amr_gather_flux(i,j,k,n,d,crsearr,finearr,0,scomp,ratio);      
-        //  });         
-        //}
+
+        amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
+        {  
+          amr_gather(i,j,k,finearr,fine_comp,crsearr,crse_comp,ncomp,ratio);
+        });  
       }
     }
-
-    S_crse.ParallelCopy(crse_S_fine,0,scomp,ncomp);
+    S_crse.ParallelCopy(crse_S_fine,0,fine_comp,ncomp);
   }
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
-                                      Array4<Real const> const& fine,int ccomp, 
-                                      int fcomp, IntVect const& ratio) noexcept
-{
+void AmrDG::L2ProjInterp::amr_scatter(int i, int j, int k, Array4<Real> const& fine, 
+                                    int fcomp, Array4<Real const> const& crse, int ccomp, 
+                                    int ncomp, IntVect const& ratio) noexcept
+{ 
+    Eigen::VectorXd u_fine(ncomp);
+    Eigen::VectorXd u_coarse(ncomp);
 
-  //reset coarse first 
-  crse(i,j,k,n+ccomp) = 0.0;
+    //Loop over the components
+    for(int n=0; n<ncomp;++n){
+      u_fine[n] = fine(i,j,k,fcomp+n);
+      u_coarse[n] =crse(i,j,k,ccomp+n);
+    }
+
+    auto map = set_fine_coarse_idx_map(i,j,k,ratio);
+
+    u_fine = Minv*P_cf[map.fidx]*u_coarse;
+
+    for(int n=0; n<ncomp;++n){
+      fine(i,j,k,fcomp+n) = u_fine[n];
+    }
+}
+
+void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
+                                     Array4<Real> const& crse, int ccomp, int ncomp, 
+                                     IntVect const& ratio ) noexcept
+             
+{
+  int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
+
+  amrex::Vector<Eigen::VectorXd> u_fine;
+  u_fine.resize(num_overlap_cells,Eigen::VectorXd (ncomp));
+
+  Eigen::VectorXd u_coarse(ncomp);
+  u_coarse.setZero();
+
+  auto map = set_coarse_fine_idx_map(i,j,k,ratio);
+
+  Eigen::VectorXd sum(ncomp);
+  for(int l=0; l<num_overlap_cells;++l)
+  {
+    for(int n=0; n<ncomp;++n){
+      u_fine[l][n] = fine(map[l].i,map[l].j,map[l].k,fcomp+n);
+    }    
+    sum+=P_fc[map[l].fidx]*u_fine[l];
+  }
+
+  u_coarse = (1.0/num_overlap_cells)*Minv*sum;
+
+  for(int n=0; n<ncomp;++n){
+    crse(i,j,k,ccomp+n) = u_coarse[n];
+  }
+}
+
+AmrDG::L2ProjInterp::IndexMap AmrDG::L2ProjInterp::set_fine_coarse_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
+{
+  //pass fine cell index and return overlapping coarse cell index 
+  //and index locating fine cell w.r.t coarse one reference frame
+  IndexMap _map;
+
+#if (AMREX_SPACEDIM == 1)
+  int _i = amrex::coarsen(i,ratio[0]);
+  int _j = 0;
+  int _k = 0;
+#elif (AMREX_SPACEDIM == 2)
+  int _i = amrex::coarsen(i,ratio[0]);
+  int _j = amrex::coarsen(j,ratio[1]);
+  int _k = 0;
+#elif (AMREX_SPACEDIM == 3)  
+  int _i = amrex::coarsen(i,ratio[0]);
+  int _j = amrex::coarsen(j,ratio[1]);
+  int _k = amrex::coarsen(k,ratio[2]);
+#endif
+
+  // Populate coarse cell indices in _map
+  _map.i = _i;
+  _map.j = _j;
+  _map.k = _k;
+
+
+  //Retrieve idx of subcell given fine and coarse idx relation
+  int si,sj,sk;
+
+#if (AMREX_SPACEDIM == 1)
+  if(_i<0){si=1;}
+  else if(_i>=0 && i == 2*_i){si=-1;}
+  else if(_i>=0 && i == 2*_i+1){si=1;}
+#elif (AMREX_SPACEDIM == 2)
+  if(_i<0){si=1;}
+  else if(_i>=0 && i == 2*_i){si=-1;}
+  else if(_i>=0 && i == 2*_i+1){si=1;}
   
+  if(_j<0){sj=1;}
+  else if(_j>=0 && j == 2*_j){sj=-1;}
+  else if(_j>=0 && j == 2*_j+1){sj=1;}  
+#elif (AMREX_SPACEDIM == 3) 
+  if(_i<0 && i == _i){si=1;}
+  else if(_i>=0 && i == 2*_i){si=-1;}
+  else if(_i>=0 && i == 2*_i+1){si=1;}
+  
+  if(_j<0 && j == _jc){sj=1;}
+  else if(_j>=0 && j == 2*_j){sj=-1;}
+  else if(_j>=0 && j == 2*_j+1){sj=1;}  
+  
+  if(_k<0 && k == _k){sk=1;}
+  else if(_k>=0 && k == 2*_k){sk=-1;}
+  else if(_k>=0 && k == 2*_k+1){sk=1;}
+#endif
+
+  //Retrieve fine sub-cell idx
+  int idx;
+  for(int _idx=0; _idx<std::pow(2,AMREX_SPACEDIM); ++_idx)
+  {
+  #if (AMREX_SPACEDIM == 1)
+    if((si ==amr_projmat_int[_idx][0]))
+  #elif (AMREX_SPACEDIM == 2)
+    if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1]))
+  #elif (AMREX_SPACEDIM == 3) 
+    if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1])
+        && (sk ==amr_projmat_int[_idx][2]))
+  #endif
+    {
+      idx=_idx;
+      break;
+    }
+  }
+
+    // Populate fine sub-cell index in _map
+    _map.fidx = idx;
+
+  return _map;
+}
+
+amrex::Vector<AmrDG::L2ProjInterp::IndexMap> AmrDG::L2ProjInterp::set_coarse_fine_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
+{
+  //pass coarse cell index and return all fine cells indices and their
+  //respective rf-element indices to lcoate them w.r.t coarse cell
+
+  int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
+
+  amrex::Vector<IndexMap> _map;
+  _map.resize(num_overlap_cells);
+
 #if (AMREX_SPACEDIM == 1)
   const int faci = ratio[0];
-  
   const int ii = i*faci;
   
   int i_f,j_f,k_f;
@@ -373,7 +387,7 @@ void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
     int si = (i_f % faci == 0) ? -1 : 1;
             
     int idx;
-    for(int _idx=0; _idx<std::pow(2,AMREX_SPACEDIM); ++_idx)
+    for(int _idx=0; _idx<num_overlap_cells; ++_idx)
     { 
       if((si ==amr_projmat_int[_idx][0]))
       {
@@ -381,14 +395,13 @@ void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
         break;
       }
     }
-    
-    amrex::Real sum=0.0;
-    for(int m=0; m<(amrdg->Np);++m){
-      sum+= (P_gather[idx][n][m]*fine(i_f,j_f,k_f,m));
-    } 
-    crse(i,j,k,n)+=sum;
+
+    _map[idx].i = i_f;
+    _map[idx].j = j_f;
+    _map[idx].k = k_f;
+    _map[idx].fidx = idx;
+
   }
-   
 #elif (AMREX_SPACEDIM == 2) 
   const int faci = ratio[0];
   const int facj = ratio[1];
@@ -402,12 +415,12 @@ void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
       i_f=ii+iref;
       j_f=jj+jref;
       k_f = 0;
- 
+
       int si = (i_f % faci == 0) ? -1 : 1;
       int sj = (j_f % facj == 0) ? -1 : 1;
               
       int idx;
-      for(int _idx=0; _idx<std::pow(2,AMREX_SPACEDIM); ++_idx)
+      for(int _idx=0; _idx<num_overlap_cells; ++_idx)
       { 
         if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1]))
         {
@@ -416,14 +429,14 @@ void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
         }
       }
 
-      amrex::Real sum=0.0;
-      for(int m=0; m<(amrdg->Np);++m){
-        sum+= (P_gather[idx][n][m]*fine(i_f,j_f,k_f,m));
-      } 
-      crse(i,j,k,n)+=sum;
+      _map[idx].i = i_f;
+      _map[idx].j = j_f;
+      _map[idx].k = k_f;
+      _map[idx].fidx = idx;
+
     }
-  } 
-#elif (AMREX_SPACEDIM == 3)
+  }
+#elif (AMREX_SPACEDIM == 3) 
   const int faci = ratio[0];
   const int facj = ratio[1];
   const int fack = ratio[2];
@@ -439,13 +452,13 @@ void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
         i_f=ii+iref;
         j_f=jj+jref;
         k_f=kk+kref;
-   
+
         int si = (i_f % faci == 0) ? -1 : 1;
         int sj = (j_f % facj == 0) ? -1 : 1;
         int sk = (k_f % fack == 0) ? -1 : 1;
                 
         int idx;
-        for(int _idx=0; _idx<std::pow(2,AMREX_SPACEDIM); ++_idx)
+        for(int _idx=0; _idx<num_overlap_cells; ++_idx)
         { 
           if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1]) 
             && (sk ==amr_projmat_int[_idx][2]))
@@ -454,19 +467,17 @@ void AmrDG::DGprojInterp::amr_gather(int i, int j, int k, int n,Array4<Real> con
             break;
           }
         }
-        
-        amrex::Real sum=0.0;
-        for(int m=0; m<(amrdg->Np);++m){
-          sum+= (P_gather[idx][n][m]*fine(i_f,j_f,k_f,m));
-        } 
-        crse(i,j,k,n)+=sum;
+
+        _map[idx].i = i_f;
+        _map[idx].j = j_f;
+        _map[idx].k = k_f;
+        _map[idx].fidx = idx;
+
       }
     }
-  }  
+  }
 #endif  
+
+  return _map;
 }
 
-
-
-
-*/

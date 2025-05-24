@@ -58,11 +58,6 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
   for(int q=0 ; q<Q; ++q){
     std::swap(U_w[lev][q],_mf[q]);  
   }
-
-  //TODO: is step below needed?
-  //for(int q=0 ; q<Q; ++q){
-  //  FillPatchGhostFC(lev,time, q);
-  //}
 }
 
 //Make a new level using provided BoxArray and DistributionMapping and fill with 
@@ -75,8 +70,6 @@ void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
   set_init_data_system(lev,ba,dm); 
 
   AMR_FillFromCoarsePatch(lev, time, U_w[lev], 0, basefunc->Np_s);
-  //FillPatchGhostFC(lev,time,q);//TODO
-  //
 }
 
 // fill an entire multifab by interpolating from the coarser level
@@ -97,7 +90,7 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
 
-  amrex::Interpolater* mapper= amr_interpolator.get();//&amrex::cell_cons_interp;//= &custom_interp;//TODO
+  amrex::Interpolater* mapper= amr_interpolator.get();
 
   amrex::Vector<MultiFab*> cmf;
   amrex::Vector<Real> ctime;
@@ -150,7 +143,7 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
   }
   else
   { 
-    amrex::Interpolater* mapper = amr_interpolator.get();//&amrex::cell_cons_interp;//= &custom_interp; TODO
+    amrex::Interpolater* mapper = amr_interpolator.get();
 
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
@@ -178,69 +171,25 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
   }
 }
 
-/*
-//fills ghost cells of fine level at fine-coarse interface with respective
-//coarse data. Used during timestepping
-void AmrDG::FillPatchGhostFC(int lev,amrex::Real time,int q)
-{ 
-   
-  amrex::Vector<MultiFab*> cmf;
-  amrex::Vector<Real> ctime;
-  GetData(lev-1, q,time, cmf, ctime);
-  amrex::CpuBndryFuncFab bcf(nullptr);
-  amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(geom[lev-1],bc_w[q],bcf);
-
-  std::unique_ptr<FillPatcher<MultiFab>> m_fillpatcher;
-  auto& fillpatcher = m_fillpatcher;
-
-  fillpatcher = std::make_unique<FillPatcher<MultiFab>>(U_w[lev][q].boxArray(),
-                                                        U_w[lev][q].DistributionMap(),
-                                                        geom[lev],
-                                                        U_w[lev-1][q].boxArray(),
-                                                        U_w[lev-1][q].DistributionMap(),
-                                                        geom[lev-1],
-                                                        IntVect(nghost),
-                                                        Np, 
-                                                        //&custom_interp);
-                                                        &pc_interp);
-
-  fillpatcher->fillCoarseFineBoundary(U_w[lev][q],IntVect(nghost),time,cmf,ctime,
-                                      0,0,Np,coarse_physbcf,0,bc_w[q],0);                        
-}	    
-*/
-
-/*
-//averages cell centered data from finer cells to the respective covered coarse cell
-void AmrDG::AverageFineToCoarse()
-{  
-//Print(*ofs) << "AverageFineToCoarse()"<< "\n";
-
-for (int l = finest_level; l > 0; --l){  
-for(int q=0; q<Q; ++q){   
-custom_interp.average_down(U_w[l][q], U_w[l-1][q],0,U_w[l-1][q].nComp(), 
-              refRatio(l-1), l,l-1);
+void AmrDG::AMR_avg_down_initial_condition()
+{
+  AMR_average_fine_coarse();
 }
-} 
+
+//averages cell centered data from finer cells to the respective covered coarse cell
+void AmrDG::AMR_average_fine_coarse()
+{  
+  auto _mesh = mesh.lock();
+
+  for (int l = _mesh->get_finest_lev(); l > 0; --l){  
+    for(int q=0; q<Q; ++q){   
+      amr_interpolator->average_down(U_w[l][q], 0,U_w[l-1][q],0,U_w[l-1][q].nComp(), 
+                                    _mesh->get_refRatio(l-1), l,l-1); 
+    }
+  } 
 }
  
-//averages face centered data from finer cells to the respective covered coarse cell
-void AmrDG::AverageFineToCoarseFlux(int lev)
-{
-  if(lev!=finest_level)
-  { 
-    for(int d = 0; d<AMREX_SPACEDIM; ++d){
-      for(int q=0; q<Q; ++q){           
-        custom_interp.average_down_flux(Fnumm_int[lev+1][d][q], Fnumm_int[lev][d][q],0,
-                                  Fnumm_int[lev][d][q].nComp(), refRatio(lev), 
-                                  lev+1,lev,d,true);
-        custom_interp.average_down_flux(Fnump_int[lev+1][d][q], Fnump_int[lev][d][q],0,
-                                  Fnump_int[lev][d][q].nComp(), refRatio(lev), 
-                                  lev+1,lev,d,true);            
-      }
-    } 
-  }
-}
-*/
+
 /*
 void AmrDG::AMR_settings_tune()
 {
