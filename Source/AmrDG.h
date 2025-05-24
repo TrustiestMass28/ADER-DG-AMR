@@ -12,6 +12,7 @@
 #include <AMReX_FluxRegister.H>
 #include <AMReX_BCRec.H>
 #include <AMReX_Interpolater.H>
+#include <Eigen/Core>
 
 #include "Solver.h"
 #include "Mesh.h"
@@ -230,9 +231,12 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                     RunOn            runon);
 
         //AMR scatter MUST be called from interp
-        void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
-                        int fcomp, Array4<Real const> const& crse, int ccomp, 
-                        int ncomp, IntVect const& ratio) noexcept;
+        //void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
+        //                int fcomp, Array4<Real const> const& crse, int ccomp, 
+        //                int ncomp, IntVect const& ratio) noexcept;
+        
+        void amr_scatter(int i, int j, int k, Eigen::VectorXd& u_fine,
+                      Eigen::VectorXd& u_coarse, const amrex::IntVect& ratio) noexcept;
                                             
         void average_down(const MultiFab& S_fine, MultiFab& S_crse,
                         int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
@@ -264,11 +268,13 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         amrex::Vector<amrex::Vector<int >> amr_projmat_int;
 
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_cf;
+        amrex::Vector<Eigen::MatrixXd> P_cf;
 
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> P_fc;      
+        amrex::Vector<Eigen::MatrixXd> P_fc;      
 
-        amrex::Vector<amrex::Vector<amrex::Real>> M;
+        Eigen::MatrixXd M;
+
+        Eigen::MatrixXd Minv;
 
     };
 
