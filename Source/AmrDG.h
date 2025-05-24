@@ -79,6 +79,10 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     template <typename EquationType>
     void set_Dt(std::shared_ptr<ModelEquation<EquationType>> model_pde);
 
+    void AMR_avg_down_initial_condition();
+
+    void AMR_average_fine_coarse();
+
     void AMR_clear_level_data(int lev);
 
     void AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, 
@@ -230,41 +234,40 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                     int              actual_state,
                     RunOn            runon);
 
-        //AMR scatter MUST be called from interp
-        //void amr_scatter(int i, int j, int k, int n, Array4<Real> const& fine, 
-        //                int fcomp, Array4<Real const> const& crse, int ccomp, 
-        //                int ncomp, IntVect const& ratio) noexcept;
-        
-        void amr_scatter(int i, int j, int k, Eigen::VectorXd& u_fine,
-                      Eigen::VectorXd& u_coarse, const amrex::IntVect& ratio) noexcept;
+        void amr_scatter(int i, int j, int k, Array4<Real> const& fine, 
+                                            int fcomp, Array4<Real const> const& crse, int ccomp, 
+                                            int ncomp, IntVect const& ratio) noexcept;
                                             
-        void average_down(const MultiFab& S_fine, MultiFab& S_crse,
-                        int scomp, int ncomp, const IntVect& ratio, const int lev_fine, 
-                        const int lev_coarse) noexcept;
+        void average_down(const MultiFab& S_fine, int fine_comp, MultiFab& S_crse, 
+                          int crse_comp, int ncomp, const IntVect& ratio, 
+                          const int lev_fine, const int lev_coarse) noexcept;
         
         //AMR gater MUST be called from average down
-        void amr_gather(int i, int j, int k, int n,Array4<Real> const& crse, 
-                        Array4<Real const> const& fine,int ccomp, 
-                        int fcomp, IntVect const& ratio) noexcept;
-        /*
-        void amr_gather_flux(int i, int j, int k, int n, int d,Array4<Real> const& crse, 
-                                        Array4<Real const> const& fine,int ccomp, 
-                                        int fcomp, IntVect const& ratio) noexcept;   
-
-        void average_down_flux(MultiFab& S_fine, MultiFab& S_crse,
-                            int scomp, int ncomp, const IntVect& ratio, 
-                            const int lev_fine, const int lev_coarse, 
-                            int d, bool flag_flux);
-                                    
-        */
+        void amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
+                        Array4<Real> const& crse, int ccomp, int ncomp, IntVect const& ratio ) noexcept;
 
         Box CoarseBox (const Box& fine, int ratio);
 
         Box CoarseBox (const Box& fine, const IntVect& ratio);
         
-      private:        
+      private:      
       
         void interp_proj_mat();
+
+        struct IndexMap{
+          int i;
+          int j;
+          int k;
+          int fidx;
+        };
+
+        //pass fine cell index and return overlapping coarse cell index 
+        //and index locating fine cell w.r.t coarse one reference frame
+        IndexMap set_fine_coarse_idx_map(int i, int j, int k, const amrex::IntVect& ratio);
+
+        //pass coarse cell index and return all fine cells indices and their
+        //respective rf-element indices to lcoate them w.r.t coarse cell
+        amrex::Vector<IndexMap> set_coarse_fine_idx_map(int i, int j, int k, const amrex::IntVect& ratio);
 
         amrex::Vector<amrex::Vector<int >> amr_projmat_int;
 
@@ -512,8 +515,9 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
 
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
+
     //gather valid fine cell solutions U_w into valid coarse cells
-    //AverageFineToCoarse();   
+    AMR_average_fine_coarse();   
     
     //Prepare inner ghost cell data for next time step
     //for grids at same level and fine-coarse interface
