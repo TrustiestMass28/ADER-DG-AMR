@@ -5,12 +5,6 @@
 
 using namespace amrex;
 
-
-AmrDG::L2ProjInterp::L2ProjInterp()
-{
-  interp_proj_mat();
-}
-
 void AmrDG::L2ProjInterp::interp_proj_mat()
 { 
   int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
@@ -77,7 +71,7 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
 
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeThinU | Eigen::ComputeThinV);
   Eigen::VectorXd singularValues = svd.singularValues();  
-  Eigen::MatrixXd Minv = svd.matrixV() * singularValues.asDiagonal().inverse() 
+  Minv = svd.matrixV() * singularValues.asDiagonal().inverse() 
                               * svd.matrixU().transpose();
 
   //Compute projection matrices for each sub-cell (indicated by idx)
@@ -259,6 +253,7 @@ void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> co
                                      IntVect const& ratio ) noexcept
              
 {
+
   int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
 
   amrex::Vector<Eigen::VectorXd> u_fine;
@@ -277,7 +272,7 @@ void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> co
     }    
     sum+=P_fc[map[l].fidx]*u_fine[l];
   }
-
+  
   u_coarse = (1.0/num_overlap_cells)*Minv*sum;
 
   for(int n=0; n<ncomp;++n){

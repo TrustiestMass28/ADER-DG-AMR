@@ -216,7 +216,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     class L2ProjInterp : public AMR_Interpolation<L2ProjInterp>
     {
       public:
-        L2ProjInterp();
+        L2ProjInterp() = default;
 
         ~L2ProjInterp() = default;
 
@@ -249,10 +249,10 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         Box CoarseBox (const Box& fine, int ratio);
 
         Box CoarseBox (const Box& fine, const IntVect& ratio);
+
+        void interp_proj_mat();
         
       private:      
-      
-        void interp_proj_mat();
 
         struct IndexMap{
           int i;
@@ -480,7 +480,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
 
   Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
   Print()<<"------------------------------------------------"<<"\n";
-  
+  /*
   while(t<T)
   {  
     //Remake existing levels and create new fine levels from coarse
@@ -500,7 +500,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
         FillBoundary(&(U_w[l][q]),l);
       }
     }
-    
+    */
     /*
                 for(int q=0 ; q<Q; ++q){//TODO
                 //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
@@ -510,6 +510,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
                 //to put inside ADER function ebfore time-stepping
               }  
     */
+   /*
     //advance solution by one time-step.
     time_integration(model_pde,bdcond,t);
 
@@ -567,7 +568,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   
   //Output t=T norm
   L1Norm_DG_AMR(model_pde);
-  L2Norm_DG_AMR(model_pde);
+  L2Norm_DG_AMR(model_pde);*/
 }
 
 template <typename EquationType>

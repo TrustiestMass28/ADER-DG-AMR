@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
       sim.setIO(dtn_outplt, dt_outplt);
 
       //AMR
-      int max_level = 0;            // number of levels = max_level + 1
+      int max_level = 1;            // number of levels = max_level + 1
       int dtn_regrid  = 1;          // try regrid every n timesteps
       int nghost = 1;               //number of ghost cells, dont change
       amrex::Real dt_regrid = -1;    //regrid every dt time, negative wont use it
