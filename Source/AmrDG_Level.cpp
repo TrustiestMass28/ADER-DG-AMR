@@ -180,7 +180,7 @@ void AmrDG::AMR_avg_down_initial_condition()
 void AmrDG::AMR_average_fine_coarse()
 {  
   auto _mesh = mesh.lock();
-
+  
   for (int l = _mesh->get_finest_lev(); l > 0; --l){  
     for(int q=0; q<Q; ++q){   
       amr_interpolator->average_down(U_w[l][q], 0,U_w[l-1][q],0,U_w[l-1][q].nComp(), 
