@@ -471,7 +471,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   dtn_plt =  (dtn_outplt > 0);
   dt_plt = (dt_outplt > 0);
   if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
-
+  /*
   //Output t=0 norm
   L1Norm_DG_AMR(model_pde);
   L2Norm_DG_AMR(model_pde);
@@ -480,11 +480,11 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
 
   Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
   Print()<<"------------------------------------------------"<<"\n";
-  /*
+  
   while(t<T)
   {  
     //Remake existing levels and create new fine levels from coarse
-    if ((_mesh->L > 0) && (n>0))
+    if ((_mesh->L > 0) )//&& (n>0)
     {
       if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
         //TODO: adapt boolena condition to handle physical time
@@ -500,20 +500,12 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
         FillBoundary(&(U_w[l][q]),l);
       }
     }
-    */
-    /*
-                for(int q=0 ; q<Q; ++q){//TODO
-                //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
-                //for ghost at fine-coarseinterface just copy from coarse
-                //FillPatchGhostFC(lev,time,q);
-                //TODO: should possible avg down be put here?Otherwise all this block
-                //to put inside ADER function ebfore time-stepping
-              }  
-    */
-   /*
+    
     //advance solution by one time-step.
     time_integration(model_pde,bdcond,t);
 
+    t=T;
+    
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -564,12 +556,22 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     //{
     //  t=T+1;
     //}
-  }
+  }*/
   
   //Output t=T norm
-  L1Norm_DG_AMR(model_pde);
-  L2Norm_DG_AMR(model_pde);*/
+  //L1Norm_DG_AMR(model_pde);
+  //L2Norm_DG_AMR(model_pde);
 }
+
+    /*
+                for(int q=0 ; q<Q; ++q){//TODO
+                //FillCoarsePatch(lev, time, U_w[lev][q], 0, Np,q);
+                //for ghost at fine-coarseinterface just copy from coarse
+                //FillPatchGhostFC(lev,time,q);
+                //TODO: should possible avg down be put here?Otherwise all this block
+                //to put inside ADER function ebfore time-stepping
+              }  
+    */
 
 template <typename EquationType>
 void AmrDG::time_integration(std::shared_ptr<ModelEquation<EquationType>> model_pde, 
@@ -596,13 +598,13 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
   for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     //apply BC
     FillBoundaryCells(bdcond,&(U_w[l]), l, time);
-
+    
     //set predictor initial guess
     set_predictor(&(U_w[l]), &(H_w[l]));  
     
     //iteratively find predictor
     int iter=0;    
-
+    
     while(iter<p)
     { 
       if(model_pde->flag_source_term){
@@ -621,7 +623,7 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
       
       iter+=1;
     }
-    
+    /*
     //use found predictor to compute corrector
     if(model_pde->flag_source_term){
       get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
@@ -642,7 +644,7 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
     } 
 
     //update corrector
-    update_U_w(l);  
+    update_U_w(l);  */
   }
   
   amrex::ParallelDescriptor::Barrier();

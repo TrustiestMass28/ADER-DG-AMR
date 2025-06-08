@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
       sim.setNumericalSettings(p,T);
 
       //IO
-      int dtn_outplt = -1;
+      int dtn_outplt = 1;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);
@@ -45,15 +45,11 @@ int main(int argc, char* argv[])
       {
         //code here if you want different coefficients 
         //for each level of refinement
-        amr_c[l] = 1.0+l*0.25; 
-        //if(l==0){amr_c[l] = 0.7;}
-        //else if(l==1){amr_c[l] = 1.7;}
-        //else if(l==2){amr_c[l] = 1.8;}
+        amr_c[l] = 0.65; 
       }
 
       //BOUNDARY CONDITION
       int Q = sim.getQ();
-      
       
       amrex::Array<int,AMREX_SPACEDIM> is_periodic;
       amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_lo;
@@ -103,11 +99,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 64;
+            n_cell_x = 16;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 64;
+            n_cell_y = 16;
 
 
             L_z_lo   = 0.0;
