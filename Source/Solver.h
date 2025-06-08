@@ -583,15 +583,30 @@ void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEqu
     //            and mantain higher order ifo from ifne cells inside coarse
     //            just need to ensure restriction is conservative
 
-    //loop over levels
+    //Initialize all levels with full grid
     auto _mesh = mesh.lock();
-    for(int l=0; l<_mesh->L; ++l){
-        //Define IC on coarsest mesh
-        static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,l);
-    }
 
-    //Restrict solution from fine to coarse level
-    static_cast<NumericalMethodType*>(this)->AMR_avg_down_initial_condition();
+    if (_mesh->L > 0) {
+        //Init solution on coarsest level only
+        static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,0);
+
+        //Call the cascading regrid function. It will build the ENTIRE grid hierarchy
+        // for levels 1, 2, 3,... based on the data in level 0.
+        _mesh->regrid(0, 0.0);
+
+        //The grid structure is now final. Initialize the solution on all the newly
+        // created fine levels.
+        for(int l=1; l<_mesh->L; ++l){
+            static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,l);
+        }
+
+        //Restrict solution from fine to coarse level for consistency
+        static_cast<NumericalMethodType*>(this)->AMR_avg_down_initial_condition();
+    }
+    else{
+        //Define IC on single coarse mesh
+        static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,0);
+    }
 }
 
 
