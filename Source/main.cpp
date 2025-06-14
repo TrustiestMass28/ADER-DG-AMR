@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
         //code here if you want different coefficients 
         //for each level of refinement
         if(l==0){amr_c[l] = 0.8;}
-        else{amr_c[l] = 0.0;}
+        else{amr_c[l] = 0.7;}
       }
 
       //BOUNDARY CONDITION

@@ -602,13 +602,8 @@ void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEqu
         //when regridding no projection/interpolation will be made
         _mesh->regrid(0, 0.0);
 
-        //TODO: testing interpolation from coarse when creating new finest level
-        _mesh->amr_c[1]=0.7;
-
-        _mesh->regrid(1, 0.0);
-
         //Restrict solution from fine to coarse level for consistency
-        //static_cast<NumericalMethodType*>(this)->AMR_avg_down_initial_condition();
+        static_cast<NumericalMethodType*>(this)->AMR_avg_down_initial_condition();
     }
     else{
         //Define IC on single coarse mesh
