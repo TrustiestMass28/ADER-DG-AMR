@@ -67,7 +67,8 @@ void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
                                     const amrex::DistributionMapping& dm)
 {
   //create new level MFabs defined on new ba,dm
-  set_init_data_system(lev,ba,dm); 
+  Print()<<"constructing new level "<<lev<<"\n";
+  Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm); 
 
   AMR_FillFromCoarsePatch(lev, time, U_w[lev], 0, basefunc->Np_s);
 }
@@ -90,11 +91,11 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
 
-  amrex::Interpolater* mapper= amr_interpolator.get();
+  amrex::Interpolater* mapper= &amrex::pc_interp;//amr_interpolator.get();
 
   amrex::Vector<MultiFab*> cmf;
   amrex::Vector<Real> ctime;
-
+  
   for(int q=0 ; q<Q; ++q){                            
     //Store tmp data of the coarse MFab
 
@@ -188,33 +189,3 @@ void AmrDG::AMR_average_fine_coarse()
     }
   } 
 }
- 
-
-/*
-void AmrDG::AMR_settings_tune()
-{
-  /////////////////////////
-  //AMR MESH PARAMETERS (tune only if needed)
-  //please refer to AMReX_AmrMesh.H for all functions for setting the parameters
-  //Set the same blocking factor for all levels
-  SetBlockingFactor(2); 
-  SetGridEff(0.9);
-  //Different blocking factor for each refinemetn level
-
-  //amrex::Vector<int> block_fct;// (max_level+1);
-  //for (int l = 0; l <= max_level; ++l) {
-  //  if(l==0){block_fct.push_back(8);}
-  //  else if(l==1){block_fct.push_back(4);}
-  //}
-  ////NB: can also specify different block factor per dimension and different
-  ////block factor per dimension per level
-  //SetBlockingFactor(block_fct);
-
-  
-  //SetMaxGridSize(16);
-  //iterate_on_new_grids = false;//will genrete only one new level per refinement step
-  /////////////////////////
-}
-
-
-*/

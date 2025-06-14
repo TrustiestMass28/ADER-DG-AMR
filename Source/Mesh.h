@@ -242,67 +242,32 @@ const Vector<IntVect>&  Mesh<NumericalMethodType>::get_refRatio()
     return refRatio();
 }
 
+ 
 /*
-ADAPTIVE MESH REFINEMENT (GEOMETRY BASED OPERATIONS)
-    //AMR settings 
+void AmrDG::AMR_settings()
+{
+  /////////////////////////
+  //AMR MESH PARAMETERS (tune only if needed)
+  //please refer to AMReX_AmrMesh.H for all functions for setting the parameters
+  //Set the same blocking factor for all levels
+  SetBlockingFactor(2); 
+  SetGridEff(0.9);
+  //Different blocking factor for each refinemetn level
 
+  //amrex::Vector<int> block_fct;// (max_level+1);
+  //for (int l = 0; l <= max_level; ++l) {
+  //  if(l==0){block_fct.push_back(8);}
+  //  else if(l==1){block_fct.push_back(4);}
+  //}
+  ////NB: can also specify different block factor per dimension and different
+  ////block factor per dimension per level
+  //SetBlockingFactor(block_fct);
 
-
-
-    void FillPatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
-    
-    void FillCoarsePatch (int lev, Real time, amrex::MultiFab& mf, int icomp, int ncomp, int q);
-    
-    void GetData (int lev, int q, Real time, Vector<MultiFab*>& data, Vector<Real>& datatime);
-    
-    void AverageFineToCoarse();    
-    
-    void AverageFineToCoarseFlux(int lev);
-    
-    void FillPatchGhostFC(int lev,amrex::Real time,int q);
-
-    //AMR refinement and limiting
-    void AMR_settings_tune();
-
-AMR INTERPOLATOR
-*/
-/*
-///////////////////////////////////////////////////////////////////////
-Mesh Interpolation
-
-
-  //Interpolation coarse<->fine data scatter/gather
-  custom_interp.getouterref(this); 
-  custom_interp.interp_proj_mat();
   
+  //SetMaxGridSize(16);
+  //iterate_on_new_grids = false;//will genrete only one new level per refinement step
+  /////////////////////////
+}
 */
 
-
-/*
-
-
-
-
-
-//std::swap(U_w[lev][q],new_mf);    
-
-/*
-  //amrex::MultiFab new_mf;
-//new_mf.define(ba, dm, Np, nghost);
-//new_mf.setVal(0.0);    
-  amrex::FillPatchTwoLevels(new_mf, time, cmf, ctime, fmf, ftime,0, 0, Np, 
-                          geom[lev-1], geom[lev],coarse_physbcf, 0, fine_physbcf, 
-                          0, refRatio(lev-1),mapper, bc_w[q], 0);
-                          
-                          
-fillpatcher = std::make_unique<FillPatcher<MultiFab>>(ba, dm, geom[lev],
-parent->boxArray(level-1), parent->DistributionMap(level-1), geom_crse,
-IntVect(nghost), desc.nComp(), desc.interp(scomp));
-
-
-fillpatcher->fill(mf, IntVect(nghost), time,
-    smf_crse, stime_crse, smf_fine, stime_fine,
-    scomp, dcomp, ncomp,
-    physbcf_crse, scomp, physbcf_fine, scomp,
-    desc.getBCs(), scomp);*/
 #endif 
