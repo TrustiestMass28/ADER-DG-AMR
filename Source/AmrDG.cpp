@@ -57,7 +57,7 @@ void AmrDG::settings(int _p, amrex::Real _T) {
 }
 
 void AmrDG::init()
-{
+{ 
   amrex::Vector<std::string> logo = {
     "######################################",
     "     _   __  __ ___     ___   ___ ",
@@ -239,6 +239,7 @@ AmrDG::~AmrDG(){
 void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
                                   const DistributionMapping& dm)
 {
+  Print() <<"set_init_data_system "<<lev<<"\n";
   //Init data structures for level for all solution components of the system
   U_w[lev].resize(Q); 
   U[lev].resize(Q);
@@ -279,7 +280,8 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 //Init data for given level for specific solution component
 void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
                                     const DistributionMapping& dm, int q)
-{
+{ 
+  Print() <<"set_init_data_component "<<q<<"\n";
   auto _mesh = mesh.lock();
 
   H_w[lev][q].define(ba, dm, basefunc->Np_st, _mesh->nghost);

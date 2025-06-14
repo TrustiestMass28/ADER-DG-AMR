@@ -513,8 +513,13 @@ void Solver<NumericalMethodType>::init( std::shared_ptr<ModelEquation<EquationTy
     //Initialize BoxArray, DistributionMapping and data from scratch.
     //Calling this function requires the derive class implement its own MakeNewLevelFromScratch
     //to allocate and initialize data.
+
+    //NB: Construct full domain grids up to max_level
     _mesh->InitFromScratch(time);
 
+    //Populate all grid levels with the IC
+    //afterwards apply regridding to tag cells
+    //and create AMR grids
     set_initial_condition(model_pde);
 }
 
@@ -583,25 +588,27 @@ void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEqu
     //            and mantain higher order ifo from ifne cells inside coarse
     //            just need to ensure restriction is conservative
 
-    //Initialize all levels with full grid
     auto _mesh = mesh.lock();
 
-    if (_mesh->L > 0) {
-        //Init solution on coarsest level only
-        static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,0);
 
-        //Call the cascading regrid function. It will build the ENTIRE grid hierarchy
-        // for levels 1, 2, 3,... based on the data in level 0.
-        _mesh->regrid(0, 0.0);
-
-        //The grid structure is now final. Initialize the solution on all the newly
-        // created fine levels.
-        for(int l=1; l<_mesh->L; ++l){
+    //Initialize all levels with full grid solution
+    //AMReX expects all levels to be initially cosntructed)
+    if (_mesh->L > 1) {
+        for(int l=0; l<_mesh->L; ++l){
             static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,l);
         }
 
+        //Since the current grids at all levels cover the entire domain, 
+        //when regridding no projection/interpolation will be made
+        _mesh->regrid(0, 0.0);
+
+        //TODO: testing interpolation from coarse when creating new finest level
+        _mesh->amr_c[1]=0.7;
+
+        _mesh->regrid(1, 0.0);
+
         //Restrict solution from fine to coarse level for consistency
-        static_cast<NumericalMethodType*>(this)->AMR_avg_down_initial_condition();
+        //static_cast<NumericalMethodType*>(this)->AMR_avg_down_initial_condition();
     }
     else{
         //Define IC on single coarse mesh

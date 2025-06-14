@@ -35,17 +35,22 @@ int main(int argc, char* argv[])
       sim.setIO(dtn_outplt, dt_outplt);
 
       //AMR
-      int max_level = 1;            // number of levels = max_level + 1
+      int max_level = 2;            // number of levels = max_level + 1
+                                    // max_level=0 single level simulation
+                                    // max_level>0 multi  level simulation
+                                    // max_level==number refined levels
+
       int dtn_regrid  = 1;          // try regrid every n timesteps
       int nghost = 1;               //number of ghost cells, dont change
       amrex::Real dt_regrid = -1;    //regrid every dt time, negative wont use it
                               
-      amrex::Vector<amrex::Real> amr_c(max_level+1);  //AMR refinement criteria based on value
-      for(int l=0; l<max_level+1;++l)
+      amrex::Vector<amrex::Real> amr_c(max_level);  //AMR refinement criteria based on value
+      for(int l=0; l<max_level;++l)
       {
         //code here if you want different coefficients 
         //for each level of refinement
-        amr_c[l] = 0.65; 
+        if(l==0){amr_c[l] = 0.8;}
+        else{amr_c[l] = 0.0;}
       }
 
       //BOUNDARY CONDITION

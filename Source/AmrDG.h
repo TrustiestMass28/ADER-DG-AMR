@@ -471,11 +471,11 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   dtn_plt =  (dtn_outplt > 0);
   dt_plt = (dt_outplt > 0);
   if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
-  /*
-  //Output t=0 norm
-  L1Norm_DG_AMR(model_pde);
-  L2Norm_DG_AMR(model_pde);
   
+  //Output t=0 norm
+  //L1Norm_DG_AMR(model_pde);
+  //L2Norm_DG_AMR(model_pde);
+  /*
   set_Dt(model_pde);
 
   Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";

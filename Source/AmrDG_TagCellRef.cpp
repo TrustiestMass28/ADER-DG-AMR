@@ -10,7 +10,6 @@ void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Re
   const int   tagval = TagBox::SET;
 
   auto _mesh = mesh.lock();
-   
   /*
   amrex::Vector<amrex::MultiFab> tmp_U_p(Q);
   amrex::Vector<amrex::MultiFab> tmp_U_m(Q);
