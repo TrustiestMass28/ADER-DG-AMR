@@ -52,7 +52,7 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
   _mesh->ClearLevel(lev);
 
   //create new level MFabs defined on new ba,dm
-  set_init_data_system(lev,ba,dm); 
+  Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm);
 
   //swap old solution MFab with newly created one
   for(int q=0 ; q<Q; ++q){
@@ -91,7 +91,7 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
 
-  amrex::Interpolater* mapper= &amrex::pc_interp;//amr_interpolator.get();
+  amrex::Interpolater* mapper= amr_interpolator.get();
 
   amrex::Vector<MultiFab*> cmf;
   amrex::Vector<Real> ctime;
