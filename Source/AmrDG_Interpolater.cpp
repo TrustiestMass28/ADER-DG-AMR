@@ -146,7 +146,8 @@ void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
             int              actual_comp,
             int              actual_state,
             RunOn            runon)
-{ Print() <<"INTERPOLATING FROM COARSE"<<"\n";
+{ 
+  Print() <<"INTERPOLATING FROM COARSE"<<"\n";
   Array4<Real const> const& crsearr = crse.const_array();
   Array4<Real> const& finearr = fine.array();
   Box bx_c = crse.box();
@@ -229,17 +230,17 @@ void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, int fine_comp, Mu
 void AmrDG::L2ProjInterp::amr_scatter(int i, int j, int k, Array4<Real> const& fine, 
                                     int fcomp, Array4<Real const> const& crse, int ccomp, 
                                     int ncomp, IntVect const& ratio) noexcept
-{ 
+{   
+    
     Eigen::VectorXd u_fine(ncomp);
     Eigen::VectorXd u_coarse(ncomp);
 
+    auto map = set_fine_coarse_idx_map(i,j,k,ratio);
+
     //Loop over the components
     for(int n=0; n<ncomp;++n){
-      u_fine[n] = fine(i,j,k,fcomp+n);
-      u_coarse[n] =crse(i,j,k,ccomp+n);
+      u_coarse[n] =crse(map.i,map.j,map.k,ccomp+n);
     }
-
-    auto map = set_fine_coarse_idx_map(i,j,k,ratio);
 
     u_fine = Minv*P_cf[map.fidx]*u_coarse;
 
@@ -282,81 +283,103 @@ void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> co
 
 AmrDG::L2ProjInterp::IndexMap AmrDG::L2ProjInterp::set_fine_coarse_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
 {
-  //pass fine cell index and return overlapping coarse cell index 
-  //and index locating fine cell w.r.t coarse one reference frame
-  IndexMap _map;
+    //pass fine cell index and return overlapping coarse cell index
+    //and index locating fine cell w.r.t coarse one reference frame
+    IndexMap _map;
 
+    // --- Calculate Coarse Cell Indices ---
 #if (AMREX_SPACEDIM == 1)
-  int _i = amrex::coarsen(i,ratio[0]);
-  int _j = 0;
-  int _k = 0;
+    int _i = amrex::coarsen(i,ratio[0]);
+    int _j = 0; // Not used in 1D
+    int _k = 0; // Not used in 1D
 #elif (AMREX_SPACEDIM == 2)
-  int _i = amrex::coarsen(i,ratio[0]);
-  int _j = amrex::coarsen(j,ratio[1]);
-  int _k = 0;
-#elif (AMREX_SPACEDIM == 3)  
-  int _i = amrex::coarsen(i,ratio[0]);
-  int _j = amrex::coarsen(j,ratio[1]);
-  int _k = amrex::coarsen(k,ratio[2]);
+    int _i = amrex::coarsen(i,ratio[0]);
+    int _j = amrex::coarsen(j,ratio[1]);
+    int _k = 0; // Not used in 2D
+#elif (AMREX_SPACEDIM == 3)
+    int _i = amrex::coarsen(i,ratio[0]);
+    int _j = amrex::coarsen(j,ratio[1]);
+    int _k = amrex::coarsen(k,ratio[2]);
 #endif
 
-  // Populate coarse cell indices in _map
-  _map.i = _i;
-  _map.j = _j;
-  _map.k = _k;
+    // Populate coarse cell indices in _map
+    _map.i = _i;
+    _map.j = _j;
+    _map.k = _k;
 
-
-  //Retrieve idx of subcell given fine and coarse idx relation
-  int si,sj,sk;
+    // --- Determine Sub-Cell Relative Position (si, sj, sk) ---
+    // These values indicate if the fine cell is in the "lower" (-1) or "upper" (1) half
+    // of the coarse cell along each dimension.
+    // This logic assumes a refinement ratio of 2.
+    int si, sj, sk;
 
 #if (AMREX_SPACEDIM == 1)
-  if(_i<0){si=1;}
-  else if(_i>=0 && i == 2*_i){si=-1;}
-  else if(_i>=0 && i == 2*_i+1){si=1;}
-#elif (AMREX_SPACEDIM == 2)
-  if(_i<0){si=1;}
-  else if(_i>=0 && i == 2*_i){si=-1;}
-  else if(_i>=0 && i == 2*_i+1){si=1;}
-  
-  if(_j<0){sj=1;}
-  else if(_j>=0 && j == 2*_j){sj=-1;}
-  else if(_j>=0 && j == 2*_j+1){sj=1;}  
-#elif (AMREX_SPACEDIM == 3) 
-  if(_i<0 && i == _i){si=1;}
-  else if(_i>=0 && i == 2*_i){si=-1;}
-  else if(_i>=0 && i == 2*_i+1){si=1;}
-  
-  if(_j<0 && j == _jc){sj=1;}
-  else if(_j>=0 && j == 2*_j){sj=-1;}
-  else if(_j>=0 && j == 2*_j+1){sj=1;}  
-  
-  if(_k<0 && k == _k){sk=1;}
-  else if(_k>=0 && k == 2*_k){sk=-1;}
-  else if(_k>=0 && k == 2*_k+1){sk=1;}
-#endif
-
-  //Retrieve fine sub-cell idx
-  int idx;
-  for(int _idx=0; _idx<std::pow(2,AMREX_SPACEDIM); ++_idx)
-  {
-  #if (AMREX_SPACEDIM == 1)
-    if((si ==amr_projmat_int[_idx][0]))
-  #elif (AMREX_SPACEDIM == 2)
-    if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1]))
-  #elif (AMREX_SPACEDIM == 3) 
-    if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1])
-        && (sk ==amr_projmat_int[_idx][2]))
-  #endif
-    {
-      idx=_idx;
-      break;
+    // For 1D, if fine index 'i' is even, it's the lower half; if odd, it's the upper half.
+    // This assumes ratio[0] is 2.
+    if ((i - _i * ratio[0]) == 0) { // Equivalent to i % ratio[0] == 0 for fine_idx >= 0
+        si = -1;
+    } else { // (i - _i * ratio[0]) == 1
+        si = 1;
     }
-  }
+
+#elif (AMREX_SPACEDIM == 2)
+    // For x-dimension
+    if ((i - _i * ratio[0]) == 0) {
+        si = -1;
+    } else {
+        si = 1;
+    }
+    // For y-dimension
+    if ((j - _j * ratio[1]) == 0) {
+        sj = -1;
+    } else {
+        sj = 1;
+    }
+
+#elif (AMREX_SPACEDIM == 3)
+    // For x-dimension
+    if ((i - _i * ratio[0]) == 0) {
+        si = -1;
+    } else {
+        si = 1;
+    }
+    // For y-dimension
+    if ((j - _j * ratio[1]) == 0) {
+        sj = -1;
+    } else {
+        sj = 1;
+    }
+    // For z-dimension
+    if ((k - _k * ratio[2]) == 0) {
+        sk = -1;
+    } else {
+        sk = 1;
+    }
+
+#endif
+
+    // --- Retrieve Fine Sub-Cell Index (idx) ---
+    int idx = -1; // Initialize to -1 to detect if a match is found
+    for(int _idx_loop = 0; _idx_loop < std::pow(2,AMREX_SPACEDIM); ++_idx_loop)
+    {
+#if (AMREX_SPACEDIM == 1)
+        if((si == amr_projmat_int[_idx_loop][0]))
+#elif (AMREX_SPACEDIM == 2)
+        if((si == amr_projmat_int[_idx_loop][0]) && (sj == amr_projmat_int[_idx_loop][1]))
+#elif (AMREX_SPACEDIM == 3)
+        if((si == amr_projmat_int[_idx_loop][0]) && (sj == amr_projmat_int[_idx_loop][1])
+           && (sk == amr_projmat_int[_idx_loop][2]))
+#endif
+        {
+            idx = _idx_loop;
+            break;
+        }
+    }
 
     // Populate fine sub-cell index in _map
     _map.fidx = idx;
 
-  return _map;
+    return _map;
 }
 
 amrex::Vector<AmrDG::L2ProjInterp::IndexMap> AmrDG::L2ProjInterp::set_coarse_fine_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
