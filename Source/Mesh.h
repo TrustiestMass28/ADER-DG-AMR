@@ -91,6 +91,10 @@ class Mesh : public amrex::AmrCore
         const Vector<IntVect>& get_refRatio();
 
         //Max number of levels
+        //max_level 	=	index of max level
+        //L 			= 	max number of levels
+        //finest_level=	index of curretn finest level
+
         int L = 1;
 
         //Regrid time-steps interval
@@ -142,14 +146,15 @@ template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::MakeNewLevelFromScratch(int lev, amrex::Real time, 
                                     const amrex::BoxArray& ba,
                                     const amrex::DistributionMapping& dm) 
-{
+{   Print()<<"MakeNewLevelFromScratch    :"<<lev<<"\n";
     auto _solver = solver.lock();
     _solver->set_init_data_system(lev, ba, dm);
 }
 
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::ClearLevel(int lev)
-{
+{   
+    Print()<<"ClearLevel    :"<<lev<<"\n";
     auto _solver = solver.lock();
     _solver->AMR_clear_level_data(lev);   
 }
@@ -165,7 +170,7 @@ void Mesh<NumericalMethodType>::ErrorEst (int lev, amrex::TagBoxArray& tags,
 template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::RemakeLevel(int lev, amrex::Real time, const amrex::BoxArray& ba,
                         const amrex::DistributionMapping& dm) 
-{
+{   Print()<<"RemakeLevel    :"<<lev<<"\n";
     auto _solver = solver.lock();
     _solver->AMR_remake_level(lev,time,ba,dm);     
 }
@@ -174,7 +179,7 @@ template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::MakeNewLevelFromCoarse(int lev, amrex::Real time,
                                     const amrex::BoxArray& ba, 
                                     const amrex::DistributionMapping& dm)
-{
+{   Print()<<"MakeNewLevelFromCoarse    :"<<lev<<"\n";
     auto _solver = solver.lock();
     _solver->AMR_make_new_fine_level(lev,time,ba,dm);    
 }

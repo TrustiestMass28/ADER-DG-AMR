@@ -464,6 +464,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
 
   auto _mesh = mesh.lock();
 
+  //Set timestep idx and time
   int n=0;
   amrex::Real t= 0.0;  
 
@@ -473,9 +474,9 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
   
   //Output t=0 norm
-  //L1Norm_DG_AMR(model_pde);
-  //L2Norm_DG_AMR(model_pde);
-  /*
+  L1Norm_DG_AMR(model_pde);
+  L2Norm_DG_AMR(model_pde);
+  
   set_Dt(model_pde);
 
   Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
@@ -484,7 +485,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
   while(t<T)
   {  
     //Remake existing levels and create new fine levels from coarse
-    if ((_mesh->L > 0) )//&& (n>0)
+    if ((_mesh->L > 0) && (n>0))
     {
       if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
         //TODO: adapt boolena condition to handle physical time
@@ -505,7 +506,7 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     time_integration(model_pde,bdcond,t);
 
     t=T;
-    
+    /*
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -552,11 +553,11 @@ void AmrDG::evolve(std::shared_ptr<ModelEquation<EquationType>> model_pde,
     if(T-t<Dt){Dt = T-t;}    
 
     //DEBUG
-    //if(n==1)
-    //{
-    //  t=T+1;
-    //}
-  }*/
+    if(n==1)
+    {
+      t=T+1;
+    }*/
+  }
   
   //Output t=T norm
   //L1Norm_DG_AMR(model_pde);
@@ -593,7 +594,18 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
   //to be already synchronized. This is ensured by startign from IC that is fully sync
   //and then after everytime-step, sync the updated data
   auto _mesh = mesh.lock();
+  int l = 0;
+  int d = 1;
+  set_predictor(&(U_w[l]), &(H_w[l]));  
+  get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
+  flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
+  //for(int d = 0; d<AMREX_SPACEDIM; ++d){
+    //if source ===True, this is duplicate, could avoid redoit
+  //  flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
+    //flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(H[l]),quadrule->xi_ref_quad_st);
+  //}   
 
+  /*
   //iterate from finest level to coarsest
   for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     //apply BC
@@ -607,12 +619,12 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
     
     while(iter<p)
     { 
+      get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
+      
       if(model_pde->flag_source_term){
-        get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
         source(l,quadrule->qMp_st,model_pde,&(H[l]),&(S[l]),quadrule->xi_ref_quad_st);
       }  
       
-      get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
       for(int d = 0; d<AMREX_SPACEDIM; ++d){
         //if source ===True, this is duplicate, could avoid redoit
         flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
@@ -623,7 +635,7 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
       
       iter+=1;
     }
-    /*
+    
     //use found predictor to compute corrector
     if(model_pde->flag_source_term){
       get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
@@ -644,8 +656,8 @@ void AmrDG::ADER( std::shared_ptr<ModelEquation<EquationType>> model_pde,
     } 
 
     //update corrector
-    update_U_w(l);  */
-  }
+    update_U_w(l);  
+  }*/
   
   amrex::ParallelDescriptor::Barrier();
 }
@@ -820,6 +832,7 @@ void AmrDG::flux(int lev,int d, int M,
                 amrex::Vector<amrex::MultiFab>* F_ptr,
                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 { 
+  Print() <<lev<<"\n";
   //General function that computes all Q components of the non-linear flux at 
   //the given set of M interpolation/quadrature points xi
 
@@ -855,6 +868,7 @@ void AmrDG::flux(int lev,int d, int M,
         u[q] = fab_u[q]->const_array();
         flux[q]=(*(fab_flux[q])).array();
       } 
+
       for(int q=0 ; q<Q; ++q){
         amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
         {    

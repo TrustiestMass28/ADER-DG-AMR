@@ -35,10 +35,10 @@ int main(int argc, char* argv[])
       sim.setIO(dtn_outplt, dt_outplt);
 
       //AMR
-      int max_level = 2;            // number of levels = max_level + 1
+      int max_level = 1;            // number of levels = max_level + 1
                                     // max_level=0 single level simulation
                                     // max_level>0 multi  level simulation
-                                    // max_level==number refined levels
+                                    // max_level==idx of maximum fine lvl
 
       int dtn_regrid  = 1;          // try regrid every n timesteps
       int nghost = 1;               //number of ghost cells, dont change
