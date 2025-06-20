@@ -238,8 +238,7 @@ AmrDG::~AmrDG(){
 
 void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
                                   const DistributionMapping& dm)
-{
-  Print() <<"set_init_data_system "<<lev<<"\n";
+{ Print()<<"set_init_data_system    :"<<lev<<"\n";
   //Init data structures for level for all solution components of the system
   U_w[lev].resize(Q); 
   U[lev].resize(Q);
@@ -280,8 +279,7 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 //Init data for given level for specific solution component
 void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
                                     const DistributionMapping& dm, int q)
-{ 
-  Print() <<"set_init_data_component "<<q<<"\n";
+{ Print()<<"set_init_data_component    :"<<lev<<"\n";
   auto _mesh = mesh.lock();
 
   H_w[lev][q].define(ba, dm, basefunc->Np_st, _mesh->nghost);
@@ -310,6 +308,7 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
   //idc_grad_K[lev].setVal(0.0);
     
   for(int d=0; d<AMREX_SPACEDIM; ++d){ 
+    
     H_p[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
     H_p[lev][d][q].setVal(0.0);
 
@@ -337,6 +336,7 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
 
     Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
     Fnum[lev][d][q].setVal(0.0);    
+    //Print() <<d<<"\n";
   }
 }
 

@@ -485,7 +485,6 @@ amrex::Vector<amrex::Vector<amrex::BCRec>> Solver<NumericalMethodType>::get_null
     return _bc;
 }
 
-
 template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::init( std::shared_ptr<ModelEquation<EquationType>> model_pde, 
@@ -562,6 +561,7 @@ void Solver<NumericalMethodType>::set_init_data_system(int lev,const BoxArray& b
     //NumericalMethod specific data structure initialization (e.g additional)
     //can also clear up Solver data members that arent needed for particular method
     //e.g the numerical fluxes
+    Print()<<"Solverset_init_data_system    :"<<lev<<"\n";
     static_cast<NumericalMethodType*>(this)->set_init_data_system(lev, ba, dm);
     
     //init data for each ocmponent of the equation
@@ -573,7 +573,7 @@ void Solver<NumericalMethodType>::set_init_data_system(int lev,const BoxArray& b
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::set_init_data_component(int lev,const BoxArray& ba, 
                                                         const DistributionMapping& dm, int q)
-{
+{      Print()<<"Solverset_init_data_component    :"<<lev<<"\n";
     static_cast<NumericalMethodType*>(this)->set_init_data_component(lev, ba, dm, q);
 }
 
@@ -590,7 +590,6 @@ void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEqu
 
     auto _mesh = mesh.lock();
 
-
     //Initialize all levels with full grid solution
     //AMReX expects all levels to be initially cosntructed)
     if (_mesh->L > 1) {
@@ -603,7 +602,7 @@ void Solver<NumericalMethodType>::set_initial_condition(std::shared_ptr<ModelEqu
         _mesh->regrid(0, 0.0);
 
         //Restrict solution from fine to coarse level for consistency
-        static_cast<NumericalMethodType*>(this)->AMR_avg_down_initial_condition();
+        //static_cast<NumericalMethodType*>(this)->AMR_avg_down_initial_condition();
     }
     else{
         //Define IC on single coarse mesh

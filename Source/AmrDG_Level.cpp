@@ -5,7 +5,7 @@ using namespace amrex;
 void AmrDG::AMR_clear_level_data(int lev)
 {
   //Delete level data
-
+  Print()<<"AMR_clear_level_data    :"<<lev<<"\n";
   U_w[lev].clear();  
   U[lev].clear();  
   if(flag_source_term){S[lev].clear();}
@@ -31,6 +31,7 @@ void AmrDG::AMR_clear_level_data(int lev)
 void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
                             const amrex::DistributionMapping& dm) 
 {
+  Print()<<"AMR_remake_level    :"<<lev<<"\n";
   //Remake level based on new geometry. Only the evolved solution vector
   //has to be preserved, i.e only U_w. The data transfer from old MFab
   //to new MFab (differend distribution mapping) of U_w is handled by 
@@ -65,9 +66,9 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
 void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
                                     const amrex::BoxArray& ba, 
                                     const amrex::DistributionMapping& dm)
-{
+{ 
   //create new level MFabs defined on new ba,dm
-  Print()<<"constructing new level "<<lev<<"\n";
+  Print()<<"AMR_make_new_fine_level    :"<<lev<<"\n";
   Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm); 
 
   AMR_FillFromCoarsePatch(lev, time, U_w[lev], 0, basefunc->Np_s);
@@ -80,7 +81,7 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
                                 int icomp,int ncomp)
 {   
   auto _mesh = mesh.lock();
-
+  Print()<<"AMR_FillFromCoarsePatch    :"<<lev<<"\n";
   //NB: in theory we would need access to boundary conditions if we wanted to apply them here
   //because of code structure, we dont have access to BC object, therefore we need to create a tmp
   //BC dummy amrex::Vector<amrex::BCRec> dummy_bc. After projection and levlec reation, the BCs will be applied
@@ -115,7 +116,7 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
 //NB: this function is used for regrid and not for timestepping
 void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf,int icomp, int ncomp)
 {  
-
+  Print()<<"AMR_FillPatch    :"<<lev<<"\n";
   auto _mesh = mesh.lock();
 
   amrex::CpuBndryFuncFab bcf(nullptr); 
@@ -181,7 +182,7 @@ void AmrDG::AMR_avg_down_initial_condition()
 void AmrDG::AMR_average_fine_coarse()
 {  
   auto _mesh = mesh.lock();
-  
+  Print()<<"AMR_average_fine_coarse"<<"\n";
   for (int l = _mesh->get_finest_lev(); l > 0; --l){  
     for(int q=0; q<Q; ++q){   
       amr_interpolator->average_down(U_w[l][q], 0,U_w[l-1][q],0,U_w[l-1][q].nComp(), 
