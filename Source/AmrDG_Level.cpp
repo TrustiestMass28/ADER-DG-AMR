@@ -6,26 +6,50 @@ void AmrDG::AMR_clear_level_data(int lev)
 {
   //Delete level data
   Print()<<"AMR_clear_level_data    :"<<lev<<"\n";
-  U_w[lev].clear();  
-  U[lev].clear();  
-  if(flag_source_term){S[lev].clear();}
-  U_center[lev].clear();  
 
-  F[lev].clear();
-  Fm[lev].clear();
-  Fp[lev].clear();
+    auto clear_mfab_vec = [](auto& vec) {
+        for (auto& mf : vec) {
+            mf.clear();
+        }
+        vec.clear();
+    };
 
-  DF[lev].clear();
-  DFm[lev].clear();
-  DFp[lev].clear();
+    auto clear_mfab_vec2D = [&](auto& vec2D) {
+        for (auto& vec : vec2D) {
+            clear_mfab_vec(vec);
+        }
+        vec2D.clear();
+    };
 
-  Fnum[lev].clear();   
+    auto clear_mfab_vec3D = [&](auto& vec3D) {
+        for (auto& vec2D : vec3D) {
+            clear_mfab_vec2D(vec2D);
+        }
+        vec3D.clear();
+    };
 
-  H_w[lev].clear();  
-  H[lev].clear();  
+    // Per-component fields
+    clear_mfab_vec(U[lev]);
+    clear_mfab_vec(U_w[lev]);
+    clear_mfab_vec(U_center[lev]);
+    if (flag_source_term) {
+        clear_mfab_vec(S[lev]);
+    }
 
-  H_p[lev].clear(); 
-  H_m[lev].clear();
+    // Per-dimension per-component fields
+    clear_mfab_vec2D(F[lev]);
+    clear_mfab_vec2D(DF[lev]);
+    clear_mfab_vec2D(Fm[lev]);
+    clear_mfab_vec2D(DFm[lev]);
+    clear_mfab_vec2D(Fp[lev]);
+    clear_mfab_vec2D(DFp[lev]);
+    clear_mfab_vec2D(Fnum[lev]);
+
+    // H-related fields
+    clear_mfab_vec(H[lev]);
+    clear_mfab_vec(H_w[lev]);
+    clear_mfab_vec2D(H_p[lev]);
+    clear_mfab_vec2D(H_m[lev]);
 }
 
 void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
@@ -48,7 +72,6 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
   } 
   
   AMR_FillPatch(lev, time, _mf, 0, basefunc->Np_s);
-
   //clear existing level MFabs defined on old ba,dm
   _mesh->ClearLevel(lev);
 
@@ -59,6 +82,11 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
   for(int q=0 ; q<Q; ++q){
     std::swap(U_w[lev][q],_mf[q]);  
   }
+}
+
+void AmrDG::AMR_interpolate_initial_condition(int lev)
+{
+  AMR_FillFromCoarsePatch(lev, 0.0, U_w[lev], 0, basefunc->Np_s);
 }
 
 //Make a new level using provided BoxArray and DistributionMapping and fill with 
@@ -92,7 +120,7 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
 
-  amrex::Interpolater* mapper= amr_interpolator.get();
+  amrex::Interpolater* mapper= &pc_interp;//amr_interpolator.get();
 
   amrex::Vector<MultiFab*> cmf;
   amrex::Vector<Real> ctime;
@@ -145,7 +173,7 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
   }
   else
   { 
-    amrex::Interpolater* mapper = amr_interpolator.get();
+    amrex::Interpolater* mapper = &pc_interp;//amr_interpolator.get();
 
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
@@ -173,10 +201,10 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
   }
 }
 
-void AmrDG::AMR_avg_down_initial_condition()
-{
-  AMR_average_fine_coarse();
-}
+//void AmrDG::AMR_avg_down_initial_condition()
+//{
+//  AMR_average_fine_coarse();
+//}
 
 //averages cell centered data from finer cells to the respective covered coarse cell
 void AmrDG::AMR_average_fine_coarse()

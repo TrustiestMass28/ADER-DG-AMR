@@ -11,12 +11,13 @@ void AmrDG::DEBUG_print_MFab()
   //user should implement wathever they want
   int q = 0;
   int lev = 0;
-  int dim = 0;
+  int dim = 1;
+  int M = 5;
 
   int nproc = amrex::ParallelDescriptor::MyProc();
   int nprocs = amrex::ParallelDescriptor::NProcs();
   AllPrint() << nproc<<"\n";
-  amrex::MultiFab& state_c = U_w[lev][q];
+  amrex::MultiFab& state_c = F[lev][dim][q];
   //amrex::MultiFab& state_c = H_w[lev][q];
   //amrex::MultiFab& state_c = Fnum[lev][dim][q];
   //amrex::MultiFab& state_c = Fp[lev][dim][q];
@@ -36,14 +37,21 @@ void AmrDG::DEBUG_print_MFab()
     for(int k = lo.z; k <= hi.z; ++k){  
       for(int i = lo.x; i <= hi.x; ++i){ 
         for(int j = lo.y; j <= hi.y; ++j){
-          //for(int n = 0; n<qMpbd; ++n) {
-          //for(int n = 0; n<basefunc->Np_s; ++n) {
-          for(int n = 0; n<2; ++n) {
+          /*for(int n = 0; n<2; ++n) {
             amrex::Print(nproc) << "Rank " << nproc << ": " 
                                 << "i=" << i << ", j=" << j << ", k=" << k
                                 << ", w=" << n << ", val=" << uc(i,j,k,n) << "\n";
           }       
-        } 
+          */
+            
+          amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
+          {    
+            amrex::Print(nproc) << "Rank " << nproc << ": " 
+                                << "i=" << i << ", j=" << j << ", k=" << k
+                                << ", w=" << m << ", val=" << uc(i,j,k,m) << "\n";
+          });
+      
+       } 
       }       
     }
   }
@@ -87,7 +95,7 @@ void AmrDG::init()
   }
 
   auto _mesh = mesh.lock();
-
+  
   //Set vectors size
   U_w.resize(_mesh->L); 
   U.resize(_mesh->L); 
@@ -194,16 +202,12 @@ void AmrDG::init()
     
   set_ref_element_matrix();
   
-  //TODO:Set-up mesh interpolation
-  
-  amr_interpolator = std::make_shared<L2ProjInterp>();
+  //Set-up mesh interpolation
+  //amr_interpolator = std::make_shared<L2ProjInterp>();
 
-  amr_interpolator->setNumericalMethod(shared_from_this());
+  //amr_interpolator->setNumericalMethod(shared_from_this());
 
-  amr_interpolator->interp_proj_mat();
-
-  //TODO::Set-up limiting
-
+  //amr_interpolator->interp_proj_mat();
 }
 
 void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)

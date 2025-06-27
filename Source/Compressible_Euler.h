@@ -32,21 +32,21 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
 
     template <typename NumericalMethodType>
     amrex::Real pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
-                          amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                          const amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                           const amrex::Vector<amrex::Real>& xi,
-                          std::weak_ptr<Mesh<NumericalMethodType>> mesh) const;
+                          const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
 
     template <typename NumericalMethodType>
     amrex::Real pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
-                          amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                          const amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                           const amrex::Vector<amrex::Real>& xi,
-                          std::weak_ptr<Mesh<NumericalMethodType>> mesh) const ;
+                          const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const ;
 
     template <typename NumericalMethodType>        
     amrex::Real pde_source(int lev, int q, int m, int i, int j, int k, 
-                            amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                            const amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                             const amrex::Vector<amrex::Real>& xi,
-                            std::weak_ptr<Mesh<NumericalMethodType>> mesh) const; 
+                            const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const; 
 
     virtual amrex::Real pde_cfl_lambda(int d,int m,int i, int j, int k,
                                   amrex::Vector<amrex::Array4<const amrex::Real>>* u) const override;
@@ -74,7 +74,7 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
     template <typename NumericalMethodType>
     amrex::Real pde_IC(int lev, int q, int i,int j,int k, 
                         const amrex::Vector<amrex::Real>& xi, 
-                        std::weak_ptr<Mesh<NumericalMethodType>> mesh) const;
+                        const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
     
   private:
 
@@ -84,11 +84,11 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
       double gamma_adiab;
 
       template <typename T>//T==amrex::Real, const amrex::Real
-      amrex::Real Pressure(amrex::Vector<amrex::Array4<T>>* u, 
+      amrex::Real Pressure(const amrex::Vector<amrex::Array4<T>>* u, 
                             int i, int j, int k,int m) const;
 
       template <typename T>
-      amrex::Real Soundspeed(amrex::Vector<amrex::Array4<T>>* u,
+      amrex::Real Soundspeed(const amrex::Vector<amrex::Array4<T>>* u,
                               int i, int j, int k, int m) const;
 
       amrex::Real smooth_discontinuity(amrex::Real xi, amrex::Real a, 
@@ -98,12 +98,11 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
 template <typename NumericalMethodType>
 amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k, 
                                       const amrex::Vector<amrex::Real>& xi, 
-                                      std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+                                      const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const
 {
-  auto _mesh = mesh.lock();
 
-  const auto prob_lo = _mesh->get_Geom(lev).ProbLoArray();
-  const auto dx     = _mesh->get_Geom(lev).CellSizeArray();
+  const auto prob_lo = mesh->get_Geom(lev).ProbLoArray();
+  const auto dx     = mesh->get_Geom(lev).CellSizeArray();
   
   amrex::Real uw_ic; 
 #if (AMREX_SPACEDIM == 1)
@@ -348,9 +347,9 @@ amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
 
 template <typename NumericalMethodType>
 amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, int j, int k, 
-                                        amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                        const amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                         const amrex::Vector<amrex::Real>& xi,
-                                        std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+                                        const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const
 { 
   amrex::Real f;
   amrex::Real prs=Pressure(u,i,j,k,m);
@@ -374,12 +373,10 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
     
     if(flag_angular_momentum)
     { 
-      auto _mesh = mesh.lock();
-
       //implementation of angular momentum conservation law
-      const auto prob_lo = _mesh->get_Geom(lev).ProbLoArray();
-      const auto prob_hi = _mesh->get_Geom(lev).ProbHiArray();
-      const auto dx     = _mesh->get_Geom(lev).CellSizeArray();
+      const auto prob_lo = mesh->get_Geom(lev).ProbLoArray();
+      const auto prob_hi = mesh->get_Geom(lev).ProbHiArray();
+      const auto dx     = mesh->get_Geom(lev).CellSizeArray();
       amrex::Real x1c = prob_lo[0] + (i+Real(0.5)) * dx[0];
       amrex::Real x2c = prob_lo[1] + (j+Real(0.5)) * dx[1];
       amrex::Real x1 = dx[0]*0.5*(xi[0])+x1c;
@@ -426,12 +423,11 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
     
     if(flag_angular_momentum)
     { 
-      auto _mesh = mesh.lock();
       //implementation of angular momentum conservation law
       
-      const auto prob_lo = _mesh->get_Geom(lev).ProbLoArray();
-      const auto prob_hi = _mesh->get_Geom(lev).ProbHiArray();
-      const auto dx     = _mesh->get_Geom(lev).CellSizeArray();
+      const auto prob_lo = mesh->get_Geom(lev).ProbLoArray();
+      const auto prob_hi = mesh->get_Geom(lev).ProbHiArray();
+      const auto dx     = mesh->get_Geom(lev).CellSizeArray();
       amrex::Real x1c = prob_lo[0] + (i+Real(0.5)) * dx[0];
       amrex::Real x2c = prob_lo[1] + (j+Real(0.5)) * dx[1];
       amrex::Real x3c = prob_lo[2] + (k+Real(0.5)) * dx[2];
@@ -470,9 +466,9 @@ amrex::Real Compressible_Euler::pde_flux(int lev, int d, int q, int m, int i, in
 
 template <typename NumericalMethodType>
 amrex::Real Compressible_Euler::pde_dflux(int lev, int d, int q, int m, int i, int j, int k, 
-                                          amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                          const amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                           const amrex::Vector<amrex::Real>& xi,
-                                          std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+                                          const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const
 {
   amrex::Real df;
   amrex::Real un;
@@ -501,17 +497,15 @@ amrex::Real Compressible_Euler::pde_dflux(int lev, int d, int q, int m, int i, i
 
 template <typename NumericalMethodType>        
 amrex::Real Compressible_Euler::pde_source(int lev, int q, int m, int i, int j, int k, 
-                                          amrex::Vector<amrex::Array4<const amrex::Real>>* u,
+                                          const amrex::Vector<amrex::Array4<const amrex::Real>>* u,
                                           const amrex::Vector<amrex::Real>& xi,
-                                          std::weak_ptr<Mesh<NumericalMethodType>> mesh) const
+                                          const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const
 {
-  auto _mesh = mesh.lock();
-
   amrex::Real s;
   if(model_case == "keplerian_disc")
   {
-    const auto prob_lo = _mesh->get_Geom(lev).ProbLoArray();
-    const auto dx     = _mesh->get_Geom(lev).CellSizeArray();
+    const auto prob_lo = mesh->get_Geom(lev).ProbLoArray();
+    const auto dx     = mesh->get_Geom(lev).CellSizeArray();
   
     amrex::Vector<amrex::Real> ctr_ptr = {AMREX_D_DECL(3.0,3.0,3.0)};
     amrex::Real x_shape_ctr = ctr_ptr[0];
@@ -544,7 +538,7 @@ amrex::Real Compressible_Euler::pde_source(int lev, int q, int m, int i, int j, 
 }
 
 template <typename T>
-amrex::Real Compressible_Euler::Pressure(amrex::Vector<amrex::Array4<T>>* u, 
+amrex::Real Compressible_Euler::Pressure(const amrex::Vector<amrex::Array4<T>>* u, 
                                         int i, int j, int k,int m) const
 {
   amrex::Real prs =0.0;
@@ -566,7 +560,7 @@ amrex::Real Compressible_Euler::Pressure(amrex::Vector<amrex::Array4<T>>* u,
 }
 
 template <typename T>
-amrex::Real Compressible_Euler::Soundspeed(amrex::Vector<amrex::Array4<T>>* u,
+amrex::Real Compressible_Euler::Soundspeed(const amrex::Vector<amrex::Array4<T>>* u,
                                           int i, int j, int k, int m) const
 {
 //return the pointwise value of soundspeed, i.e at quadrature/interpolation point

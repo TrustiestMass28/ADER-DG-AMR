@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
       sim.setIO(dtn_outplt, dt_outplt);
 
       //AMR
-      int max_level = 1;            // number of levels = max_level + 1
+      int max_level =1;            // number of levels = max_level + 1
                                     // max_level=0 single level simulation
                                     // max_level>0 multi  level simulation
                                     // max_level==idx of maximum fine lvl
@@ -104,11 +104,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 16;
+            n_cell_x = 32;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 16;
+            n_cell_y = 32;
 
 
             L_z_lo   = 0.0;
