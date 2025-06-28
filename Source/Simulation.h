@@ -102,8 +102,10 @@ void Simulation<NumericalMethodType,EquationType>::run()
     }
   }
   
+  //set ptr to solver, other init procedures
   mesh->init(solver);
   
+  //set ptr to mesh and init grids
   solver->init(model,mesh,dtn_outplt,dt_outplt,out_name_prefix);
 
   bdcond->init(model,solver,mesh);

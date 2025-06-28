@@ -493,7 +493,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
         //TODO: adapt boolena condition to handle physical time
         //interval dt_regrid
-        //_mesh->regrid(0, t);
+        _mesh->regrid(0, t);
       }
     }  
 
@@ -503,20 +503,18 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //(during init ghost are not filled)
     for(int l=0; l<=_mesh->get_finest_lev(); ++l){
       for(int q=0; q<Q; ++q){ 
-        //Solver<NumericalMethodType>::FillBoundary(&(U_w[l][q]),l);
+        Solver<NumericalMethodType>::FillBoundary(&(U_w[l][q]),l);
       }
     }
 
     //advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
-    //Print()<<"done"<<"\n";
-    t=T;
-    /*
+    
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
     //gather valid fine cell solutions U_w into valid coarse cells
-    AMR_average_fine_coarse();   
+    //Solver<NumericalMethodType>::AMR_average_fine_coarse();   
     
     //Prepare inner ghost cell data for next time step
     //for grids at same level and fine-coarse interface
@@ -550,18 +548,21 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     
     //plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
-    dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);//use as tolerance dt_outplt, i.e same order of magnitude
+    dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
+    //use as tolerance dt_outplt, i.e same order of magnitude
     if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
     else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
 
-    set_Dt(model_pde);
+    Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
 
+    t=T;
+
     //DEBUG
-    if(n==1)
-    {
-      t=T+1;
-    }*/
+    //if(n==1)
+    //{
+     // t=T+1;
+    //}
   }
   
   //Output t=T norm
@@ -585,12 +586,9 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
   //NB:this function  expectes the incoming MFabs (solution) internal ghost cells
   //to be already synchronized. This is ensured by startign from IC that is fully sync
   //and then after everytime-step, sync the updated data
-  amrex::ParallelDescriptor::Barrier();//*/
   auto _mesh = mesh.lock();
 
-  ///*
   //iterate from finest level to coarsest
-
   for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     Print() <<"ADER-lev:  "<<l<<"\n";
     //apply BC
@@ -638,12 +636,13 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st,&(H_p[l][d]),&(H_w[l]),quadrule->xi_ref_quad_st_bdp[d]);
       Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde,&(H_p[l][d]),&(Fp[l][d]),&(DFp[l][d]),quadrule->xi_ref_quad_st_bdp[d]);
 
-      //Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
+      Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
     } 
     Print()<< "done"<<"\n";
     //update corrector
-    //update_U_w(l);  
+    update_U_w(l);  
   }
+  amrex::ParallelDescriptor::Barrier();
 }
 
 template <typename EquationType>
