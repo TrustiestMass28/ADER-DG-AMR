@@ -201,11 +201,6 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
   }
 }
 
-//void AmrDG::AMR_avg_down_initial_condition()
-//{
-//  AMR_average_fine_coarse();
-//}
-
 //averages cell centered data from finer cells to the respective covered coarse cell
 void AmrDG::AMR_average_fine_coarse()
 {  

@@ -340,7 +340,6 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
 
     Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
     Fnum[lev][d][q].setVal(0.0);    
-    //Print() <<d<<"\n";
   }
 }
 

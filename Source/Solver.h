@@ -524,7 +524,7 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
     //Populate all grid levels with the IC
     //afterwards apply regridding to tag cells
     //and create AMR grids
-    set_initial_condition(model_pde);
+    //set_initial_condition(model_pde);
 }
 
 template <typename NumericalMethodType>
@@ -587,7 +587,7 @@ template <typename EquationType>
 void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<ModelEquation<EquationType>>& model_pde)
 {
     auto _mesh = mesh.lock();
-
+    Print()<<"Solver::set_initial_condition    :"<<"\n";
     //Define IC on single coarse mesh
     static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,0);
     //AMR_interpolate_initial_condition(1);
