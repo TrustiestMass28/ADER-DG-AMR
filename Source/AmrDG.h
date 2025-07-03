@@ -514,7 +514,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
     //gather valid fine cell solutions U_w into valid coarse cells
-    //Solver<NumericalMethodType>::AMR_average_fine_coarse();   
+    Solver<NumericalMethodType>::AMR_average_fine_coarse();   
     
     //Prepare inner ghost cell data for next time step
     //for grids at same level and fine-coarse interface

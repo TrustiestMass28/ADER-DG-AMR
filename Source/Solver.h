@@ -524,7 +524,7 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
     //Populate all grid levels with the IC
     //afterwards apply regridding to tag cells
     //and create AMR grids
-    //set_initial_condition(model_pde);
+    set_initial_condition(model_pde);
 }
 
 template <typename NumericalMethodType>
@@ -590,6 +590,7 @@ void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<Mo
     Print()<<"Solver::set_initial_condition    :"<<"\n";
     //Define IC on single coarse mesh
     static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,0);
+    static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,1);
     //AMR_interpolate_initial_condition(1);
     //Initialize al finer levels with full grid solution interpolated form coarsest
     //This is needed because at start-up of time-stepping, regrid will be performed
@@ -598,6 +599,7 @@ void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<Mo
     //therefore data will be jsut copied and if these fine levels 
     //with started un-initialized IC, they will remain un-initialized.
     //For this reason need to populate them befrehand
+    /*
     if (_mesh->L > 1) {
         for(int l=1; l<_mesh->L; ++l){
             AMR_interpolate_initial_condition(l);
@@ -606,7 +608,7 @@ void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<Mo
         //Since the current grids at all levels cover the entire domain, 
         //when regridding at 0th timestep
         //no projection/interpolation will be made
-    }
+    }*/
 }
 
 template <typename NumericalMethodType>
