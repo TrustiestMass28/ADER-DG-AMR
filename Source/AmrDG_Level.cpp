@@ -73,11 +73,13 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
   
   AMR_FillPatch(lev, time, _mf, 0, basefunc->Np_s);
   //clear existing level MFabs defined on old ba,dm
-  _mesh->ClearLevel(lev);
+  //_mesh->ClearLevel(lev);
+  //Solver<NumericalMethodType>::AMR_clear_level_data(lev);
+
 
   //create new level MFabs defined on new ba,dm
-  Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm);
-
+  //Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm);
+  
   //swap old solution MFab with newly created one
   for(int q=0 ; q<Q; ++q){
     std::swap(U_w[lev][q],_mf[q]);  

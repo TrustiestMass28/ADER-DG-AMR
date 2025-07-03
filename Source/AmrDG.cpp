@@ -203,11 +203,11 @@ void AmrDG::init()
   set_ref_element_matrix();
   
   //Set-up mesh interpolation
-  //amr_interpolator = std::make_shared<L2ProjInterp>();
+  amr_interpolator = std::make_shared<L2ProjInterp>();
 
-  //amr_interpolator->setNumericalMethod(shared_from_this());
+  amr_interpolator->setNumericalMethod(shared_from_this());
 
-  //amr_interpolator->interp_proj_mat();
+  amr_interpolator->interp_proj_mat();
 }
 
 void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
