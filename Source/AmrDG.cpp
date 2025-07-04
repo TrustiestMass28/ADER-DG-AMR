@@ -55,8 +55,6 @@ void AmrDG::DEBUG_print_MFab()
       }       
     }
   }
-  // Barrier to make sure output is clean
-  amrex::ParallelDescriptor::Barrier();
 }
 
 void AmrDG::settings(int _p, amrex::Real _T) {
@@ -386,9 +384,10 @@ void AmrDG::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
           fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
           uw[q] = fab_u_w[q]->const_array();
               
-          fab_u[q]=&((*(state_u[q]))[mfi]);
-          u[q]=(*(fab_u[q])).array();
+          fab_u[q] = &(state_u[q]->get(mfi));
+          u[q] = fab_u[q]->array();
         } 
+
         for(int q=0 ; q<Q; ++q){
           amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
           {
@@ -449,8 +448,8 @@ void AmrDG::get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
           fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
           uw[q] = fab_u_w[q]->const_array();
 
-          fab_u[q]=&((*(state_u[q]))[mfi]);
-          u[q]=(*(fab_u[q])).array();
+          fab_u[q] = &(state_u[q]->get(mfi));
+          u[q] = fab_u[q]->array();
         } 
         for(int q=0 ; q<Q; ++q){
           amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
@@ -503,10 +502,10 @@ void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr,
 
       for(int q=0 ; q<Q; ++q){      
         fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
-        fab_h_w[q]= &((*(state_h_w[q]))[mfi]);
+        fab_h_w[q] = &(state_h_w[q]->get(mfi));
 
         uw[q] = fab_u_w[q]->const_array();
-        hw[q]=(*(fab_h_w[q])).array();
+        hw[q] = fab_h_w[q]->array();
       }
 
       for(int q=0 ; q<Q; ++q){
@@ -558,7 +557,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
 
     state_fnum[q] = &(Fnum[lev][d][q]); 
   }
-    
+
 #ifdef AMREX_USE_OMP
 #pragma omp parallel 
 #endif
@@ -579,11 +578,11 @@ void AmrDG::numflux(int lev,int d,int M, int N,
     amrex::Vector<const amrex::FArrayBox *> fab_up(Q);
     amrex::Vector< amrex::Array4< const amrex::Real> > up(Q);
     
-    #ifdef AMREX_USE_OMP  
-    for (MFIter mfi(*(state_fnum[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
-    #else
-    for (MFIter mfi(*(state_fnum[0]),true); mfi.isValid(); ++mfi)
-    #endif    
+  #ifdef AMREX_USE_OMP
+    for (MFIter mfi(*(state_fnum[0]), MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+  #else
+      for (MFIter mfi(*(state_fnum[0]), true); mfi.isValid(); ++mfi)
+  #endif
     {
       //externally grown tilebox
       const amrex::Box& bx = mfi.tilebox();
@@ -595,7 +594,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       //
       
       for(int q=0 ; q<Q; ++q){
-        fab_fnum[q]=&((*(state_fnum[q]))[mfi]);
+        fab_fnum[q]=&(state_fnum[q]->get(mfi));
   
         fab_fm[q] = state_fm[q]->fabPtr(mfi);
         fab_fp[q] = state_fp[q]->fabPtr(mfi);
@@ -604,7 +603,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         fab_um[q] = state_um[q]->fabPtr(mfi);
         fab_up[q] = state_up[q]->fabPtr(mfi);
         
-        fnum[q]=(*(fab_fnum[q])).array();
+        fnum[q]=fab_fnum[q]->array();
 
         fm[q] = fab_fm[q]->const_array();
         fp[q] = fab_fp[q]->const_array();
@@ -619,7 +618,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         amrex::ParallelFor(ibx, M,[&] (int i, int j, int k, int m) noexcept
         {
           //check which indices it iterate across, i.e if last one is reachd
-          fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
+          //fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
         });   
       }
     }
