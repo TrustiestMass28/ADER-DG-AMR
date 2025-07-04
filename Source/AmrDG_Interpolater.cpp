@@ -147,7 +147,6 @@ void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
             int              actual_state,
             RunOn            runon)
 { 
-  Print() <<"INTERPOLATING FROM COARSE"<<"\n";
   Array4<Real const> const& crsearr = crse.const_array();
   Array4<Real> const& finearr = fine.array();
   Box bx_c = crse.box();

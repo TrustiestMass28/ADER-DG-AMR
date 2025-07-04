@@ -418,8 +418,8 @@ void AmrDG::set_initial_condition(const std::shared_ptr<ModelEquation<EquationTy
       const amrex::Box& bx = mfi.tilebox();
 
       for(int q=0 ; q<Q; ++q){
-        fab_uw[q]=&((*(state_uw[q]))[mfi]);
-        uw[q]=(*(fab_uw[q])).array();
+        fab_uw[q] = &(state_uw[q]->get(mfi));
+        uw[q] = fab_uw[q]->array();
       } 
       
       for(int q=0; q<Q; ++q){
@@ -555,14 +555,12 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
 
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
+    
+    if(n==2){
+      t=T+1;
+    }
+    
 
-    t=T;
-
-    //DEBUG
-    //if(n==1)
-    //{
-     // t=T+1;
-    //}
   }
   
   //Output t=T norm
@@ -609,6 +607,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       }  
       
       for(int d = 0; d<AMREX_SPACEDIM; ++d){
+        Print()<< d<<"\n";
         //if source ===True, this is duplicate, could avoid redoit
         Solver<NumericalMethodType>::flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
       }   
@@ -618,7 +617,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       
       iter+=1;
     }
-    
+    Print()<< "predictor step done"<<"\n";
     //use found predictor to compute corrector
     if(model_pde->flag_source_term){
       get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
@@ -638,11 +637,11 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
       Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
     } 
-    Print()<< "done"<<"\n";
+    Print()<< "flux step done"<<"\n";
     //update corrector
     update_U_w(l);  
   }
-  amrex::ParallelDescriptor::Barrier();
+  //amrex::ParallelDescriptor::Barrier();
 }
 
 template <typename EquationType>
@@ -679,7 +678,7 @@ void AmrDG::flux(int lev, int d, int M,
         for (MFIter mfi(*(state_flux[0]), true); mfi.isValid(); ++mfi)
 #endif
         {
-            const amrex::Box& bx = mfi.growntilebox();
+            const amrex::Box& bx = mfi.growntilebox();//grown
 
             // Get array data for all Q states and fluxes
             for (int q = 0; q < Q; ++q) {
@@ -739,7 +738,7 @@ void AmrDG::flux_bd(int lev,int d, int M,
     for (MFIter mfi(*(state_flux[0]),true); mfi.isValid(); ++mfi)
     #endif
     {
-      const amrex::Box& bx = mfi.growntilebox();
+      const amrex::Box& bx = mfi.growntilebox();//
       
       for(int q=0 ; q<Q; ++q){
         fab_u[q] = state_u[q]->fabPtr(mfi);
@@ -854,7 +853,7 @@ void AmrDG::set_Dt(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   
 
     //Find min for across MPI processes
-    ParallelDescriptor::Barrier();
+    //ParallelDescriptor::Barrier();
     ParallelDescriptor::ReduceRealMin(rank_lev_dt_min);//, dt_tmp.size());
     dt_tmp[l] = rank_lev_dt_min;
   }
@@ -870,7 +869,7 @@ void AmrDG::set_Dt(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
   }
 
-  ParallelDescriptor::Barrier();
+  //ParallelDescriptor::Barrier();
   ParallelDescriptor::ReduceRealMin(dt_min);
   Dt = dt_min; 
 }
@@ -911,10 +910,10 @@ void AmrDG::source(int lev,int M,
 
       for(int q=0 ; q<Q; ++q){
         fab_u[q] = state_u[q]->fabPtr(mfi);
-        fab_source[q]=&((*(state_source[q]))[mfi]);
+        fab_source[q] = &(state_source[q]->get(mfi));
 
         u[q] = fab_u[q]->const_array();
-        source[q]=(*(fab_source[q])).array();
+        source[q] = fab_source[q]->array();
       } 
 
       for(int q=0 ; q<Q; ++q){
