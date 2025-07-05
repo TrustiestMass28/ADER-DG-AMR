@@ -141,6 +141,8 @@ class Solver
         //gathering/average down method required for interpolation and sync between timesteps
         //void AMR_avg_down_initial_condition();
 
+        void AMR_advanced_settings();
+
         //Scatter IC from coarse to fine levels, used only during initialiation
         //user provide it sown implementation s.t cna specify which MFab required
         //projection
@@ -462,6 +464,12 @@ class Solver
 };
 
 template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::AMR_advanced_settings()
+{
+     static_cast<NumericalMethodType*>(this)->AMR_advanced_settings();
+}
+
+template <typename NumericalMethodType>
 amrex::Vector<amrex::BCRec> Solver<NumericalMethodType>::get_null_BC(int ncomp)
 {
     amrex::Vector<amrex::BCRec> _bc(ncomp);
@@ -483,8 +491,8 @@ amrex::Vector<amrex::Vector<amrex::BCRec>> Solver<NumericalMethodType>::get_null
 {
     amrex::Vector<amrex::Vector<amrex::BCRec>> _bc(q, amrex::Vector<amrex::BCRec> (ncomp));
 
-    for(int q=0 ; q<Q; ++q){
-        _bc[q] = get_null_BC(ncomp);
+    for(int i=0 ; i<Q; ++i){
+        _bc[i] = get_null_BC(ncomp);
     }
 
     return _bc;

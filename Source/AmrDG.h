@@ -81,6 +81,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     //void AMR_avg_down_initial_condition();
 
+    void AMR_advanced_settings();
+
     void AMR_interpolate_initial_condition(int lev);
 
     void AMR_average_fine_coarse();
@@ -119,39 +121,39 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     amrex::Real set_initial_condition_U(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                                         int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi) const;
 
-    void get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
-                        amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+    void get_U_from_U_w(int M, int N, amrex::Vector<amrex::MultiFab>* U_ptr,
+                        amrex::Vector<amrex::MultiFab>* U_w_ptr,
                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
     
-    template <typename EquationType>                    
-    void source(int lev,int M, 
+    template <typename EquationType>
+    void source(int lev, int M,
                 const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                 amrex::Vector<amrex::MultiFab>* U_ptr,
                 amrex::Vector<amrex::MultiFab>* S_ptr,
                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
     template <typename EquationType>
-    void flux(int lev,int d, int M, 
+    void flux(int lev, int d, int M,
               const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
               amrex::Vector<amrex::MultiFab>* U_ptr,
               amrex::Vector<amrex::MultiFab>* F_ptr,
-              const amrex::Vector<amrex::Vector<amrex::Real>>& xi); 
+              const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
     template <typename EquationType>
-    void flux_bd(int lev,int d, int M, 
-                const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                amrex::Vector<amrex::MultiFab>* U_ptr,
-                amrex::Vector<amrex::MultiFab>* F_ptr,
-                amrex::Vector<amrex::MultiFab>* DF_ptr,
-                const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
+    void flux_bd(int lev, int d, int M,
+                 const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                 amrex::Vector<amrex::MultiFab>* U_ptr,
+                 amrex::Vector<amrex::MultiFab>* F_ptr,
+                 amrex::Vector<amrex::MultiFab>* DF_ptr,
+                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
   
     void numflux(int lev,int d,int M, int N,
-                          amrex::Vector<amrex::MultiFab>* U_ptr_m, 
-                          amrex::Vector<amrex::MultiFab>* U_ptr_p,
-                          amrex::Vector<amrex::MultiFab>* F_ptr_m,
-                          amrex::Vector<amrex::MultiFab>* F_ptr_p,
-                          amrex::Vector<amrex::MultiFab>* DF_ptr_m,
-                          amrex::Vector<amrex::MultiFab>* DF_ptr_p);
+                 amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+                 amrex::Vector<amrex::MultiFab>* U_ptr_p,
+                 amrex::Vector<amrex::MultiFab>* F_ptr_m,
+                 amrex::Vector<amrex::MultiFab>* F_ptr_p,
+                 amrex::Vector<amrex::MultiFab>* DF_ptr_m,
+                 amrex::Vector<amrex::MultiFab>* DF_ptr_p);
 
     amrex::Real LLF_numflux(int d, int m,int i, int j, int k, 
                 amrex::Array4<const amrex::Real> up, 
@@ -311,11 +313,11 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
       
     amrex::Real coefficient_c(int k,int l) const;     
 
-    void set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-                      amrex::Vector<amrex::MultiFab>* H_w_ptr);
+    void set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr,
+                       amrex::Vector<amrex::MultiFab>* H_w_ptr);
     
-    void get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
-                        amrex::Vector<amrex::MultiFab>* H_w_ptr, 
+    void get_H_from_H_w(int M, int N, amrex::Vector<amrex::MultiFab>* H_ptr,
+                        amrex::Vector<amrex::MultiFab>* H_w_ptr,
                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
     void update_U_w(int lev);
@@ -494,6 +496,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         //TODO: adapt boolena condition to handle physical time
         //interval dt_regrid
         _mesh->regrid(0, t);
+        amrex::ParallelDescriptor::Barrier();
       }
     }  
 
@@ -545,6 +548,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
     Print()<<"------------------------------------------------"<<"\n";
     //Print(*ofs)
+    //t=T+1;
     
     //plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
@@ -559,8 +563,6 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     if(n==2){
       t=T+1;
     }
-    
-
   }
   
   //Output t=T norm
@@ -573,7 +575,17 @@ void AmrDG::time_integration(const std::shared_ptr<ModelEquation<EquationType>>&
                             const std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>>& bdcond,
                             amrex::Real time)
 {
+  auto _mesh = mesh.lock();
+  
+  // Add checks to ensure data structures are properly initialized
+  AMREX_ASSERT(H_w.size() > 0);
+  AMREX_ASSERT(U_w.size() > 0);
+  AMREX_ASSERT(F.size() > 0);
+  
   ADER(model_pde,bdcond,time);
+
+  // Add MPI synchronization after time integration
+  amrex::ParallelDescriptor::Barrier();
 }
 
 template <typename EquationType>
@@ -586,10 +598,48 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
   //and then after everytime-step, sync the updated data
   auto _mesh = mesh.lock();
 
+  // Comprehensive check for all levels and components
+  for(int l = 0; l <= _mesh->get_finest_lev(); ++l) {
+    AMREX_ASSERT(l < H_w.size());
+    AMREX_ASSERT(l < U_w.size());
+    AMREX_ASSERT(l < F.size());
+    
+    for(int q = 0; q < Q; ++q) {
+      AMREX_ASSERT(q < H_w[l].size());
+      AMREX_ASSERT(q < U_w[l].size());
+      AMREX_ASSERT(H_w[l][q].isDefined());
+      AMREX_ASSERT(U_w[l][q].isDefined());
+    }
+    
+    // Add safety checks for F arrays before calling flux
+    AMREX_ASSERT(l < F.size());
+    for(int d = 0; d < AMREX_SPACEDIM; ++d) {
+      AMREX_ASSERT(d < F[l].size());
+      for(int q = 0; q < Q; ++q) {
+        AMREX_ASSERT(q < F[l][d].size());
+        if (!F[l][d][q].isDefined()) {
+          Print() << "ERROR: F[" << l << "][" << d << "][" << q << "] is not defined!\n";
+          Print() << "  F.size()=" << F.size() << ", F[" << l << "].size()=" << F[l].size() 
+                 << ", F[" << l << "][" << d << "].size()=" << F[l][d].size() << "\n";
+          AMREX_ASSERT(false);
+        }
+      }
+    }
+  }
+
   //iterate from finest level to coarsest
   for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     Print() <<"ADER-lev:  "<<l<<"\n";
+    
+    // Add checks for data structure initialization
+    AMREX_ASSERT(l >= 0 && l < H_w.size());
+    AMREX_ASSERT(l >= 0 && l < U_w.size());
+    AMREX_ASSERT(l >= 0 && l < F.size());
+    
     //apply BC
+    //TODO OPTIMIZE: if periodic BC can skip this step
+    //or simply the FillBoundary inside evolve cna be removed since it is 
+    //performed anyway inside Fillboundary cells
     Solver<NumericalMethodType>::FillBoundaryCells(bdcond,&(U_w[l]), l, time);
     
     //set predictor initial guess
@@ -597,11 +647,11 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     
     //iteratively find predictor
     int iter=0;    
-    
+    Print()<< "set_predictor"<<"\n";
     while(iter<p)
     { 
       get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
-      
+      Print()<< "get_H_from_H_w"<<"\n";
       if(model_pde->flag_source_term){
         Solver<NumericalMethodType>::source(l,quadrule->qMp_st,model_pde,&(H[l]),&(S[l]),quadrule->xi_ref_quad_st);
       }  
@@ -614,6 +664,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       
       //update predictor
       update_H_w(l);
+      Print()<< "update_H_w"<<"\n";
       
       iter+=1;
     }
@@ -640,8 +691,8 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     Print()<< "flux step done"<<"\n";
     //update corrector
     update_U_w(l);  
+    Print()<< "update_U_w"<<"\n";
   }
-  //amrex::ParallelDescriptor::Barrier();
 }
 
 template <typename EquationType>
@@ -651,14 +702,55 @@ void AmrDG::flux(int lev, int d, int M,
                  amrex::Vector<amrex::MultiFab>* F_ptr,
                  const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
+    auto _mesh = mesh.lock();
+    for (int q = 0; q < Q; ++q)
+    {
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+        // Iterate on the destination MultiFab F
+        for (MFIter mfi((*F_ptr)[q], TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            const Box& bx = mfi.growntilebox();
+            auto f = (*F_ptr)[q].array(mfi);
+
+            // Create the vector of Array4s OUTSIDE the ParallelFor loop.
+            amrex::Vector<amrex::Array4<const amrex::Real>> u_vec;
+            for(int comp = 0; comp < Q; ++comp) {
+                u_vec.push_back((*U_ptr)[comp].const_array(mfi));
+            }
+
+            // The lambda now captures the lightweight u_vec by value.
+            amrex::ParallelFor(bx, M, [=] AMREX_GPU_DEVICE (int i, int j, int k, int m) noexcept
+            {
+                f(i,j,k,m) = model_pde->pde_flux(lev, d, q, m, i, j, k, &u_vec, xi[m], _mesh);
+            });
+        }
+    }
+}
+/*
+void AmrDG::flux(int lev, int d, int M,
+                 const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                 amrex::Vector<amrex::MultiFab>* U_ptr,
+                 amrex::Vector<amrex::MultiFab>* F_ptr,
+                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
     // Computes all Q components of the nonlinear flux at the given M interpolation/quadrature points xi
     auto _mesh = mesh.lock();
+
+    // Add safety checks
+    AMREX_ASSERT(lev >= 0 && lev < F.size());
+    AMREX_ASSERT(d >= 0 && d < AMREX_SPACEDIM);
+    AMREX_ASSERT(d < F[lev].size());
 
     amrex::Vector<amrex::MultiFab*> state_flux(Q);
     amrex::Vector<const amrex::MultiFab*> state_u(Q);
 
     // Cache pointers to MultiFabs for each state component
     for (int q = 0; q < Q; ++q) {
+        AMREX_ASSERT(q < F[lev][d].size());
+        AMREX_ASSERT(F[lev][d][q].isDefined());
+        
         state_u[q] = &((*U_ptr)[q]);
         state_flux[q] = &((*F_ptr)[q]);
     }
@@ -685,6 +777,12 @@ void AmrDG::flux(int lev, int d, int M,
                 fab_u[q] = state_u[q]->fabPtr(mfi);
                 fab_flux[q] = &(state_flux[q]->get(mfi));
 
+                // Add safety checks before accessing arrays
+                AMREX_ASSERT(fab_u[q] != nullptr);
+                AMREX_ASSERT(fab_flux[q] != nullptr);
+                AMREX_ASSERT(fab_u[q]->box().ok());
+                AMREX_ASSERT(fab_flux[q]->box().ok());
+
                 u[q] = fab_u[q]->const_array();
                 flux[q] = fab_flux[q]->array();
             }
@@ -697,9 +795,45 @@ void AmrDG::flux(int lev, int d, int M,
             }
         }
     }
-}
+}*/
 
 template <typename EquationType>
+void AmrDG::flux_bd(int lev, int d, int M,
+                    const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                    amrex::Vector<amrex::MultiFab>* U_ptr,
+                    amrex::Vector<amrex::MultiFab>* F_ptr,
+                    amrex::Vector<amrex::MultiFab>* DF_ptr,
+                    const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
+    auto _mesh = mesh.lock();
+    for (int q = 0; q < Q; ++q)
+    {
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+        // Iterate on one of the destination MultiFabs, e.g. F
+        for (MFIter mfi((*F_ptr)[q], TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            const Box& bx = mfi.growntilebox();
+            auto f = (*F_ptr)[q].array(mfi);
+            auto df = (*DF_ptr)[q].array(mfi);
+
+            // Create the vector of Array4s OUTSIDE the ParallelFor loop.
+            amrex::Vector<amrex::Array4<const amrex::Real>> u_vec;
+            for(int comp = 0; comp < Q; ++comp) {
+                u_vec.push_back((*U_ptr)[comp].const_array(mfi));
+            }
+
+            // The lambda now captures the lightweight u_vec by value.
+            amrex::ParallelFor(bx, M, [=] AMREX_GPU_DEVICE (int i, int j, int k, int m) noexcept
+            {
+                f(i,j,k,m)  = model_pde->pde_flux(lev, d, q, m, i, j, k, &u_vec, xi[m], _mesh);
+                df(i,j,k,m) = model_pde->pde_dflux(lev, d, q, m, i, j, k, &u_vec, xi[m], _mesh);
+            });
+        }
+    }
+}
+/*
 void AmrDG::flux_bd(int lev,int d, int M, 
                     const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                     amrex::Vector<amrex::MultiFab>* U_ptr,
@@ -759,7 +893,7 @@ void AmrDG::flux_bd(int lev,int d, int M,
       }
     }
   }
-}
+}*/
 
 //compute minimum time step size s.t CFL condition is met
 template <typename EquationType>
@@ -827,7 +961,7 @@ void AmrDG::set_Dt(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
           lambda_max = static_cast<amrex::Real>(*lambda_max_);         
 
           //general CFL formulation
-          amrex::Real CFL = (1.0/(2.0*(amrex::Real)p+1.0))*(1.0/(amrex::Real)AMREX_SPACEDIM);
+          CFL = (1.0/(2.0*(amrex::Real)p+1.0))*(1.0/(amrex::Real)AMREX_SPACEDIM);
           amrex::Real dt_cfl = CFL*(dx_avg/lambda_max);
         
         #ifdef AMREX_USE_OMP
@@ -851,9 +985,8 @@ void AmrDG::set_Dt(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       }
     }
   
-
     //Find min for across MPI processes
-    //ParallelDescriptor::Barrier();
+    ParallelDescriptor::Barrier();
     ParallelDescriptor::ReduceRealMin(rank_lev_dt_min);//, dt_tmp.size());
     dt_tmp[l] = rank_lev_dt_min;
   }
@@ -869,12 +1002,45 @@ void AmrDG::set_Dt(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
   }
 
-  //ParallelDescriptor::Barrier();
+  ParallelDescriptor::Barrier();
   ParallelDescriptor::ReduceRealMin(dt_min);
-  Dt = dt_min; 
+  Dt = dt_min;
 }
 
 template <typename EquationType>
+void AmrDG::source(int lev, int M,
+                   const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                   amrex::Vector<amrex::MultiFab>* U_ptr,
+                   amrex::Vector<amrex::MultiFab>* S_ptr,
+                   const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
+    auto _mesh = mesh.lock();
+    for (int q = 0; q < Q; ++q)
+    {
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+        // Iterate on the destination MultiFab S
+        for (MFIter mfi((*S_ptr)[q], TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            const Box& bx = mfi.growntilebox();
+            auto s = (*S_ptr)[q].array(mfi);
+
+            // Create the vector of Array4s OUTSIDE the ParallelFor loop.
+            amrex::Vector<amrex::Array4<const amrex::Real>> u_vec;
+            for(int comp = 0; comp < Q; ++comp) {
+                u_vec.push_back((*U_ptr)[comp].const_array(mfi));
+            }
+
+            // The lambda now captures the lightweight u_vec by value.
+            amrex::ParallelFor(bx, M, [=] AMREX_GPU_DEVICE (int i, int j, int k, int m) noexcept
+            {
+                s(i,j,k,m) = model_pde->pde_source(lev, q, m, i, j, k, &u_vec, xi[m], _mesh);
+            });
+        }
+    }
+}
+/*
 void AmrDG::source(int lev,int M, 
                     const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                     amrex::Vector<amrex::MultiFab>* U_ptr,
@@ -924,7 +1090,7 @@ void AmrDG::source(int lev,int M,
       }
     }
   } 
-}
+}*/
 
 template <typename EquationType> 
 void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,

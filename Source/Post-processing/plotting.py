@@ -23,7 +23,7 @@ yt.utilities.logger.colorize_logging()
 
 def main_plot():
     """""---------------------------------------------""""" 
-    Nsteps = 2
+    Nsteps = 1
     
     equation_type = "Compressible_Euler_2D"
     #["Compressible_Euler_2D","Advection"]
