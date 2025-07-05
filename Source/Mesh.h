@@ -134,6 +134,10 @@ template <typename NumericalMethodType>
 void Mesh<NumericalMethodType>::init(std::shared_ptr<Solver<NumericalMethodType>> _solver)
 {
     setSolver(_solver);
+
+    //TODO: user should specify these formulas in their numerical framework
+    SetBlockingFactor(4);
+    //SetGridEff(0.9);
 }
 
 template <typename NumericalMethodType>
@@ -246,33 +250,5 @@ const Vector<IntVect>&  Mesh<NumericalMethodType>::get_refRatio()
 {
     return refRatio();
 }
-
- 
-/*
-void AmrDG::AMR_settings()
-{
-  /////////////////////////
-  //AMR MESH PARAMETERS (tune only if needed)
-  //please refer to AMReX_AmrMesh.H for all functions for setting the parameters
-  //Set the same blocking factor for all levels
-  SetBlockingFactor(2); 
-  SetGridEff(0.9);
-  //Different blocking factor for each refinemetn level
-
-  //amrex::Vector<int> block_fct;// (max_level+1);
-  //for (int l = 0; l <= max_level; ++l) {
-  //  if(l==0){block_fct.push_back(8);}
-  //  else if(l==1){block_fct.push_back(4);}
-  //}
-  ////NB: can also specify different block factor per dimension and different
-  ////block factor per dimension per level
-  //SetBlockingFactor(block_fct);
-
-  
-  //SetMaxGridSize(16);
-  //iterate_on_new_grids = false;//will genrete only one new level per refinement step
-  /////////////////////////
-}
-*/
 
 #endif 
