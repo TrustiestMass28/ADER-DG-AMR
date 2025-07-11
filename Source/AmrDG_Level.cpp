@@ -150,7 +150,7 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
 
   amrex::CpuBndryFuncFab bcf(nullptr); 
   auto dummy_bc = get_null_BC(ncomp);
-
+  
   if (lev == 0)
   {
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);

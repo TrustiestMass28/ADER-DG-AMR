@@ -474,15 +474,15 @@ amrex::Vector<amrex::BCRec> Solver<NumericalMethodType>::get_null_BC(int ncomp)
 {
     amrex::Vector<amrex::BCRec> _bc(ncomp);
     for (int n = 0; n < ncomp; ++n) {
-        _bc[n].setLo(AMREX_D_DECL(amrex::BCType::bogus,
-                                amrex::BCType::bogus,
-                                amrex::BCType::bogus));
+        _bc[n].setLo(AMREX_D_DECL(amrex::BCType::int_dir,
+                                amrex::BCType::int_dir,
+                                amrex::BCType::int_dir));
 
-        _bc[n].setHi(AMREX_D_DECL(amrex::BCType::bogus,
-                                amrex::BCType::bogus,
-                                amrex::BCType::bogus));
+        _bc[n].setHi(AMREX_D_DECL(amrex::BCType::int_dir,
+                                amrex::BCType::int_dir,
+                                amrex::BCType::int_dir));
     }
-    
+   
     return _bc;
 }
   
