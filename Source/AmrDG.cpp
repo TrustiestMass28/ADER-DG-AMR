@@ -389,10 +389,7 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
     AMREX_ASSERT(F[lev][d][q].isDefined());
   }
 }
-
 /*
-//N=
-//M=qM = xi.size();
 void AmrDG::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
                           amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
@@ -663,7 +660,7 @@ void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr,
         }
     }
 }
-
+/*
 void AmrDG::numflux(int lev, int d, int M, int N,
                     amrex::Vector<amrex::MultiFab>* U_ptr_m,
                     amrex::Vector<amrex::MultiFab>* U_ptr_p,
@@ -710,9 +707,9 @@ void AmrDG::numflux(int lev, int d, int M, int N,
             });
         }
     }
-}
+}*/
 
-/*
+
 void AmrDG::numflux(int lev,int d,int M, int N,
                     amrex::Vector<amrex::MultiFab>* U_ptr_m, 
                     amrex::Vector<amrex::MultiFab>* U_ptr_p,
@@ -809,7 +806,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       }
     }
   }
-}*/
+}
 
 amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k, 
   amrex::Array4<const amrex::Real> up, 
@@ -847,6 +844,7 @@ amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k,
   return 0.5*(fL+fR)-0.5*C*(uR-uL);  
 }
 
+/*
 //updates solution on valid cells
 void AmrDG::update_U_w(int lev)
 {
@@ -934,8 +932,8 @@ void AmrDG::update_U_w(int lev)
         amrex::MultiFab::Copy(U_w[lev][q], rhs, 0, 0, basefunc->Np_s, 0);
     }
     amrex::ParallelDescriptor::Barrier();
-}
-/*
+}*/
+
 void AmrDG::update_U_w(int lev)
 {
   auto _mesh = mesh.lock();
@@ -1044,8 +1042,9 @@ void AmrDG::update_U_w(int lev)
   
   // Add MPI synchronization after updating U_w for all components
   amrex::ParallelDescriptor::Barrier();
-}*/
+}
 
+/*
 void AmrDG::update_H_w(int lev)
 {
     auto _mesh = mesh.lock();
@@ -1119,8 +1118,8 @@ void AmrDG::update_H_w(int lev)
         }
     }
     amrex::ParallelDescriptor::Barrier();
-}
-/*
+}*/
+
 void AmrDG::update_H_w(int lev)
 { 
   auto _mesh = mesh.lock();
@@ -1220,7 +1219,6 @@ void AmrDG::update_H_w(int lev)
   // Add MPI synchronization after updating H_w for all components
   amrex::ParallelDescriptor::Barrier();
 }
-*/
 
 ///////////////////////////////////////////////////////////////////////////
 

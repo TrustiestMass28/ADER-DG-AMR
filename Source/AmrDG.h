@@ -479,8 +479,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
   
   //Output t=0 norm
-  //L1Norm_DG_AMR(model_pde);
-  //L2Norm_DG_AMR(model_pde);
+  L1Norm_DG_AMR(model_pde);
+  L2Norm_DG_AMR(model_pde);
   
   Solver<NumericalMethodType>::set_Dt(model_pde);
 
@@ -512,7 +512,9 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
 
     //advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
-    
+
+    //t= T+1;
+    ///*
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -534,7 +536,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         _mf[q].setVal(0.0);    
       } 
       
-      AMR_FillPatch(l, t, _mf, 0, basefunc->Np_s);
+      AMR_FillPatch(l, t, _mf, 0, basefunc->Np_s);//TODO: BUG HERE
       
       for(int q=0 ; q<Q; ++q){
         std::swap(U_w[l][q],_mf[q]);  
@@ -548,7 +550,6 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
     Print()<<"------------------------------------------------"<<"\n";
     //Print(*ofs)
-    //t=T+1;
     
     //plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
@@ -566,8 +567,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   }
   
   //Output t=T norm
-  //L1Norm_DG_AMR(model_pde);
-  //L2Norm_DG_AMR(model_pde);
+  L1Norm_DG_AMR(model_pde);
+  L2Norm_DG_AMR(model_pde);
 }
 
 template <typename EquationType>
@@ -695,6 +696,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
   }
 }
 
+/*
 template <typename EquationType>
 void AmrDG::flux(int lev, int d, int M,
                  const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
@@ -727,8 +729,9 @@ void AmrDG::flux(int lev, int d, int M,
             });
         }
     }
-}
-/*
+}*/
+
+template <typename EquationType>
 void AmrDG::flux(int lev, int d, int M,
                  const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                  amrex::Vector<amrex::MultiFab>* U_ptr,
@@ -795,8 +798,9 @@ void AmrDG::flux(int lev, int d, int M,
             }
         }
     }
-}*/
+}
 
+/*
 template <typename EquationType>
 void AmrDG::flux_bd(int lev, int d, int M,
                     const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
@@ -832,8 +836,10 @@ void AmrDG::flux_bd(int lev, int d, int M,
             });
         }
     }
-}
+}*/
+
 /*
+template <typename EquationType>
 void AmrDG::flux_bd(int lev,int d, int M, 
                     const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                     amrex::Vector<amrex::MultiFab>* U_ptr,
