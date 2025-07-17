@@ -121,7 +121,7 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
 
-  amrex::Interpolater* mapper= amr_interpolator.get();&pc_interp;//
+  amrex::Interpolater* mapper= amr_interpolator.get();//&pc_interp;//
 
   amrex::Vector<MultiFab*> cmf;
   amrex::Vector<Real> ctime;

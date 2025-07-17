@@ -45,8 +45,14 @@ void Compressible_Euler::settings(std::string _euler_case){
   else{
     gamma_adiab = 1.4;
   }
-
 }  
+
+void Compressible_Euler::set_pde_numeric_limits()
+{
+  const double epsilon = std::numeric_limits<double>::epsilon();
+
+  PDE_NUMERIC_LIMIT = 1000*epsilon;
+}
 
 amrex::Real Compressible_Euler::pde_cfl_lambda(int d,int m,int i, int j, int k,
                               amrex::Vector<amrex::Array4<const amrex::Real>>* u) const
