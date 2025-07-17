@@ -14,6 +14,7 @@
 #include <AMReX_Interpolater.H>
 #include <Eigen/Core>
 
+
 #include "Solver.h"
 #include "Mesh.h"
 
@@ -465,7 +466,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
                   const std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>>& bdcond)
 {
 
-  bool dtn_plt; bool dt_plt; int n; amrex::Real t;
+  bool dtn_plt; bool dt_plt; int n; amrex::Real t; std::ostringstream oss;
 
   auto _mesh = mesh.lock();
 
@@ -483,12 +484,33 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   L2Norm_DG_AMR(model_pde);
   
   Solver<NumericalMethodType>::set_Dt(model_pde);
+  
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+    if (m_bar) {
+        amrex::Print()<< "\n";
+        m_bar->set_option(indicators::option::PostfixText{"Simulating..."});
+        m_bar->set_progress(0);
+    }
+  }
 
   while(t<T)
   {  
-    Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
-    Print()<<"------------------------------------------------"<<"\n";
-    //TODO: PROGRESS BAR- https://github.com/p-ranav/indicators
+    if (amrex::ParallelDescriptor::IOProcessor()) {
+      if (m_bar) {
+          // Calculate progress percentage
+          int progress = static_cast<int>(std::round((t / T) * 100.0));
+          progress = std::clamp(progress, 0, 100);
+          m_bar->set_progress(progress);
+
+          // Update the text to show current time vs total time
+          
+          oss << "t = " << std::fixed << std::setprecision(5) << t
+            << " / " << T
+            << " | Dt = " << std::scientific << std::setprecision(2) << Dt;
+          m_bar->set_option(indicators::option::PostfixText{oss.str()});
+      }
+    }
+
     //Remake existing levels and create new fine levels from coarse
     if ((_mesh->L > 1))
     {
@@ -500,8 +522,6 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       }
     }  
 
-    //PlotFile(model_pde,U_w,n+1, t);
-    
     //Synch ghost cells inside same level across MPI processes
     //(during init ghost are not filled)
     for(int l=0; l<=_mesh->get_finest_lev(); ++l){
@@ -510,15 +530,13 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       }
     }
 
-    //advance solution by one time-step.
+    // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
 
-    //PlotFile(model_pde,U_w,n+2, t+1);//DEBUG-REMOVE
-    
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
-    //gather valid fine cell solutions U_w into valid coarse cells
+    // Gather valid fine cell solutions U_w into valid coarse cells
     Solver<NumericalMethodType>::AMR_average_fine_coarse();   
     
     //Prepare inner ghost cell data for next time step
@@ -531,7 +549,6 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       for(int q=0 ; q<Q; ++q){
         const amrex::BoxArray& ba = U_w[l][q].boxArray();
         const amrex::DistributionMapping& dm = U_w[l][q].DistributionMap();
-
         _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
         _mf[q].setVal(0.0);    
       } 
@@ -543,21 +560,18 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       }
     }
     
-    //update timestep idx and physical time
+    // Update timestep idx and physical time
     n+=1;
     t+=Dt;
 
-    Print().SetPrecision(6)<<"time: "<< t<<" | time step: "<<n<<" | step size: "<< Dt<<"\n";
-    Print()<<"------------------------------------------------"<<"\n";
-    //Print(*ofs)
-    
-    //plotting at pre-specified times
+    //Plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
     dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
     //use as tolerance dt_outplt, i.e same order of magnitude
     if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
     else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
 
+    //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
     
@@ -565,10 +579,23 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       t=T+1;
     }
   }
-  
+
+  if (amrex::ParallelDescriptor::IOProcessor()) {
+  if (m_bar && !m_bar->is_completed()) {
+      
+     
+      m_bar->set_option(indicators::option::PostfixText{"Done"});
+      m_bar->set_progress(100);
+      //m_bar->mark_as_completed();
+      m_bar.reset();
+      amrex::Print()<< "\n";
+  } }
+
+  amrex::ParallelDescriptor::Barrier();
+
   //Output t=T norm
-  L1Norm_DG_AMR(model_pde);
-  L2Norm_DG_AMR(model_pde);
+  //L1Norm_DG_AMR(model_pde);
+  //L2Norm_DG_AMR(model_pde);
 }
 
 template <typename EquationType>
@@ -596,9 +623,6 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
   //iterate from finest level to coarsest
   for (int l = _mesh->get_finest_lev(); l >= 0; --l){
-
-    Print() <<"ADER-lev:  "<<l<<"\n";
-    
     //apply BC
     //TODO OPTIMIZE: if periodic BC can skip this step
     //or simply the FillBoundary inside evolve cna be removed since it is 
@@ -610,28 +634,25 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     
     //iteratively find predictor
     int iter=0;    
-    Print()<< "set_predictor"<<"\n";
     while(iter<p)
     { 
       get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
-      Print()<< "get_H_from_H_w"<<"\n";
       if(model_pde->flag_source_term){
         Solver<NumericalMethodType>::source(l,quadrule->qMp_st,model_pde,&(H[l]),&(S[l]),quadrule->xi_ref_quad_st);
       }  
       
       for(int d = 0; d<AMREX_SPACEDIM; ++d){
-        Print()<< d<<"\n";
         //if source ===True, this is duplicate, could avoid redoit
         Solver<NumericalMethodType>::flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
       }   
       
       //update predictor
       update_H_w(l);
-      Print()<< "update_H_w"<<"\n";
+
       
       iter+=1;
     }
-    Print()<< "predictor step done"<<"\n";
+
     
     //use found predictor to compute corrector
     if(model_pde->flag_source_term){
@@ -641,7 +662,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     
     get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
     for(int d = 0; d<AMREX_SPACEDIM; ++d){
-      Print()<< d<<"\n";
+
       Solver<NumericalMethodType>::flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
 
       get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st,&(H_m[l][d]),&(H_w[l]),quadrule->xi_ref_quad_st_bdm[d]);
@@ -652,11 +673,9 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
       Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
     } 
-    Print()<< "flux step done"<<"\n";
+
     //update corrector
     update_U_w(l);  
-
-    Print()<< "update_U_w"<<"\n";
   }
 }
 

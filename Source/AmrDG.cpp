@@ -72,8 +72,8 @@ void AmrDG::AMR_advanced_settings()
 }
 
 void AmrDG::init()
-{ 
-  amrex::Vector<std::string> logo = {
+{ /*
+  amrex::Vector<std::string> logo0 = {
     "######################################",
     "     _   __  __ ___     ___   ___ ",
     "    /_\\ |  \\/  | _ \\___|   \\ / __|",
@@ -97,9 +97,49 @@ void AmrDG::init()
   };
 
   // Loop through the vector and print each line
-  for (const auto& line : logo) {
+  for (const auto& line : logo0) {
     Print() << line << std::endl;
-  }
+  }*/
+
+    const int width = 80;
+    std::vector<std::string> logo = {
+    "     _   __  __ ___     ___   ___ ",
+    "    /_\\ |  \\/  | _ \\___|   \\ / __|",
+    "   / _ \\| |\\/| |   /___| |) | (_ |",
+    "  /_/ \\_\\_|  |_|_|_\\   |___/ \\___|",
+    "",
+    "    +..+..+----+---------+",
+    "  ->|  |  |    |<==      |",
+    "    +..+..+----|         |",
+    "  ->|  |  |    |<==      |",
+    "    +----+..+..+----+----+",
+    " ==>|    |  |  |    |    |",
+    "    +----+..+..+----+----+",
+    "  =>|    |  |  |    |    |",
+    "    +----+..+..+----+----+",
+    "                                     ",
+    "       Adaptive Mesh Refinement     ",
+    "                  &                 ",
+    "        Discontinuous Galerkin      ",
+  };
+
+    // Print top border (80 #)
+    std::cout << std::string(width, '#') << "\n";
+
+    for (const auto& line : logo) {
+        int offset = 3; // shift left by 5 spaces
+        int padding = ((width - static_cast<int>(line.size())) / 2) - offset;
+        // If padding < 0 means line longer than width, just print it as is
+        if (padding < 0) {
+            std::cout << line << "\n";
+        } else {
+            // Left pad with spaces to center
+            std::cout << std::string(padding, ' ') << line << "\n";
+        }
+    }
+
+    // Print bottom border (80 #)
+    std::cout << std::string(width, '#') << "\n";
 
   auto _mesh = mesh.lock();
   
@@ -249,7 +289,7 @@ AmrDG::~AmrDG(){
 
 void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
                                   const DistributionMapping& dm)
-{ Print()<<"set_init_data_system    :"<<lev<<"\n";
+{ 
   //Init data structures for level for all solution components of the system
   U_w[lev].resize(Q); 
   U[lev].resize(Q);
@@ -301,7 +341,7 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 //Init data for given level for specific solution component
 void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
                                     const DistributionMapping& dm, int q)
-{ Print()<<"set_init_data_component    :"<<lev<<"\n";
+{ 
   auto _mesh = mesh.lock();
 
   // Add safety checks for data structure sizes

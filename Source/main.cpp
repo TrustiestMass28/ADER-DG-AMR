@@ -145,7 +145,7 @@ int main(int argc, char* argv[])
       
       // print wallclock time
       ParallelDescriptor::ReduceRealMax(end_total ,ParallelDescriptor::IOProcessorNumber());
-      amrex::Print() << "\nTotal Time: " << end_total << '\n';
+      //amrex::Print() << "\nTotal Time: " << end_total << '\n';
       
     }
     amrex::Finalize();

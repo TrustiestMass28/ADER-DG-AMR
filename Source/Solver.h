@@ -21,6 +21,10 @@
 #include <AMReX_MemProfiler.H>
 #endif
 
+#include <indicators/progress_bar.hpp>
+#include <sstream>
+#include <iomanip>
+
 template <typename NumericalMethodType>
 class Mesh;
 
@@ -457,6 +461,8 @@ class Solver
         //Source/Sink term S(x,t)
         amrex::Vector<amrex::Vector<amrex::MultiFab>> S;
 
+        std::optional<indicators::ProgressBar> m_bar;
+
     private:
     
         void setMesh(std::shared_ptr<Mesh<NumericalMethodType>> _mesh);
@@ -515,11 +521,29 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
     Q = model_pde->Q_model;
     Q_unique = model_pde->Q_model_unique;
     flag_source_term = model_pde->flag_source_term;
-    
+
     //Numerical method specific initialization
     static_cast<NumericalMethodType*>(this)->init();
 
     const Real time = 0.0;
+
+	//Init progress bar
+    if (amrex::ParallelDescriptor::IOProcessor()) {
+        m_bar.emplace(
+            indicators::option::BarWidth{90},
+            indicators::option::Start{"["},
+            indicators::option::Fill{"█"},  // full block
+            indicators::option::Lead{"█"},
+            indicators::option::Remainder{"░"},  // light shade
+            indicators::option::End{"]"},
+            indicators::option::PostfixText{"Initializing..."},
+            indicators::option::ForegroundColor{indicators::Color::yellow},
+            indicators::option::FontStyles{
+                std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
+            }
+        );
+    }
+
     //AmrCore.h function initialize multilevel mesh, geometry, Box array and DistributionMap
     //calls MakeNewLevelFromScratch
     //Initialize BoxArray, DistributionMapping and data from scratch.
@@ -574,7 +598,7 @@ void Solver<NumericalMethodType>::set_init_data_system(int lev,const BoxArray& b
     //NumericalMethod specific data structure initialization (e.g additional)
     //can also clear up Solver data members that arent needed for particular method
     //e.g the numerical fluxes
-    Print()<<"Solver::set_init_data_system    :"<<lev<<"\n";
+
     static_cast<NumericalMethodType*>(this)->set_init_data_system(lev, ba, dm);
     
     //init data for each ocmponent of the equation
@@ -586,7 +610,7 @@ void Solver<NumericalMethodType>::set_init_data_system(int lev,const BoxArray& b
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::set_init_data_component(int lev,const BoxArray& ba, 
                                                         const DistributionMapping& dm, int q)
-{     Print()<<"Solver::set_init_data_component    :"<<lev<<"\n";
+{   
     static_cast<NumericalMethodType*>(this)->set_init_data_component(lev, ba, dm, q);
 }
 
@@ -608,7 +632,7 @@ template <typename EquationType>
 void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<ModelEquation<EquationType>>& model_pde)
 {
     auto _mesh = mesh.lock();
-    Print()<<"Solver::set_initial_condition    :"<<"\n";
+   
     //Define IC on single coarse mesh
     static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,0);
     
