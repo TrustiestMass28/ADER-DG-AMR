@@ -126,6 +126,7 @@ template <typename... Args>
 void Simulation<NumericalMethodType,EquationType>::setModelSettings(Args... args) {
   model = std::make_shared<EquationType>();
   model->settings(args...);
+  model->set_pde_numeric_limits();
 }
 
 template <typename NumericalMethodType,typename EquationType>

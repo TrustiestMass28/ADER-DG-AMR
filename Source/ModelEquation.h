@@ -3,8 +3,8 @@
 
 #include <memory>
 #include <AMReX_AmrCore.H>
-
-//class Solver;
+#include <cmath>   // For std::abs()
+#include <limits>  // For std::numeric_limits
 
 using namespace amrex;
 
@@ -92,6 +92,11 @@ class ModelEquation
                         const amrex::Vector<amrex::Real>& xi,
                         const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
 
+  //This function is required to be implemented by the user such that
+  //corrections can be made to floating point roundings which can
+  //lead to unphysical results. Depending on the application
+  void set_pde_numeric_limits();
+
   //Number of model equations in the system
   int Q_model;
 
@@ -157,8 +162,16 @@ class ModelEquation
      */
   protected:
 
+    amrex::Real PDE_NUMERIC_LIMIT;
+
     std::shared_ptr<std::ofstream> ofs;
 };
+
+template <typename EquationType>
+void ModelEquation<EquationType>::set_pde_numeric_limits()
+{
+  static_cast<EquationType*>(this)->set_pde_numeric_limits();  
+}
 
 template <typename EquationType>
 template <typename NumericalMethodType> 

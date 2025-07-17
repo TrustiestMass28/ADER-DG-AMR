@@ -75,6 +75,8 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
     amrex::Real pde_IC(int lev, int q, int i,int j,int k, 
                         const amrex::Vector<amrex::Real>& xi, 
                         const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
+
+    void set_pde_numeric_limits();
     
   private:
 
@@ -489,7 +491,7 @@ amrex::Real Compressible_Euler::pde_dflux(int lev, int d, int q, int m, int i, i
   {
     un+=((((*u)[_d+1])(i,j,k,m)/((*u)[0])(i,j,k,m))*n[_d]);
   }
-  
+
   df=std::max({std::abs(un-c), std::abs(un), std::abs(un+c)});
   
   return df;
@@ -541,21 +543,28 @@ template <typename T>
 amrex::Real Compressible_Euler::Pressure(const amrex::Vector<amrex::Array4<T>>* u, 
                                         int i, int j, int k,int m) const
 {
-  amrex::Real prs =0.0;
+  amrex::Real prs;
+  amrex::Real _prs =0.0;
+
   for(int d=0; d<AMREX_SPACEDIM; ++d)//velocity norm
   {
-    prs+=(std::pow(((*u)[d+1])(i,j,k,m),2.0)/((*u)[0])(i,j,k,m));
+    _prs+=(std::pow(((*u)[d+1])(i,j,k,m),2.0)/((*u)[0])(i,j,k,m));
   }
-  prs*=(-0.5);
+  _prs*=(-0.5);
 
-#if(AMREX_SPACEDIM ==2) 
-  prs+=((*u)[3])(i,j,k,m);
+#if(AMREX_SPACEDIM == 1)
+  _prs += ((*u)[2])(i,j,k,m);
+#elif(AMREX_SPACEDIM ==2) 
+  _prs+=((*u)[3])(i,j,k,m);
 #elif(AMREX_SPACEDIM ==3)
-  prs+=((*u)[4])(i,j,k,m);
+  _prs+=((*u)[4])(i,j,k,m);
 #endif
   
-  prs*=(gamma_adiab-1.0);
-  
+  _prs*=(gamma_adiab-1.0);
+
+  // ensure no negative or excessively small pressures
+  prs = std::max(_prs,PDE_NUMERIC_LIMIT);
+
   return prs;
 }
 
@@ -563,12 +572,15 @@ template <typename T>
 amrex::Real Compressible_Euler::Soundspeed(const amrex::Vector<amrex::Array4<T>>* u,
                                           int i, int j, int k, int m) const
 {
-//return the pointwise value of soundspeed, i.e at quadrature/interpolation point
-amrex::Real c;
-amrex::Real prs=Pressure(u,i,j,k,m);
+  //return the pointwise value of soundspeed, i.e at quadrature/interpolation point
+  amrex::Real c; 
+  amrex::Real prs=Pressure(u,i,j,k,m);
+  amrex::Real rho = std::max(((*u)[0])(i,j,k,m),PDE_NUMERIC_LIMIT);
+  if(prs<0.0){Print() <<prs<<"\n";}
+  
+  c = std::sqrt(gamma_adiab*(prs/rho));
 
-c = std::sqrt(gamma_adiab*(prs/((*u)[0])(i,j,k,m)));
-return c;
+  return c;
 }
 
 #endif 
@@ -630,21 +642,4 @@ return c;
     
     virtual amrex::Real pde_BC_gNeumann(int d, int side, int q) const override;                                            
 
-  private:     
-    
-    amrex::Real Pressure(amrex::Vector<amrex::Array4<const amrex::Real>>* u, 
-                        int i, int j, int k,int m) const;
-                        
-    amrex::Real Soundspeed(amrex::Vector<amrex::Array4<const amrex::Real>>* u,
-                          int i, int j, int k, int m) const;
-                          
-    amrex::Real Pressure(amrex::Vector<amrex::Array4< amrex::Real>>* u, 
-                        int i, int j, int k,int m) const;
-                        
-    amrex::Real Soundspeed(amrex::Vector<amrex::Array4< amrex::Real>>* u,
-                          int i, int j, int k, int m) const;
-
-
-    
-    amrex::Real gamma_adiab;
     */
