@@ -38,7 +38,18 @@ $(info INCLUDE_DIRS = $(INCLUDE_DIRS))
 LIB_DIRS += $(EIGEN_HOME)/build
 LIBS += -leigen
 
+#---------------INDICATORS---------------#
+# Set INDICATORS_HOME to point to the location of the indicators library
+INDICATORS_HOME ?= ../Library/indicators
 
+# Add the path to the indicators header files to the include directories
+# The headers are in the 'include' subdirectory of the repository
+CXXFLAGS += -I$(INDICATORS_HOME)/include
+
+# Add -pthread for std::thread support, which indicators may use
+LIBS += -lpthread
+
+# --- Final Setup ---
 include ../Source/Make.package
 VPATH_LOCATIONS  += ../Source
 INCLUDE_LOCATIONS += ../Source

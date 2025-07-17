@@ -36,6 +36,13 @@ rm eigen-3.4.0.zip
 git clone https://github.com/AMReX-Codes/amrex.git
 ```
 
+
+### **Clone Other UTIL Libraries**  
+
+```sh
+git clone https://github.com/p-ranav/indicators.git
+```
+
 ---
 
 ## 🔧 **Compile**  
