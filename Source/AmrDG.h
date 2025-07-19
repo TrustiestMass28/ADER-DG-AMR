@@ -493,21 +493,32 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
   }
 
+  //Synch ghost cells inside same level across MPI processes
+  //(during init ghost are not filled)
+  for(int l=0; l<=_mesh->get_finest_lev(); ++l){
+    for(int q=0; q<Q; ++q){ 
+      Solver<NumericalMethodType>::FillBoundary(&(U_w[l][q]),l);
+    }
+  }
+
   while(t<T)
   {  
     if (amrex::ParallelDescriptor::IOProcessor()) {
       if (m_bar) {
-          // Calculate progress percentage
-          int progress = static_cast<int>(std::round((t / T) * 100.0));
-          progress = std::clamp(progress, 0, 100);
-          m_bar->set_progress(progress);
+        oss.str("");
+        oss.clear();
+        
+        // Calculate progress percentage
+        int progress = static_cast<int>((t / T) * 100.0);
+        progress = std::clamp(progress, 0, 100);
+        m_bar->set_progress(progress);
 
-          // Update the text to show current time vs total time
-          
-          oss << "t = " << std::fixed << std::setprecision(5) << t
-            << " / " << T
-            << " | Dt = " << std::scientific << std::setprecision(2) << Dt;
-          m_bar->set_option(indicators::option::PostfixText{oss.str()});
+        // Update the text to show current time vs total time
+        
+        oss << "t = " << std::fixed << std::setprecision(5) << t
+          << " / " << T
+          << " | Dt = " << std::scientific << std::setprecision(2) << Dt;
+        m_bar->set_option(indicators::option::PostfixText{oss.str()});
       }
     }
 
@@ -521,14 +532,6 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         amrex::ParallelDescriptor::Barrier();
       }
     }  
-
-    //Synch ghost cells inside same level across MPI processes
-    //(during init ghost are not filled)
-    for(int l=0; l<=_mesh->get_finest_lev(); ++l){
-      for(int q=0; q<Q; ++q){ 
-        Solver<NumericalMethodType>::FillBoundary(&(U_w[l][q]),l);
-      }
-    }
 
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
@@ -575,15 +578,13 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
     
-    if(n==2){
-      t=T+1;
-    }
+    //if(n==2){
+    //  t=T+1;
+    //}
   }
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
   if (m_bar && !m_bar->is_completed()) {
-      
-     
       m_bar->set_option(indicators::option::PostfixText{"Done"});
       m_bar->set_progress(100);
       //m_bar->mark_as_completed();
@@ -594,8 +595,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   amrex::ParallelDescriptor::Barrier();
 
   //Output t=T norm
-  //L1Norm_DG_AMR(model_pde);
-  //L2Norm_DG_AMR(model_pde);
+  L1Norm_DG_AMR(model_pde);
+  L2Norm_DG_AMR(model_pde);
 }
 
 template <typename EquationType>
@@ -1364,4 +1365,3 @@ void AmrDG::L2Norm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& mo
 }
 
 #endif
-

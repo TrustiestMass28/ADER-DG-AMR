@@ -1,7 +1,7 @@
 #---------------AMREX---------------#
 PRECISION  = DOUBLE
 PROFILE    = FALSE
-DEBUG      = TRUE
+DEBUG      = FALSE
 DIM        = 2
 COMP	   = gnu
 USE_MPI    = TRUE

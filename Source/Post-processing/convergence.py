@@ -1,55 +1,34 @@
-import yt
-import pathlib
-import imageio
-import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import linregress
 
 def main_convergence():
-    
-    #Volume/domain size [-1,1]x[-1,1]x[-1,1]
-    D = 2
-    v = 2**D
-    #V_ary   = np.square(np.array([v,v]))
-    N   =  np.array([8,16,32])
-    #h   = np.power(np.divide(V_ary,N), np.array([1.0/D,1.0/D]))
+
+    #===================================#
+    N = np.array([8,16,32])
     p = 3
     L = 2
-    
-    #p_E=[p0_E,p1_E,p2_E,p3_E] pk_E=[E_N_0,E_N_1,...]
-    flag_plot = False
+    #===================================#
+
     if L==1:       
-        p_E = []
-    
-    elif L==2:       
-        p_E = {3:[0.0027697076478446544,0.00017612926504944972,7.8707163726112854e-06]}
+        # Single level 
+        p_E = { 1:[0.027160446752173044,0.011423722902617695, 0.0052233221492592264, 0.0032104541149294286],#pre-asymptotic
+                3:[0.0014040860573684849,9.0893514353631476e-05,4.0117851422637728e-06,1.7954526308565961e-07]}
+        # Multi level
+        #p_E = {3:[]}
+
+    elif L==2:   
+        # Single level     
+        #p_E = {1:[0.048870899515791516, 0.01753439920565603,0.0087262139910766756, 0.0057269497617791539],#pre-asymptotic
+        #       2:[0.0087790966099986489, 0.0017085238936960308,0.00012726442764960074,1.5981709704366251e-05],
+        #       3:[0.0027877884461944696,0.0001746922677643825,7.8290770603552511e-06,3.9752247868729303e-07]}
+        # Multi level
+        p_E = {3:[0.0020574654998603064,0.00028314561995897592,3.2632006533149857e-05]}
         
-    for i in range(len(N)-1):
-        alpha = abs((np.log10(p_E[p][i])-np.log10(p_E[p][i+1]))/(np.log10(N[i])-np.log10(N[i+1])))
     slope, intercept, r_value, p_value, std_err = linregress(np.log10(N), np.log10(p_E[p]))
     print("EOC p"+str(p)+": "+str(abs(slope)))  
     print("TOC p"+str(p)+": "+str(p+1))  
 
-
-
-    """""
-    if flag_plot:
-        plt.figure(figsize=(10, 6))
-        plt.plot(N, p_E[p], 'o-', label='$DG-p=$'+str(p))
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.xlabel('$N$ [-]', fontsize=20)
-        if L==1:
-            plt.ylabel('$\epsilon_{L^1(\Omega)}(\\rho)$ [-]', fontsize=20)
-        elif L==2:
-            plt.ylabel('$\epsilon_{L^2(\Omega)}(\\rho)$ [-]', fontsize=20)
-        #plt.title('ADER-D')
-        plt.legend()
-        plt.grid(True)
-        #plt.show()
-        plt.savefig("plots/2d_advectionx_grid_convergence.png")
-    """""
 if __name__ == "__main__":
     main_convergence()
 

@@ -532,15 +532,17 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
         m_bar.emplace(
             indicators::option::BarWidth{90},
             indicators::option::Start{"["},
-            indicators::option::Fill{"█"},  // full block
+            indicators::option::Fill{"█"},
             indicators::option::Lead{"█"},
-            indicators::option::Remainder{"░"},  // light shade
+            indicators::option::Remainder{"░"},
             indicators::option::End{"]"},
             indicators::option::PostfixText{"Initializing..."},
             indicators::option::ForegroundColor{indicators::Color::yellow},
             indicators::option::FontStyles{
                 std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
-            }
+            },
+            indicators::option::Stream{std::cout},  //CRITICAL for in-place update
+            indicators::option::MaxProgress{100} // REQUIRED for set_progress(0–100)
         );
     }
 
