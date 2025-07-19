@@ -125,9 +125,12 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
   amrex::Vector<MultiFab*> cmf;
   amrex::Vector<Real> ctime;
   
-  for(int q=0 ; q<Q; ++q){                            
-    //Store tmp data of the coarse MFab
+  for(int q=0 ; q<Q; ++q){   
+    // Clear vectors at the start of each iteration
+    cmf.clear();
+    ctime.clear();
 
+    //Store tmp data of the coarse MFab
     cmf.push_back(&(U_w[lev-1][q]));
     ctime.push_back(time);
 
@@ -154,9 +157,12 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
   {
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
 
+    amrex::Vector<MultiFab*> smf;
+    amrex::Vector<Real> stime;
+
     for(int q=0 ; q<Q; ++q){  
-      amrex::Vector<MultiFab*> smf;
-      amrex::Vector<Real> stime;
+      smf.clear();
+      stime.clear();
 
       smf.push_back(&(U_w[lev][q]));
       stime.push_back(time);  
@@ -178,9 +184,12 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
 
+    amrex::Vector<MultiFab*> cmf, fmf;
+    amrex::Vector<Real> ctime, ftime;
+
     for(int q=0 ; q<Q; ++q){  
-      amrex::Vector<MultiFab*> cmf, fmf;
-      amrex::Vector<Real> ctime, ftime;
+      cmf.clear(); ctime.clear();
+      fmf.clear(); ftime.clear();
 
       cmf.push_back(&(U_w[lev-1][q]));
       ctime.push_back(time);

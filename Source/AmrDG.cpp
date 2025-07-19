@@ -124,22 +124,22 @@ void AmrDG::init()
   };
 
     // Print top border (80 #)
-    std::cout << std::string(width, '#') << "\n";
+    amrex::Print() << std::string(width, '#') << "\n";
 
     for (const auto& line : logo) {
         int offset = 3; // shift left by 5 spaces
         int padding = ((width - static_cast<int>(line.size())) / 2) - offset;
         // If padding < 0 means line longer than width, just print it as is
         if (padding < 0) {
-            std::cout << line << "\n";
+            amrex::Print() << line << "\n";
         } else {
             // Left pad with spaces to center
-            std::cout << std::string(padding, ' ') << line << "\n";
+            amrex::Print() << std::string(padding, ' ') << line << "\n";
         }
     }
 
     // Print bottom border (80 #)
-    std::cout << std::string(width, '#') << "\n";
+    amrex::Print() << std::string(width, '#') << "\n";
 
   auto _mesh = mesh.lock();
   

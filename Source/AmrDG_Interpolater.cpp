@@ -265,6 +265,7 @@ void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> co
   auto map = set_coarse_fine_idx_map(i,j,k,ratio);
 
   Eigen::VectorXd sum(ncomp);
+  sum.setZero();
   for(int l=0; l<num_overlap_cells;++l)
   {
     for(int n=0; n<ncomp;++n){
