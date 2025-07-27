@@ -16,8 +16,8 @@
 #include <Eigen/Core>
 
 
-#include "Solver.h"
-#include "Mesh.h"
+#include "Core/Solver.h"
+#include "Core/Mesh.h"
 
 using namespace amrex;
 
@@ -524,7 +524,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
 
     //Remake existing levels and create new fine levels from coarse
-    if ((_mesh->L > 1))
+    if ((_mesh->L > 1) && (n == 0))
     {
       if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
         //TODO: adapt boolena condition to handle physical time

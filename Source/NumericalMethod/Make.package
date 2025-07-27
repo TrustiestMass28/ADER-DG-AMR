@@ -1,0 +1,4 @@
+# Include AmrDG package
+#include $(SRCDIR)/NumericalMethod/AmrDG/Make.package
+
+include ../Source/NumericalMethod/AmrDG/Make.package

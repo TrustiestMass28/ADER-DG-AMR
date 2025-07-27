@@ -49,10 +49,22 @@ CXXFLAGS += -I$(INDICATORS_HOME)/include
 # Add -pthread for std::thread support, which indicators may use
 LIBS += -lpthread
 
+# --- SOURCE DIRECTORIES ---
+# Tell AMReX where to find source files and headers
+VPATH_LOCATIONS  += ../Source
+VPATH_LOCATIONS  += ../Source/Core
+VPATH_LOCATIONS  += ../Source/NumericalMethod/AmrDG
+VPATH_LOCATIONS  += ../Source/Model/Euler
+
+INCLUDE_LOCATIONS += ../Source
+INCLUDE_LOCATIONS += ../Source/Core
+INCLUDE_LOCATIONS += ../Source/NumericalMethod/AmrDG  
+INCLUDE_LOCATIONS += ../Source/Model/Euler
+
 # --- Final Setup ---
 include ../Source/Make.package
-VPATH_LOCATIONS  += ../Source
-INCLUDE_LOCATIONS += ../Source
+#VPATH_LOCATIONS  += ../Source
+#INCLUDE_LOCATIONS += ../Source
 
 all: $(executable) 
 	@echo SUCCESS

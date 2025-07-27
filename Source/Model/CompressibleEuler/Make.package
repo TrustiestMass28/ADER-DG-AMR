@@ -1,0 +1,3 @@
+# Compressible Euler implementation
+CEXE_headers += Compressible_Euler.h
+CEXE_sources += Compressible_Euler.cpp

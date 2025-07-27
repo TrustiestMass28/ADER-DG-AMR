@@ -1,0 +1,15 @@
+# AmrDG implementation
+CEXE_headers += AmrDG.h
+
+CEXE_sources += AmrDG.cpp
+CEXE_sources += AmrDG_NumericalFlux.cpp
+CEXE_sources += AmrDG_Basis.cpp
+CEXE_sources += AmrDG_Quadrature.cpp
+CEXE_sources += AmrDG_ElementMatrix.cpp
+CEXE_sources += AmrDG_TagCellRef.cpp
+CEXE_sources += AmrDG_Level.cpp
+CEXE_sources += AmrDG_Interpolater.cpp
+
+# Commented out for now
+#CEXE_sources += AmrDG_Limiter.cpp
+#CEXE_sources += AmrDG_Utils.cpp
