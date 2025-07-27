@@ -1,8 +1,4 @@
 # Include subdirectory packages
-#include $(SRCDIR)/Core/Make.package
-#include $(SRCDIR)/NumericalMethod/Make.package  
-#include $(SRCDIR)/Model/Make.package
-
 include ../Source/Core/Make.package
 include ../Source/NumericalMethod/Make.package  
 include ../Source/Model/Make.package

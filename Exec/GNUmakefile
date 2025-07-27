@@ -54,12 +54,12 @@ LIBS += -lpthread
 VPATH_LOCATIONS  += ../Source
 VPATH_LOCATIONS  += ../Source/Core
 VPATH_LOCATIONS  += ../Source/NumericalMethod/AmrDG
-VPATH_LOCATIONS  += ../Source/Model/Euler
+VPATH_LOCATIONS  += ../Source/Model/CompressibleEuler
 
 INCLUDE_LOCATIONS += ../Source
 INCLUDE_LOCATIONS += ../Source/Core
 INCLUDE_LOCATIONS += ../Source/NumericalMethod/AmrDG  
-INCLUDE_LOCATIONS += ../Source/Model/Euler
+INCLUDE_LOCATIONS += ../Source/Model/CompressibleEuler
 
 # --- Final Setup ---
 include ../Source/Make.package
