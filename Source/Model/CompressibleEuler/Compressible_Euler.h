@@ -1,7 +1,7 @@
 #ifndef COMPRESSIBLE_EULER_H
 #define COMPRESSIBLE_EULER_H
 
-#include "ModelEquation.h"
+#include "Core/ModelEquation.h"
 //#include "Solver.h"
 
 

@@ -1,9 +1,9 @@
 #include <iostream>
 #include <AMReX.H>
 
-#include "AmrDG.h"
-#include "Compressible_Euler.h"
-#include "Simulation.h"
+#include "Core/Simulation.h"
+#include "NumericalMethod/AmrDG/AmrDG.h"
+#include "Model/Euler/Compressible_Euler.h"
 
 using namespace amrex;
 
@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
       sim.setNumericalSettings(p,T);
 
       //IO
-      int dtn_outplt = 1;
+      int dtn_outplt = -1;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);

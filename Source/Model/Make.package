@@ -1,0 +1,4 @@
+# Include Euler package
+#include $(SRCDIR)/Model/CompressibleEuler/Make.package
+
+include ../Source/Model/CompressibleEuler/Make.package

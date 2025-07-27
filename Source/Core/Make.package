@@ -1,0 +1,6 @@
+# Core framework headers
+CEXE_headers += ModelEquation.h
+CEXE_headers += Solver.h
+CEXE_headers += Mesh.h
+CEXE_headers += BoundaryCondition.h
+CEXE_headers += Simulation.h
