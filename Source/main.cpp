@@ -1,9 +1,9 @@
 #include <iostream>
 #include <AMReX.H>
 
-#include "Core/Simulation.h"
-#include "NumericalMethod/AmrDG/AmrDG.h"
-#include "Model/Euler/Compressible_Euler.h"
+#include "Simulation.h"
+#include "AmrDG.h"
+#include "Compressible_Euler.h"
 
 using namespace amrex;
 

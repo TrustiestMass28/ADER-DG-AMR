@@ -16,8 +16,8 @@
 #include <Eigen/Core>
 
 
-#include "Core/Solver.h"
-#include "Core/Mesh.h"
+#include "Solver.h"
+#include "Mesh.h"
 
 using namespace amrex;
 
