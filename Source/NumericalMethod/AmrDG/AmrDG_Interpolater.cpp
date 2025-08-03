@@ -95,13 +95,10 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
         for(int q=0; q<numme->quadrule->qMp_s; ++q)
         {
           //Shift the quadrature point
-          amrex::Real _xi_ref_shift[AMREX_SPACEDIM];
-          for(int d=0; d<AMREX_SPACEDIM; ++d){
-            _xi_ref_shift[d]=0.5*(numme->quadrule->xi_ref_quad_s[q][d])+shift[d];
-          }  
-
-          // Convert to const amrex::Vector<amrex::Real>
-          const amrex::Vector<amrex::Real> xi_ref_shift(_xi_ref_shift, _xi_ref_shift + AMREX_SPACEDIM);
+          amrex::Vector<amrex::Real> xi_ref_shift(AMREX_SPACEDIM);
+          for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+              xi_ref_shift[d] = 0.5 * (numme->quadrule->xi_ref_quad_s[q][d]) + shift[d];
+          }
           
           //Use pre-computed QuadratureMatrix quadmat
           sum_cf += (numme->quadmat[j][q]*numme->basefunc->phi_s(m,numme->basefunc->basis_idx_s,xi_ref_shift));

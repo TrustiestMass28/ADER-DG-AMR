@@ -13,6 +13,7 @@
 #include <AMReX_FluxRegister.H>
 #include <AMReX_BCRec.H>
 #include <AMReX_Interpolater.H>
+#include <AMReX_BoxDomain.H>
 #include <Eigen/Core>
 
 
@@ -675,7 +676,15 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
       Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
     } 
+  }
 
+  //Flux correction fine->coarse to ensure conservation
+  for (int l = _mesh->get_finest_lev(); l > 0; --l){
+    //TODO
+  }
+  
+
+  for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     //update corrector
     update_U_w(l);  
   }
@@ -964,7 +973,7 @@ void AmrDG::source(int lev,int M,
     }
   } 
 }
-
+/*
 template <typename EquationType> 
 void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                           int _p, amrex::Vector<amrex::Vector<amrex::Real>> quad_pt, int N) const
@@ -1169,6 +1178,187 @@ void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& mo
                           "DG Order:  "<<p+1<<" | solution component: "<<q<<"\n";
     }  
   
+}*/
+template <typename EquationType> 
+void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                                  int _p, amrex::Vector<amrex::Vector<amrex::Real>> quad_pt, int N) const
+{
+  auto _mesh = mesh.lock();
+ 
+  amrex::Vector<amrex::Vector<amrex::Real>> Lpnorm_multilevel(Q);
+  amrex::Vector<amrex::Real> V_level;
+ 
+  for(int l=0; l<=_mesh->get_finest_lev(); ++l)
+  {
+    amrex::Vector<const amrex::MultiFab *> state_u_h(Q);  
+    amrex::Vector<const amrex::FArrayBox *> fab_u_h(Q);
+    amrex::Vector< amrex::Array4<const amrex::Real>> uh(Q);  
+      
+    amrex::Vector<amrex::MultiFab> U_h_DG(Q);
+    
+    for(int q=0; q<Q;++q){
+      amrex::BoxArray c_ba = U_w[l][q].boxArray();    
+      U_h_DG[q].define(c_ba, U_w[l][q].DistributionMap(), basefunc->Np_s, _mesh->nghost);      
+      amrex::MultiFab::Copy(U_h_DG[q], U_w[l][q], 0, 0, basefunc->Np_s, _mesh->nghost);        
+    }
+      
+    // Get number of cells of full level and intersection level
+    amrex::BoxArray c_ba = U_w[l][0].boxArray();
+    int N_full = (int)(c_ba.numPts());
+      
+    int N_overlap = 0;
+    if(l != _mesh->get_finest_lev()){
+      amrex::BoxArray f_ba = U_w[l+1][0].boxArray();
+      amrex::BoxArray f_ba_c = f_ba.coarsen(_mesh->get_refRatio(l));
+      N_overlap = (int)(f_ba_c.numPts());
+    }
+      
+    auto dx = _mesh->get_Geom(l).CellSizeArray();  
+    amrex::Real vol = 1.0;
+    for(int d = 0; d < AMREX_SPACEDIM; ++d) {
+      vol *= dx[d];
+    }
+
+    V_level.push_back((amrex::Real)(vol*(amrex::Real)(N_full-N_overlap)));
+
+    // Compute Lp norm on full level
+    for(int q=0; q<Q;++q){
+      state_u_h[q] = &(U_h_DG[q]);
+    }
+      
+    // Vector to accumulate all the full level norm (reduction sum of all cells norms)
+    amrex::Vector<amrex::Real> Lpnorm_full(Q, 0.0);
+    amrex::Vector<amrex::Vector<amrex::Real>> Lpnorm_full_tmp(Q);
+      
+#ifdef AMREX_USE_OMP
+#pragma omp parallel
+#endif
+    {
+      for (MFIter mfi(*(state_u_h)[0],true); mfi.isValid(); ++mfi){
+        const amrex::Box& bx_tmp = mfi.tilebox();
+
+        for(int q=0 ; q<Q; ++q){
+          fab_u_h[q] = state_u_h[q]->fabPtr(mfi);
+          uh[q] = fab_u_h[q]->const_array();
+        }
+            
+        if(l != _mesh->get_finest_lev()){
+          amrex::BoxArray f_ba = U_w[l+1][0].boxArray();
+          amrex::BoxArray ba_c = f_ba.coarsen(_mesh->get_refRatio(l));
+          const amrex::BoxList f_ba_lst(ba_c);
+            
+          // Get complement: boxes NOT covered by finer level
+          amrex::BoxList f_ba_lst_compl = complementIn(bx_tmp, f_ba_lst);
+                
+          amrex::ParallelFor(bx_tmp,[&] (int i, int j, int k) noexcept
+          {
+            bool is_not_covered = false;
+            amrex::IntVect iv(AMREX_D_DECL(i, j, k));
+            
+            // Check if cell is in complement (NOT covered by finer level)
+            for (const amrex::Box& bx : f_ba_lst_compl) {
+              if(bx.contains(iv)) {
+                is_not_covered = true;
+                break;
+              }          
+            }
+              
+            // Compute norm only for cells NOT covered by finer level
+            if(is_not_covered) {
+              for(int q=0 ; q<Q; ++q){
+                amrex::Real cell_Lpnorm = 0.0;
+                amrex::Real w;
+                amrex::Real f;
+                  
+                for (int m = 0; m < std::pow(N,AMREX_SPACEDIM); ++m){
+                  // Quad weights for each quadrature point
+                  w = 1.0;
+                  for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
+                    w *= 2.0/std::pow(std::assoc_legendre(N,1,quad_pt[m][d_]),2);
+                  }
+
+                  amrex::Real u_h = 0.0;          
+                  for (int n = 0; n < basefunc->Np_s; ++n){  
+                    u_h += uh[q](i,j,k,n)*(basefunc->phi_s(n,basefunc->basis_idx_s,quad_pt[m]));
+                  }
+                        
+                  amrex::Real u = 0.0;
+                  u = set_initial_condition_U(model_pde,l,q,i,j,k, quad_pt[m]);
+                    
+                  f = std::pow(std::abs(u-u_h),(amrex::Real)_p);
+                  cell_Lpnorm += (f*w);
+                }
+                amrex::Real coeff = vol/std::pow(2.0,AMREX_SPACEDIM);
+#pragma omp critical
+                {
+                  Lpnorm_full_tmp[q].push_back(cell_Lpnorm*coeff);  
+                }
+              }          
+            }
+          });
+        }  
+        else {
+          // Finest level - include all cells
+          amrex::ParallelFor(bx_tmp,[&] (int i, int j, int k) noexcept
+          {
+            for(int q=0 ; q<Q; ++q){
+              amrex::Real cell_Lpnorm = 0.0;
+              amrex::Real w;
+              amrex::Real f;
+                
+              for (int m = 0; m < std::pow(N,AMREX_SPACEDIM); ++m){
+                // Quad weights for each quadrature point
+                w = 1.0;
+                for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
+                  w *= 2.0/std::pow(std::assoc_legendre(N,1,quad_pt[m][d_]),2);
+                }
+                  
+                amrex::Real u_h = 0.0;          
+                for (int n = 0; n < basefunc->Np_s; ++n){  
+                  u_h += uh[q](i,j,k,n)*(basefunc->phi_s(n,basefunc->basis_idx_s,quad_pt[m]));
+                }
+                      
+                amrex::Real u = 0.0;
+                u = set_initial_condition_U(model_pde,l,q,i,j,k, quad_pt[m]);
+                      
+                f = std::pow(std::abs(u-u_h),(amrex::Real)_p);
+                cell_Lpnorm += (f*w);
+              }
+              amrex::Real coeff = vol/std::pow(2.0,AMREX_SPACEDIM);
+#pragma omp critical
+              {
+                Lpnorm_full_tmp[q].push_back(cell_Lpnorm*coeff);  
+              }
+            }      
+          });    
+        }  
+      }
+    }
+    
+    for(int q=0 ; q<Q; ++q){
+      amrex::Real global_Lpnorm = 0.0;
+      global_Lpnorm = std::accumulate(Lpnorm_full_tmp[q].begin(),
+                                      Lpnorm_full_tmp[q].end(), 0.0);
+                                      
+      ParallelDescriptor::ReduceRealSum(global_Lpnorm);
+      Lpnorm_full[q] = global_Lpnorm;
+    } 
+      
+    for(int q=0 ; q<Q; ++q){
+      Lpnorm_multilevel[q].push_back((amrex::Real)Lpnorm_full[q]);      
+    }      
+  }
+    
+  amrex::Real V_amr = (amrex::Real)std::accumulate(V_level.begin(),V_level.end(), 0.0);  
+  for(int q=0 ; q<Q; ++q){
+    amrex::Real Lpnorm = std::accumulate(Lpnorm_multilevel[q].begin(),
+                                         Lpnorm_multilevel[q].end(), 0.0);
+                                             
+    Lpnorm = std::pow(Lpnorm/V_amr, 1.0/(amrex::Real)_p);
+    Print().SetPrecision(17) << "--multilevel--" << "\n";
+    Print().SetPrecision(17) << "L" << _p << " error norm:  " << Lpnorm << " | "
+                           << "DG Order:  " << p+1 << " | solution component: " << q << "\n";
+  }  
 }
 
 template <typename EquationType> 

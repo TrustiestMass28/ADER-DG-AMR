@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 3;
+      int p  = 2;
       amrex::Real T = 10.0;
 
       sim.setNumericalSettings(p,T);
@@ -104,11 +104,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 32;
+            n_cell_x = 64;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 32;
+            n_cell_y = 64;
 
 
             L_z_lo   = 0.0;
