@@ -300,6 +300,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     //L2 projection quadrature matrix
     amrex::Vector<amrex::Vector<amrex::Real>> quadmat;
 
+    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> quadmat_bd;
+
   private:
 
     //Vandermonde matrix for mapping modes<->quadrature points
@@ -701,31 +703,19 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     update_U_w(l); 
 
     // Store coarse fluxes
-    if (l < _mesh->get_finest_lev() && flux_reg[l+1]) {
-        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-            for (int q = 0; q < Q; ++q) {
-                // CORRECTED LINE: Added the missing Geometry object at the end
-                flux_reg[l+1]->CrseAdd(Fnum[l][d][q], d, 
-                                      0,
-                                      0,
-                                      static_cast<int>(basefunc->Np_s),
-                                      Dt,
-                                      _mesh->get_Geom(l)); // The missing argument
-            }
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+      for (int q = 0; q < Q; ++q) {
+        if (l < _mesh->get_finest_lev() && flux_reg[l+1]) {
+          flux_reg[l+1]->CrseAdd(Fnum_int[l][d][q], d, 
+                                0,0,static_cast<int>(basefunc->Np_s),
+                                Dt,_mesh->get_Geom(l)); 
         }
-    }
-
-    // Store fine fluxes (THIS PART IS ALREADY CORRECT - NO CHANGE NEEDED)
-    if (l > 0 && flux_reg[l]) {
-        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-            for (int q = 0; q < Q; ++q) {
-                flux_reg[l]->FineAdd(Fnum[l][d][q], d,
-                                      0,
-                                      0,
-                                      static_cast<int>(basefunc->Np_s),
-                                      Dt);
-            }
+        if (l > 0 && flux_reg[l]) {
+          flux_reg[l]->FineAdd(Fnum_int[l][d][q], d,
+                                0,0, static_cast<int>(basefunc->Np_s),
+                                Dt);
         }
+      }
     }
   }
   /*

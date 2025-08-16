@@ -195,8 +195,14 @@ void AmrDG::init()
   //Number of quadrature pts
   quadrule->set_number_quadpoints();
 
-  //Init data structure holdin quadrature data
+  //Init data structure holdin quadrature data 
   quadrule->xi_ref_quad_s.resize(quadrule->qMp_s,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
+  quadrule->xi_ref_quad_s_bdm.resize(AMREX_SPACEDIM,
+                            amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_s_bd,
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM)));    
+  quadrule->xi_ref_quad_s_bdp.resize(AMREX_SPACEDIM,
+                            amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_s_bd,
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM)));    
   quadrule->xi_ref_quad_t.resize(quadrule->qMp_t,amrex::Vector<amrex::Real> (1)); 
   quadrule->xi_ref_quad_st.resize(quadrule->qMp_st,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
   quadrule->xi_ref_quad_st_bdm.resize(AMREX_SPACEDIM,
@@ -221,6 +227,9 @@ void AmrDG::init()
 
   //Initialize L2 projeciton quadrature matrix
   quadmat.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(quadrule->qMp_s));  
+
+  quadmat_bd.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
+                amrex::Vector<amrex::Real>(quadrule->qMp_s_bd)));  
 
   //Initialize quadrature weights for cell faces st quadratures 
   quad_weights_st_bd.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));  

@@ -296,6 +296,7 @@ class Solver
                 //Interpolation nodes/quadrature points
                 //  for spatial basis functions
                 amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_s;
+
                 //  for spatial basis function at the boundaries
                 amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdm;
 
@@ -324,8 +325,9 @@ class Solver
 
                 //number of quadrature points for quadrature of volume (spatio) integral   
                 int qMp_s;    
-                //  at the boundary, surface (spatio) integral
-                int qMp_s_bd;   
+
+                //number of quadrature points for quadrature of surface (spatio) integral
+                int qMp_s_bd;
 
                 //number of quadrature points for quadrature of volume (temporal) integral   
                 int qMp_t;  
