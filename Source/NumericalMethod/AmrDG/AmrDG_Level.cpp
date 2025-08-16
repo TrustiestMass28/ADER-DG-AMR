@@ -222,3 +222,20 @@ void AmrDG::AMR_average_fine_coarse()
     }
   } 
 }
+
+void AmrDG::AMR_set_flux_registers()
+{
+    auto _mesh = mesh.lock();
+    
+    flux_reg.resize(_mesh->L);
+    
+    for (int lev = 1; lev < _mesh->L; ++lev) {
+        flux_reg[lev] = std::make_unique<amrex::FluxRegister>(
+            U_w[lev][0].boxArray(),
+            U_w[lev][0].DistributionMap(),
+            _mesh->get_refRatio(lev-1),
+            lev,
+            basefunc->Np_s  // Number of components per equation
+        );
+    }
+}
