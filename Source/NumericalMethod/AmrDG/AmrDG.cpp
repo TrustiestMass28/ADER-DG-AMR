@@ -158,6 +158,8 @@ void AmrDG::init()
   DFp.resize(_mesh->L);
 
   Fnum.resize(_mesh->L);
+  Fnum_int.resize(_mesh->L);
+
 
   H_w.resize(_mesh->L); 
   H.resize(_mesh->L); 
@@ -219,6 +221,9 @@ void AmrDG::init()
 
   //Initialize L2 projeciton quadrature matrix
   quadmat.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(quadrule->qMp_s));  
+
+  //Initialize quadrature weights for cell faces st quadratures 
+  quad_weights_st_bd.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));  
 
   //Initialize generalized Element matrices for ADER-DG corrector
   Mk_corr.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(basefunc->Np_s));
@@ -312,6 +317,8 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
   DFp[lev].resize(AMREX_SPACEDIM);
 
   Fnum[lev].resize(AMREX_SPACEDIM);
+  Fnum_int[lev].resize(AMREX_SPACEDIM);
+
 
   for(int d=0; d<AMREX_SPACEDIM; ++d){
     F[lev][d].resize(Q);
@@ -321,6 +328,7 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
     DFm[lev][d].resize(Q);
     DFp[lev][d].resize(Q);
     Fnum[lev][d].resize(Q);
+    Fnum_int[lev][d].resize(Q);
 
     H_p[lev][d].resize(Q);
     H_m[lev][d].resize(Q);
@@ -408,6 +416,9 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
 
     Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
     Fnum[lev][d][q].setVal(0.0);    
+
+    Fnum_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,1,0);    
+    Fnum_int[lev][d][q].setVal(0.0);    
   }
   
   // Add verification that all data structures are properly defined
@@ -606,6 +617,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
 {
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
+  amrex::Vector<amrex::MultiFab *> state_fnum_int(Q); 
   
   amrex::Vector<const amrex::MultiFab *> state_fm(Q);
   amrex::Vector<const amrex::MultiFab *> state_fp(Q); 
@@ -625,6 +637,8 @@ void AmrDG::numflux(int lev,int d,int M, int N,
     state_dfp[q] = &((*DF_ptr_p)[q]);
 
     state_fnum[q] = &(Fnum[lev][d][q]); 
+
+    state_fnum_int[q] = &(Fnum_int[lev][d][q]);  
   }
 
 #ifdef AMREX_USE_OMP
@@ -633,6 +647,10 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   {
     amrex::Vector<amrex::FArrayBox *> fab_fnum(Q);
     amrex::Vector< amrex::Array4<amrex::Real> > fnum(Q);
+
+    amrex::Vector<amrex::FArrayBox *> fab_fnum_int(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnum_int(Q);
+
     
     amrex::Vector<const amrex::FArrayBox *> fab_fm(Q);
     amrex::Vector< amrex::Array4< const amrex::Real> > fm(Q);
@@ -668,6 +686,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       
       for(int q=0 ; q<Q; ++q){
         fab_fnum[q]=&(state_fnum[q]->get(mfi));
+        fab_fnum_int[q]=&(state_fnum_int[q]->get(mfi));
   
         fab_fm[q] = state_fm[q]->fabPtr(mfi);
         fab_fp[q] = state_fp[q]->fabPtr(mfi);
@@ -677,6 +696,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         fab_up[q] = state_up[q]->fabPtr(mfi);
         
         fnum[q]=fab_fnum[q]->array();
+        fnum_int[q]=fab_fnum_int[q]->array();
 
         fm[q] = fab_fm[q]->const_array();
         fp[q] = fab_fp[q]->const_array();
@@ -698,100 +718,23 @@ void AmrDG::numflux(int lev,int d,int M, int N,
           }
           //check which indices it iterate across, i.e if last one is reachd
           fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
-        });   
+        }); 
+        
+
+        //Compute net numerical flux flowing betwene interfaces
+        //I.e the time-space(bd) integrated numerical flux, for which
+        //the values at quadrature points we actually just computed
+        amrex::ParallelFor(bx, [&] (int i, int j, int k) noexcept
+        {    
+          fnum_int[q](i,j,k,0) = 0.0;
+          for(int m=0; m<M;++m){ 
+            fnum_int[q](i,j,k,0) += fnum[q](i,j,k,m)*quad_weights_st_bd[d][m];
+          }
+        }); 
       }
     }
   }
 }
-/*
-//updates solution on valid cells
-void AmrDG::update_U_w(int lev)
-{
-    auto _mesh = mesh.lock();
-    const auto dx = _mesh->get_dx(lev);
-
-    for (int q = 0; q < Q; ++q)
-    {
-        amrex::MultiFab rhs(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), basefunc->Np_s, 0);
-        rhs.setVal(0.0);
-
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-        for (MFIter mfi(Fnum[lev][0][q], TilingIfNotGPU()); mfi.isValid(); ++mfi)
-        {
-            const Box& bx = mfi.tilebox();
-            auto const& uw = U_w[lev][q].const_array(mfi);
-            auto const& s  = S.empty() ? amrex::Array4<const Real>{} : S[lev][q].const_array(mfi);
-            auto rhs_arr   = rhs.array(mfi);
-
-            // Get all needed Array4s for fluxes BEFORE the ParallelFor loop.
-            amrex::Vector<amrex::Array4<const amrex::Real>> f_vec;
-            amrex::Vector<amrex::Array4<const amrex::Real>> fnum_vec;
-            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                f_vec.push_back(F[lev][d][q].const_array(mfi));
-                fnum_vec.push_back(Fnum[lev][d][q].const_array(mfi));
-            }
-
-            const amrex::IntVect& hi_idx = bx.bigEnd();
-
-            amrex::ParallelFor(bx, basefunc->Np_s, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
-            {
-                amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
-                
-                if (idx[0] == hi_idx[0]
-                #if AMREX_SPACEDIM >= 2
-                    || idx[1] == hi_idx[1]
-                #endif
-                #if AMREX_SPACEDIM == 3
-                    || idx[2] == hi_idx[2]
-                #endif
-                ) {
-                    return; // Skip this index if it's on any high boundary
-                }
-
-                amrex::Real final_rhs = Mk_corr[n][n] * uw(i,j,k,n);
-
-                int shift[] = {0,0,0};
-
-                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                    auto const& f = f_vec[d];
-                    auto const& fnum = fnum_vec[d];
-
-                    amrex::Real S_norm = (Dt / dx[d]);
-                    amrex::Real Mbd_norm = (Dt / dx[d]);
-
-                    //int shift_arr[] = {0,0,0};
-                    //shift_arr[d] = 1;
-                    //const IntVect shift_iv(shift_arr);
-
-                    for (int m = 0; m < quadrule->qMp_st; ++m) {
-                        final_rhs += S_norm * (Sk_corr[d][n][m] * f(i,j,k,m));
-                    }
-
-                    shift[d] = 1;
-
-                    for (int m = 0; m < quadrule->qMp_st_bd; ++m) {
-                        final_rhs -= Mbd_norm * (Mkbdp[d][n][m] * fnum(i+shift[0],j+shift[1], k+shift[2],m)
-                                              - Mkbdm[d][n][m] * fnum(i,j,k,m));
-                    }
-
-                    shift[d] = 0;
-                }
-
-                if (flag_source_term) {
-                    for (int m = 0; m < quadrule->qMp_st; ++m) {
-                        final_rhs += (Dt/2.0) * Mk_corr_src[n][m] * s(i,j,k,m);
-                    }
-                }
-                
-                rhs_arr(i,j,k,n) = final_rhs / Mk_corr[n][n];
-            });
-        }
-        amrex::MultiFab::Copy(U_w[lev][q], rhs, 0, 0, basefunc->Np_s, 0);
-    }
-    amrex::ParallelDescriptor::Barrier();
-}*/
 
 void AmrDG::update_U_w(int lev)
 {
@@ -902,81 +845,6 @@ void AmrDG::update_U_w(int lev)
   // Add MPI synchronization after updating U_w for all components
   amrex::ParallelDescriptor::Barrier();
 }
-/*
-void AmrDG::update_H_w(int lev)
-{
-    auto _mesh = mesh.lock();
-    const auto dx = _mesh->get_dx(lev);
-
-    for (int q = 0; q < Q; ++q)
-    {
-        amrex::MultiFab rhs(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), basefunc->Np_st, _mesh->nghost);
-        rhs.setVal(0.0);
-
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-        for (MFIter mfi(H_w[lev][q], TilingIfNotGPU()); mfi.isValid(); ++mfi)
-        {
-            const Box& bx = mfi.growntilebox();
-            auto const& uw = U_w[lev][q].const_array(mfi);
-            auto const& s = S.empty() ? amrex::Array4<const Real>{} : S[lev][q].const_array(mfi);
-            auto rhs_arr = rhs.array(mfi);
-            
-            // Get all needed Array4s for fluxes BEFORE the ParallelFor loop.
-            amrex::Vector<amrex::Array4<const amrex::Real>> f_vec;
-            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                f_vec.push_back(F[lev][d][q].const_array(mfi));
-            }
-
-            amrex::ParallelFor(bx, basefunc->Np_st, [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
-            {
-                amrex::Real final_rhs = 0.0;
-                
-                for (int m = 0; m < basefunc->Np_s; ++m) {
-                    final_rhs += Mk_pred[n][m] * uw(i,j,k,m);
-                }
-
-                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                    auto const& f = f_vec[d]; // Use the pre-captured array
-                    for (int m = 0; m < quadrule->qMp_st; ++m) {
-                        final_rhs -= (Dt / dx[d]) * Sk_predVinv[d][n][m] * f(i,j,k,m);
-                    }
-                }
-
-                if (flag_source_term) {
-                    for (int m = 0; m < quadrule->qMp_st; ++m) {
-                        final_rhs += (Dt/2.0) * Mk_pred_srcVinv[n][m] * s(i,j,k,m);
-                    }
-                }
-                
-                rhs_arr(i,j,k,n) = final_rhs;
-            });
-        }
-
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-        for (MFIter mfi(H_w[lev][q], TilingIfNotGPU()); mfi.isValid(); ++mfi)
-        {
-            const Box& bx = mfi.growntilebox();
-            auto const& rhs_arr = rhs.const_array(mfi);
-            auto hw = H_w[lev][q].array(mfi);
-
-            amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-            {
-                for (int n = 0; n < basefunc->Np_st; ++n) {
-                    amrex::Real sum = 0.0;
-                    for (int m = 0; m < basefunc->Np_st; ++m) {
-                        sum += Mk_h_w_inv[n][m] * rhs_arr(i,j,k,m);
-                    }
-                    hw(i,j,k,n) = sum;
-                }
-            });
-        }
-    }
-    amrex::ParallelDescriptor::Barrier();
-}*/
 
 void AmrDG::update_H_w(int lev)
 { 

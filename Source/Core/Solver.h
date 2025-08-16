@@ -452,6 +452,9 @@ class Solver
         //Numerical flux approximation Fnum(x,t)
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum;
 
+        //Numerical flux approximation Fnum(x,t) integrated
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum_int;
+
         //Numerical flux approximation Fnum(x,t) integrated over boundary minus (-) b-
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnumm_int; 
 

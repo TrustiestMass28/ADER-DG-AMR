@@ -207,26 +207,3 @@ void AmrDG::QuadratureGaussLegendre::NewtonRhapson(amrex::Real& x, int n)
     if(error<=TOL){break;}    
   }
 }
-
- void AmrDG::QuadratureGaussLegendre::NewtonRhapson(amrex::Real& x, int n)
-{
-    int niter = 1000; // A million is excessive; it should converge much faster.
-    amrex::Real TOL = 1e-15;
-    amrex::Real error;
-    amrex::Real x_new = x; // Start with the initial guess
-
-    for (int it = 0; it < niter; ++it)
-    {
-        // Robust derivative calculation
-        amrex::Real Pn_val = std::legendre(n, x);
-        amrex::Real Pn_minus_1_val = std::legendre(n - 1, x);
-        amrex::Real df = (n / (1.0 - x*x)) * (Pn_minus_1_val - x * Pn_val);
-
-        // Standard update
-        x_new = x - (Pn_val / df);
-        error = std::abs(x_new - x);
-        x = x_new;
-
-        if (error <= TOL) { break; }
-    }
-}

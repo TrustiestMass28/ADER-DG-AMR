@@ -155,6 +155,9 @@ void AmrDG::set_ref_element_matrix()
           wp*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st_bdp[d][i][d_]),2.0);   
         }
       }
+
+      quad_weights_st_bd[d][i] = wm;
+
       for(int j=0; j<basefunc->Np_s;++j){
         Mkbdm[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdm[d][i])*wm;
         Mkbdp[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdp[d][i])*wp;
@@ -183,7 +186,7 @@ void AmrDG::set_ref_element_matrix()
     for(int j=0; j<basefunc->Np_s;++j){
       quadmat[j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s[i])*w;
     }
-  }  
+  }
 }
 
 amrex::Real AmrDG::refMat_phiphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j, 
