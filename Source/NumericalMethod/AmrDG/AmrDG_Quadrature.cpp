@@ -8,7 +8,9 @@ void AmrDG::QuadratureGaussLegendre::set_number_quadpoints()
 {
   qMp_1d = (numme->p+1);
 
-  qMp_s = (int)std::pow(qMp_1d,AMREX_SPACEDIM);//space, i.e L2 projection
+  qMp_s = (int)std::pow(qMp_1d,AMREX_SPACEDIM);//space  L2 projection
+
+  qMp_s_bd = (int)std::pow(qMp_1d,AMREX_SPACEDIM-1);//surface  L2 projection
 
   qMp_t = qMp_1d;
 
@@ -81,6 +83,7 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
         }
       }
     }
+
     for(int i=0; i<N;++i){
       for(int t=0; t<N;++t){
         for(int d=0 ; d<AMREX_SPACEDIM; ++d){
@@ -104,6 +107,25 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
           }
         } 
       }
+    }
+
+    for(int i=0; i<N;++i){
+      for(int d=0 ; d<AMREX_SPACEDIM; ++d){
+        if(d==0)
+        {
+          xi_ref_quad_s_bdm[d][i][0] = -bd_val;
+          xi_ref_quad_s_bdm[d][i][1] = GLquadpts[i]; 
+          xi_ref_quad_s_bdp[d][i][0] = bd_val;
+          xi_ref_quad_s_bdp[d][i][1] = GLquadpts[i]; 
+        }
+        else if(d==1)
+        {
+          xi_ref_quad_s_bdm[d][i][0] = GLquadpts[i];
+          xi_ref_quad_s_bdm[d][i][1] = -bd_val; 
+          xi_ref_quad_s_bdp[d][i][0] = GLquadpts[i];
+          xi_ref_quad_s_bdp[d][i][1] = bd_val; 
+        }
+      } 
     }
 
     for(int i=0; i<N;++i){
@@ -164,6 +186,46 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
               xi_ref_quad_st_bdp[d][t+j*N+N*N*i][2] = bd_val; 
               xi_ref_quad_st_bdp[d][t+j*N+N*N*i][3] = GLquadpts[t]; 
             }
+          }
+        }
+      }
+    }
+
+    for(int i=0; i<N;++i){
+      for(int j=0; j<N;++j){
+        for(int d=0 ; d<AMREX_SPACEDIM; ++d){
+          if(d == 0)
+          {
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][0] = -bd_val;
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][1] = GLquadpts[i]; 
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
+
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][0] = bd_val;
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][1] = GLquadpts[i]; 
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][2] = GLquadpts[j];
+
+          }
+          else if(d == 1)
+          {
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][0] = GLquadpts[i];
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][1] = -bd_val; 
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
+
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][0] = GLquadpts[i];
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][1] = bd_val; 
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
+
+          }
+          else if(d == 2)
+          {
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][0] = GLquadpts[i];
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][1] = GLquadpts[j]; 
+            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][2] = -bd_val; 
+
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][0] = GLquadpts[i];
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][1] = GLquadpts[j]; 
+            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][2] = bd_val; 
+
           }
         }
       }

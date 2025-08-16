@@ -156,6 +156,7 @@ void AmrDG::set_ref_element_matrix()
         }
       }
 
+      //as convention use points and weights at the minus boundary bd_m
       quad_weights_st_bd[d][i] = wm;
 
       for(int j=0; j<basefunc->Np_s;++j){
@@ -167,8 +168,8 @@ void AmrDG::set_ref_element_matrix()
    
   for(int i=0; i<quadrule->qMp_st;++i){  
     w = 1.0;
-    for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
-      w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st[i][d_]),2.0);
+    for(int d=0; d<AMREX_SPACEDIM+1; ++d){
+      w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st[i][d]),2.0);
     }
     for(int j=0; j<basefunc->Np_s;++j){
       Mk_corr_src[j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st[i])*w;
@@ -180,11 +181,29 @@ void AmrDG::set_ref_element_matrix()
   //used for the BC,IC
   for(int i=0; i<quadrule->qMp_s;++i){  
     w = 1.0;
-    for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
-      w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_s[i][d_]),2.0);
+    for(int d=0; d<AMREX_SPACEDIM; ++d){
+      w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_s[i][d]),2.0);
     }
     for(int j=0; j<basefunc->Np_s;++j){
       quadmat[j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s[i])*w;
+    }
+  }
+
+  //general surface integral quadrature matrix with only spatial boundary nodes
+  //used for flux registers
+  for(int i=0; i<quadrule->qMp_s_bd;++i){ 
+    for(int d=0; d<AMREX_SPACEDIM; ++d){
+      wm = 1.0;
+      for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
+        if(d_!=d)
+        {
+          wm*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_s_bdm[d][i][d_]),2.0);
+        }
+
+        for(int j=0; j<basefunc->Np_s;++j){
+          quadmat_bd[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s_bdm[d][i])*wm;
+        }
+      }
     }
   }
 }
