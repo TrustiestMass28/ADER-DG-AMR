@@ -61,13 +61,11 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
       }
     }
     
-    for(int t=0; t<N;++t){
-      xi_ref_quad_st_bdm[0][t][0] = -bd_val;
-      xi_ref_quad_st_bdm[0][t][1] = GLquadpts[t];
-      xi_ref_quad_st_bdp[0][t][0] = bd_val;
-      xi_ref_quad_st_bdp[0][t][1] = GLquadpts[t];
-    }
-
+    xi_ref_quad_s_bdm[0][0][0] = -bd_val;
+    xi_ref_quad_s_bdm[0][0][1] = GLquadpts[0];
+    xi_ref_quad_s_bdp[0][0][0] = bd_val;
+    xi_ref_quad_s_bdp[0][0][1] = GLquadpts[0];
+    
     for(int i=0; i<N;++i){     
       xi_ref_quad_t[i][0]=GLquadpts[i];
       xi_ref_quad_s[i][0]=GLquadpts[i];
@@ -196,35 +194,35 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
         for(int d=0 ; d<AMREX_SPACEDIM; ++d){
           if(d == 0)
           {
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][0] = -bd_val;
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][1] = GLquadpts[i]; 
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
+            xi_ref_quad_s_bdm[d][j+N*i][0] = -bd_val;
+            xi_ref_quad_s_bdm[d][j+N*i][1] = GLquadpts[i]; 
+            xi_ref_quad_s_bdm[d][j+N*i][2] = GLquadpts[j]; 
 
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][0] = bd_val;
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][1] = GLquadpts[i]; 
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][2] = GLquadpts[j];
+            xi_ref_quad_s_bdp[d][j+N*i][0] = bd_val;
+            xi_ref_quad_s_bdp[d][j+N*i][1] = GLquadpts[i]; 
+            xi_ref_quad_s_bdp[d][j+N*i][2] = GLquadpts[j];
 
           }
           else if(d == 1)
           {
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][0] = GLquadpts[i];
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][1] = -bd_val; 
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
+            xi_ref_quad_s_bdm[d][j+N*i][0] = GLquadpts[i];
+            xi_ref_quad_s_bdm[d][j+N*i][1] = -bd_val; 
+            xi_ref_quad_s_bdm[d][j+N*i][2] = GLquadpts[j]; 
 
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][0] = GLquadpts[i];
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][1] = bd_val; 
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
+            xi_ref_quad_s_bdp[d][j+N*i][0] = GLquadpts[i];
+            xi_ref_quad_s_bdp[d][j+N*i][1] = bd_val; 
+            xi_ref_quad_s_bdp[d][j+N*i][2] = GLquadpts[j]; 
 
           }
           else if(d == 2)
           {
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][0] = GLquadpts[i];
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][1] = GLquadpts[j]; 
-            xi_ref_quad_s_bdm[d][t+j*N+N*N*i][2] = -bd_val; 
+            xi_ref_quad_s_bdm[d][j+N*i][0] = GLquadpts[i];
+            xi_ref_quad_s_bdm[d][j+N*i][1] = GLquadpts[j]; 
+            xi_ref_quad_s_bdm[d][j+N*i][2] = -bd_val; 
 
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][0] = GLquadpts[i];
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][1] = GLquadpts[j]; 
-            xi_ref_quad_s_bdp[d][t+j*N+N*N*i][2] = bd_val; 
+            xi_ref_quad_s_bdp[d][j+N*i][0] = GLquadpts[i];
+            xi_ref_quad_s_bdp[d][j+N*i][1] = GLquadpts[j]; 
+            xi_ref_quad_s_bdp[d][j+N*i][2] = bd_val; 
 
           }
         }
