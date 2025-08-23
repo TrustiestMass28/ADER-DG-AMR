@@ -203,6 +203,7 @@ GpuArray<Real, AMREX_SPACEDIM> Mesh<NumericalMethodType>::get_dx(int lev)
 template <typename NumericalMethodType>
 amrex::Real Mesh<NumericalMethodType>::get_dvol(int lev, int d)
 {
+    //Surface  
     const auto dx = get_dx(lev);
 
     amrex::Real dvol = 1.0;
@@ -216,6 +217,7 @@ amrex::Real Mesh<NumericalMethodType>::get_dvol(int lev, int d)
 template <typename NumericalMethodType>
 amrex::Real Mesh<NumericalMethodType>::get_dvol(int lev)
 {
+    //Volume
     const auto dx = get_dx(lev);
 
     amrex::Real dvol = 1.0;

@@ -5,6 +5,68 @@
 
 using namespace amrex;
 
+void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
+                               const amrex::MultiFab* correction_mf,
+                               int lev,
+                               const amrex::Geometry& crse_geom) noexcept
+{
+    auto _mesh =  numme->mesh.lock();
+
+    // Get coarse cell volume
+    auto vol = _mesh->get_dvol(lev);
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+    {
+        Eigen::VectorXd delta_u_w(numme->basefunc->Np_s);
+        Eigen::VectorXd f_delta(numme->basefunc->Np_s);
+
+        for (MFIter mfi(*correction_mf, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            const Box& bx = mfi.tilebox();
+            
+            const amrex::FArrayBox * fab_corr = correction_mf->fabPtr(mfi);
+            amrex::Array4<const amrex::Real> corr = fab_corr->const_array();
+
+            amrex::FArrayBox* fab_u_crse = &(U_crse->get(mfi));
+            amrex::Array4<amrex::Real> u_crse = fab_u_crse->array();
+
+            amrex::ParallelFor(bx, [=] (int i, int j, int k) noexcept
+            {
+                // The correction_mf only has one component (index 0).
+                //Real delta_F_over_vol = correction_arr(i, j, k, 0);
+
+                //if (std::abs(delta_F_over_vol) < 1.e-15) {
+                //    return; // Using return is safer in a ParallelFor than continue
+                //}
+
+                // Recover the total conservation error ΔF for this cell
+                //amrex::Real delta_F_cell = delta_F_over_vol ;//* vol;
+
+                /*
+                // Construct the right-hand-side vector f_Δ
+                for (int j = 0; j < numme->basefunc->Np_s; ++j) {
+                    f_delta(j) = delta_F_over_vol * phi_j_integral(j);
+                } 
+                
+                //for(int i=0; i<quadrule->qMp_s_bd;++i){ 
+                //  for(int j=0; j<basefunc->Np_s;++j){
+
+                quadmat_bd[d][j<=>basefunc->Np_s][i<quadrule->qMp_s_bd]
+
+                // Step 3: Solve M * δû = f_Δ to find the modal corrections
+                delta_u_w = Minv * f_delta;
+
+                // Step 4: Apply the correction to the modal coefficients
+                for (int n = 0; n < Np; ++n) {
+                    u_crse_arr(i, j, k, n) += delta_u_w(n);
+                }*/
+            });
+        }
+    }
+}
+
 void AmrDG::L2ProjInterp::interp_proj_mat()
 { 
   int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
