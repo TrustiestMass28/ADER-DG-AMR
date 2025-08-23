@@ -225,17 +225,52 @@ void AmrDG::AMR_average_fine_coarse()
 
 void AmrDG::AMR_set_flux_registers()
 {
-    auto _mesh = mesh.lock();
-    
-    flux_reg.resize(_mesh->L);
-    
-    for (int lev = 1; lev < _mesh->L; ++lev) {
-        flux_reg[lev] = std::make_unique<amrex::FluxRegister>(
-            U_w[lev][0].boxArray(),
-            U_w[lev][0].DistributionMap(),
-            _mesh->get_refRatio(lev-1),
-            lev,
-            basefunc->Np_s  // Number of components per equation
-        );
+  auto _mesh = mesh.lock();
+  
+  flux_reg.resize(_mesh->L);
+  
+  for (int lev = 1; lev < _mesh->L; ++lev) {
+    for(int q=0; q<Q; ++q){  
+      flux_reg[lev][q] = std::make_unique<amrex::FluxRegister>(
+          U_w[lev][q].boxArray(),
+          U_w[lev][q].DistributionMap(),
+          _mesh->get_refRatio(lev-1),
+          lev,
+          basefunc->Np_s  // Number of components per equation
+      );
     }
+  }
 }
+
+void AmrDG::AMR_flux_correction()
+{
+    auto _mesh = mesh.lock();
+
+    // Loop from the finest level `l` down to level 1
+    for (int l = _mesh->get_finest_lev(); l > 0; --l) {
+
+      amrex::Vector<amrex::MultiFab> correction_mf(Q);
+
+      for(int q=0; q<Q; ++q){
+        if (flux_reg[l][q]) {
+            //  Get the scalar flux mismatch DeltaF for each coarse cell at level l-1.
+            // This MultiFab lives on the BoxArray of the coarse cells at the C/F interface.
+            correction_mf[q].define(U_w[l-1][q].boxArray(), U_w[l-1][q].DistributionMap(), 1, 0);
+            correction_mf[q].setVal(0.0);
+            
+            // Populate correction_mf with the mismatch values.
+            // The components [0...Q-1] of the flux register are refluxed into 
+            // the components [0...Q-1] of correction_mf.
+            flux_reg[l][q]->Reflux(correction_mf[q], 1.0, 0, 0, 1, _mesh->get_Geom(l-1));
+            //flux_reg[l][q]->Reflux(correction_mf[q], 1.0, 0, 0, Q, _mesh->get_Geom(l-1));
+
+            // Call your new DG-specific reflux function to project the
+            // scalar mismatch onto the basis functions and update the solution.
+            amr_interpolator->reflux(&(U_w[l-1][q]),      // Coarse level solution to be corrected
+                                     &(correction_mf[q]),    // The scalar mismatch ΔF
+                                     l-1,             // The coarse level index
+                                     _mesh->get_Geom(l-1));
+        }
+      }
+    }
+} 

@@ -624,6 +624,10 @@ void AmrDG::numflux(int lev,int d,int M, int N,
                     amrex::Vector<amrex::MultiFab>* DF_ptr_m,
                     amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
+  auto _mesh = mesh.lock();
+
+  amrex::Real dvol = _mesh->get_dvol(lev,d);
+
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
   amrex::Vector<amrex::MultiFab *> state_fnum_int(Q); 
@@ -729,16 +733,17 @@ void AmrDG::numflux(int lev,int d,int M, int N,
           fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
         }); 
         
-
         //Compute net numerical flux flowing betwene interfaces
         //I.e the time-space(bd) integrated numerical flux, for which
         //the values at quadrature points we actually just computed
         amrex::ParallelFor(bx, [&] (int i, int j, int k) noexcept
         {    
           fnum_int[q](i,j,k,0) = 0.0;
-          for(int m=0; m<M;++m){ 
+          for(int m=0; m<M;++m){ //(D-1)+1
             fnum_int[q](i,j,k,0) += fnum[q](i,j,k,m)*quad_weights_st_bd[d][m];
           }
+          fnum_int[q](i,j,k,0)*=(Dt/2.0);//Jacobian of temporal coordinate transform
+          fnum_int[q](i,j,k,0)*=(dvol/std::pow(2.0,AMREX_SPACEDIM-1));//Jacobian of spatial coordinate transform
         }); 
       }
     }

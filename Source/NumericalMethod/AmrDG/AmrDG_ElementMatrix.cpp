@@ -204,7 +204,7 @@ void AmrDG::set_ref_element_matrix()
           quadmat_bd[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s_bdm[d][i])*wm;
         }
       }
-    }
+    } 
   }
 }
 

@@ -109,6 +109,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     void AMR_set_flux_registers();
 
+    void AMR_flux_correction();
+
     void set_init_data_system(int lev,const BoxArray& ba,
                               const DistributionMapping& dm);
 
@@ -255,6 +257,9 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         void amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
                         Array4<Real> const& crse, int ccomp, int ncomp, IntVect const& ratio ) noexcept;
 
+        void reflux(amrex::MultiFab* U_crse, const amrex::MultiFab* correction_mf,
+                    int lev, const amrex::Geometry& crse_geom) noexcept;
+
         Box CoarseBox (const Box& fine, int ratio);
 
         Box CoarseBox (const Box& fine, const IntVect& ratio);
@@ -341,7 +346,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                       int _p, amrex::Vector<amrex::Vector<amrex::Real>> quad_pt, int N) const;
     
-    amrex::Vector<std::unique_ptr<amrex::FluxRegister>> flux_reg;
+    amrex::Vector<amrex::Vector<std::unique_ptr<amrex::FluxRegister>>> flux_reg;
 
     amrex::Vector<amrex::Vector<amrex::Real>> quad_weights_st_bd;
 
@@ -542,10 +547,10 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         amrex::ParallelDescriptor::Barrier();
 
         //clear old flux register
-        //flux_registers.clear();
+        flux_reg.clear();
 
         //construct new flux register on new grid
-        //AMR_set_flux_registers();
+        AMR_set_flux_registers();
       }
     }  
 
@@ -640,10 +645,12 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
   // Clear flux registers at beginning of timestep
   for (int l = 1; l <= _mesh->get_finest_lev(); ++l) {
-      if (flux_reg[l]) {
+    for(int q=0; q<Q; ++q){
+      if (flux_reg[l][q]) {
           //flux_reg[l]->reset();
-          flux_reg[l]->setVal(0.0);
+          flux_reg[l][q]->setVal(0.0);
       }
+    }
   }
 
   //iterate from finest level to coarsest
@@ -674,7 +681,6 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       //update predictor
       update_H_w(l);
 
-      
       iter+=1;
     }
 
@@ -697,98 +703,38 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde,&(H_p[l][d]),&(Fp[l][d]),&(DFp[l][d]),quadrule->xi_ref_quad_st_bdp[d]);
 
       Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
+
+      // Store coarse and fine face integrated fluxes on coarse level
+      //The AMReX FluxRegister object already knows the exact locations of the coarse-fine interfaces. 
+      //It automatically picks out only the flux data from the faces that lie on
+      //these specific interfaces and ignores the rest.
+      //For any given coarse level l that has a finer level l+1 above it, the corresponding 
+      //register flux_reg[l] needs to be populated with two contributions:
+      //  -A CrseAdd call using the flux (Fnum_int[l]) calculated on the current coarse level l
+      //  -A FineAdd call using the flux (Fnum_int[l+1]) calculated on the finer level l+1
+      for (int q = 0; q < Q; ++q) {
+        //The current level 'l' is the COARSE grid for the l/l+1 interface.
+        if (l < _mesh->get_finest_lev() && flux_reg[l][q]) {
+            flux_reg[l][q]->CrseAdd(Fnum_int[l][d][q], d,
+                                    0, 0, static_cast<int>(basefunc->Np_s),
+                                    1.0, _mesh->get_Geom(l)); // Added Geometry and cast
+        }
+
+        //The current level 'l' is the FINE grid for the l-1/l interface.
+        if (l > 0 && flux_reg[l-1][q]) {
+            flux_reg[l-1][q]->FineAdd(Fnum_int[l][d][q], d,
+                                      0, 0, static_cast<int>(basefunc->Np_s), // Added cast back
+                                      1.0);
+        }
+      }
     } 
     
     //update corrector
     update_U_w(l); 
-
-    // Store coarse fluxes
-    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-      for (int q = 0; q < Q; ++q) {
-        if (l < _mesh->get_finest_lev() && flux_reg[l+1]) {
-          flux_reg[l+1]->CrseAdd(Fnum_int[l][d][q], d, 
-                                0,0,static_cast<int>(basefunc->Np_s),
-                                Dt,_mesh->get_Geom(l)); 
-        }
-        if (l > 0 && flux_reg[l]) {
-          flux_reg[l]->FineAdd(Fnum_int[l][d][q], d,
-                                0,0, static_cast<int>(basefunc->Np_s),
-                                Dt);
-        }
-      }
-    }
   }
-  /*
-  // Apply flux register correction to ensure conservation
-  for (int l = _mesh->get_finest_lev(); l > 0; --l) {
-      if (flux_reg[l]) {
-            // --- Step A: Get the Correction ---
-            // Define a temporary MultiFab to hold the correction from the register
-            MultiFab correction_mf(U_w[l-1][0].boxArray(), U_w[l-1][0].DistributionMap(), Q, 0);
-            correction_mf.setVal(0.0);
 
-            // Get the scalar correction value for each face
-            flux_reg[l]->Reflux(correction_mf, 1.0, 0, 0, Q, _mesh->get_Geom(l-1));
-            // Apply correction to coarse level
-            //for (int q = 0; q < Q; ++q) {
-            //flux_reg[l]->Reflux(U_w[l-1][q],  // coarse MultiFab to correct
-            //          1.0,            // scale factor
-            //          0,              // source component
-            //          0,              // destination component 
-            //          basefunc->Np_s, // number of components
-            //          _mesh->get_Geom(l-1));
-            }
+  AMR_flux_correction();
 
-            // --- Step B: Apply Correction via Facial L2 Projection ---
-            // This is the loop you need to write.
-            for (int q = 0; q < Q; ++q) {
-                for (MFIter mfi(U_w[l-1][q], TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-                    
-                    const Box& bx = mfi.tilebox();
-                    Array4<Real> const& u_w_crse = U_w[l-1][q].array(mfi);
-                    Array4<const Real> const& corr = correction_mf.const_array(mfi);
-
-                    // Pre-computed values needed for the projection:
-                    // - face_integral_phi[n]: integral of basis function n over a face
-                    // - face_mass_matrix_diag[n]: diagonal of the face mass matrix
-                    // - inv_vol: 1.0 / coarse_cell_volume
-
-                    amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                        // Loop over each face of the cell (0 to 2*AMREX_SPACEDIM-1)
-                        for (int f = 0; f < 2*AMREX_SPACEDIM; ++f) {
-                            
-                            // Get the single scalar correction value for this face 'f'
-                            Real C_f = get_correction_for_face(f, i, j, k, corr);
-                            
-                            // Apply its contribution to all modes 'n'
-                            for (int n = 0; n < basefunc->Np_s; ++n) {
-                                
-                                Real numerator = C_f * face_integral_phi[f][n];
-                                Real denominator = face_mass_matrix_diag[f][n];
-
-                                // Update the coarse solution mode
-                                u_w_crse(i, j, k, n) += (numerator / denominator) * inv_vol;
-                            }
-                        }
-                    });
-                }
-            }*/
-
-      //}
-  //}
-
-  //for (int l = _mesh->get_finest_lev(); l >= 0; --l){
-  //  
-  //   
-  //}
-
-  // After all fine steps are done, correct the coarse level solution
-  // Note: This assumes you can get a single MultiFab for all solution components.
-  // You might need to loop over your 'Q' components.
-  //for (int q = 0; q < Q; ++q) {
-  //      flux_registers[l]->Reflux(U_w[l][q], 1.0, basefunc->Np_s*q,
-  //                                    0, basefunc->Np_s, _mesh->get_Geom(l));
-  //}
 }
 
 template <typename EquationType>
