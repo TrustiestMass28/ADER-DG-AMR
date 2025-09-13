@@ -16,6 +16,23 @@ For efficient mesh operations and distributed data management, the framework lev
 
 ## 🚀 **Setup**  
 
+### **Setup dev environment** 
+
+Update the package list from the repositories
+```sh
+sudo apt update
+```
+
+Install GCC,GPP,Make
+```sh
+sudo apt install build-essential
+```
+
+Install OpenMPI libraries and binaries
+```sh
+sudo apt install openmpi-bin libopenmpi-dev
+```
+
 Navigate to the **Library** folder:  
 
 ```sh
