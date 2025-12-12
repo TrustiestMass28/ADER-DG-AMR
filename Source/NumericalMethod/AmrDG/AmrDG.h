@@ -515,7 +515,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       Solver<NumericalMethodType>::FillBoundary(&(U_w[l][q]),l);
     }
   }
-
+  
   while(t<T)
   {  
     if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -553,10 +553,10 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         AMR_set_flux_registers();
       }
     }  
-
+    
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
-
+    /*
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -583,11 +583,11 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         std::swap(U_w[l][q],_mf[q]);  
       }
     }
-    
+    */
     // Update timestep idx and physical time
     n+=1;
     t+=Dt;
-
+    /*
     //Plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
     dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
@@ -598,10 +598,10 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
-    
-    //if(n==2){
-    //  t=T+1;
-    //}
+    */
+    if(n==1){
+      t=T+1;
+    }
   }
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -647,12 +647,11 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
   for (int l = 1; l <= _mesh->get_finest_lev(); ++l) {
     for(int q=0; q<Q; ++q){
       if (flux_reg[l][q]) {
-          //flux_reg[l]->reset();
           flux_reg[l][q]->setVal(0.0);
       }
     }
   }
-
+  
   //iterate from finest level to coarsest
   for (int l = _mesh->get_finest_lev(); l >= 0; --l){
     //apply BC
@@ -684,7 +683,6 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       iter+=1;
     }
 
-    
     //use found predictor to compute corrector
     if(model_pde->flag_source_term){
       get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
@@ -693,7 +691,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     
     get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
     for(int d = 0; d<AMREX_SPACEDIM; ++d){
-
+      
       Solver<NumericalMethodType>::flux(l,d,quadrule->qMp_st,model_pde,&(H[l]),&(F[l][d]),quadrule->xi_ref_quad_st);
 
       get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st,&(H_m[l][d]),&(H_w[l]),quadrule->xi_ref_quad_st_bdm[d]);
@@ -701,9 +699,9 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
       get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st,&(H_p[l][d]),&(H_w[l]),quadrule->xi_ref_quad_st_bdp[d]);
       Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde,&(H_p[l][d]),&(Fp[l][d]),&(DFp[l][d]),quadrule->xi_ref_quad_st_bdp[d]);
-
+      
       Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
-
+      
       // Store coarse and fine face integrated fluxes on coarse level
       //The AMReX FluxRegister object already knows the exact locations of the coarse-fine interfaces. 
       //It automatically picks out only the flux data from the faces that lie on
@@ -714,17 +712,17 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       //  -A FineAdd call using the flux (Fnum_int[l+1]) calculated on the finer level l+1
       for (int q = 0; q < Q; ++q) {
         //The current level 'l' is the COARSE grid for the l/l+1 interface.
-        if (l < _mesh->get_finest_lev() && flux_reg[l][q]) {
-            flux_reg[l][q]->CrseAdd(Fnum_int[l][d][q], d,
-                                    0, 0, static_cast<int>(basefunc->Np_s),
-                                    1.0, _mesh->get_Geom(l)); // Added Geometry and cast
+        if (l < _mesh->get_finest_lev() && flux_reg[l].size()) {
+          flux_reg[l][q]->CrseAdd(Fnum_int[l][d][q], d,
+                      0, 0, static_cast<int>(basefunc->Np_s),
+                      1.0, _mesh->get_Geom(l)); // Added Geometry and cast
         }
 
         //The current level 'l' is the FINE grid for the l-1/l interface.
-        if (l > 0 && flux_reg[l-1][q]) {
-            flux_reg[l-1][q]->FineAdd(Fnum_int[l][d][q], d,
-                                      0, 0, static_cast<int>(basefunc->Np_s), // Added cast back
-                                      1.0);
+        if (l > 0 && flux_reg[l-1].size()) {
+          flux_reg[l-1][q]->FineAdd(Fnum_int[l][d][q], d,
+                        0, 0, static_cast<int>(basefunc->Np_s), // Added cast back
+                        1.0);
         }
       }
     } 
@@ -733,8 +731,8 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     update_U_w(l); 
   }
 
-  AMR_flux_correction();
-
+  //AMR_flux_correction();
+  
 }
 
 template <typename EquationType>

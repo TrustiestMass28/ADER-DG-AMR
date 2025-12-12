@@ -649,6 +649,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
     state_dfm[q] = &((*DF_ptr_m)[q]);
     state_dfp[q] = &((*DF_ptr_p)[q]);
 
+    //TODO: should be passed as argument?
     state_fnum[q] = &(Fnum[lev][d][q]); 
 
     state_fnum_int[q] = &(Fnum_int[lev][d][q]);  
@@ -732,12 +733,24 @@ void AmrDG::numflux(int lev,int d,int M, int N,
           //check which indices it iterate across, i.e if last one is reachd
           fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
         }); 
-        
+
+        /*temporal and spatial integration of numerical fluxes
+        ıssue is that the numerical fluxes are computed at quadrature points
+        defined on reference element [-1,1]x[-1,1]...x[-1,1]x[-1,1] (D space + 1 time)
+        but the quadrature weights used are defined on [0,Dt]x[0,dx]...x[0,dx]x[0,dx]
+        thus the Jacobian of the transformation from reference to physical element is not taken into account*/
         //Compute net numerical flux flowing betwene interfaces
         //I.e the time-space(bd) integrated numerical flux, for which
         //the values at quadrature points we actually just computed
         amrex::ParallelFor(bx, [&] (int i, int j, int k) noexcept
         {    
+          amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
+
+          if(idx[d] == lo_idx[d])
+          {
+            return; // Skip this index if it's on any boundary
+          }
+
           fnum_int[q](i,j,k,0) = 0.0;
           for(int m=0; m<M;++m){ //(D-1)+1
             fnum_int[q](i,j,k,0) += fnum[q](i,j,k,m)*quad_weights_st_bd[d][m];
