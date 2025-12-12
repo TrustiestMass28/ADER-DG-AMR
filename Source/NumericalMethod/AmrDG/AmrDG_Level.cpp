@@ -226,10 +226,11 @@ void AmrDG::AMR_average_fine_coarse()
 void AmrDG::AMR_set_flux_registers()
 {
   auto _mesh = mesh.lock();
-  
-  flux_reg.resize(_mesh->L);
-  
-  for (int lev = 1; lev < _mesh->L; ++lev) {
+
+  flux_reg.resize(_mesh->get_finest_lev()+1);
+  //The flux register's job is to manage the flux exchange at the coarse-fine interface between two adjacent levels
+  for (int lev = 1; lev <=_mesh->get_finest_lev(); ++lev) {
+    flux_reg[lev].resize(Q);
     for(int q=0; q<Q; ++q){  
       flux_reg[lev][q] = std::make_unique<amrex::FluxRegister>(
           U_w[lev][q].boxArray(),
