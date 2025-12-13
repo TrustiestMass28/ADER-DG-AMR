@@ -264,7 +264,7 @@ void AmrDG::AMR_flux_correction()
             // the components [0...Q-1] of correction_mf.
             flux_reg[l][q]->Reflux(correction_mf[q], 1.0, 0, 0, 1, _mesh->get_Geom(l-1));
             //flux_reg[l][q]->Reflux(correction_mf[q], 1.0, 0, 0, Q, _mesh->get_Geom(l-1));
-
+            
             // Call your new DG-specific reflux function to project the
             // scalar mismatch onto the basis functions and update the solution.
             amr_interpolator->reflux(&(U_w[l-1][q]),      // Coarse level solution to be corrected

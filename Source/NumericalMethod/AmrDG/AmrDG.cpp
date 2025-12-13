@@ -624,6 +624,26 @@ void AmrDG::numflux(int lev,int d,int M, int N,
                     amrex::Vector<amrex::MultiFab>* DF_ptr_m,
                     amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
+  /*
+  Growing the box on the lower side, and then skipping lowest index
+  during the parallel loop is done because we are iterating over mfi
+  defined based on the face centered MFab. Assuming cell centered box
+  is given by idx=0,...,N. The face centered box iter will select the 
+  cell centered MFab at indices idx=0,...,N+1. Cell N+1 is okey as it is 
+  the right ghost cell. So when computing face N+1, we will select as R state
+  the data in cell N+1.(NB: face index is at i-0.5, so always left side).
+  But when computing interface flux at idx=0, a non extended box would
+  retrieve Array4 of the cell centered MFab at idx=0 and thus
+  when computing flux at face idx=0, it would select as L state that is out
+  of bounds. By growing the box on the lower side, the face centered
+  iterator will select the cell centered MFab at idx=-1,...,N+1. And thus
+  when computing flux at face idx=0, it will select as L state the cell
+  value that is actually in cell idx=-1, i.e the left ghost cell and thus in
+  the selected iteration bounds.
+  We then ahve to skip in the parallel loop the lowest idx=-1 to avoid because that itnerface
+  value cannot be computed.
+  TLDR: it is done such that when we iterate, we select valid portison fo celle centered mfab
+  */
   auto _mesh = mesh.lock();
 
   amrex::Real dvol = _mesh->get_dvol(lev,d);
@@ -696,6 +716,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       const amrex::Box& _bx = mfi.tilebox();
       amrex::Box bx = amrex::growLo(_bx, d, 1);
 
+      //Get the LOCAL box limits for this specific rank/tile
       const amrex::IntVect& lo_idx = bx.smallEnd();
       
       for(int q=0 ; q<Q; ++q){
@@ -748,7 +769,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
 
           if(idx[d] == lo_idx[d])
           {
-            return; // Skip this index if it's on any boundary
+            return; 
           }
 
           fnum_int[q](i,j,k,0) = 0.0;
