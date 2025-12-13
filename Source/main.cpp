@@ -23,19 +23,19 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 2;
+      int p  = 3;
       amrex::Real T = 10.0;
 
       sim.setNumericalSettings(p,T);
 
       //IO
-      int dtn_outplt = -1;
+      int dtn_outplt = 2;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);
 
       //AMR
-      int max_level =1;            // number of levels = max_level + 1
+      int max_level =2;            // number of levels = max_level + 1
                                     // max_level=0 single level simulation
                                     // max_level>0 multi  level simulation
                                     // max_level==idx of maximum fine lvl

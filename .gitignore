@@ -1,4 +1,5 @@
 .vscode/
+.venv/
 
 #Dont ignore gitignore
 

@@ -556,7 +556,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
-    /*
+    
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -583,11 +583,11 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         std::swap(U_w[l][q],_mf[q]);  
       }
     }
-    */
+  
     // Update timestep idx and physical time
     n+=1;
     t+=Dt;
-    /*
+    
     //Plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
     dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
@@ -598,8 +598,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
-    */
-    if(n==1){
+    
+    if(n==1){ //safety break
       t=T+1;
     }
   }
@@ -715,13 +715,13 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
         if (l < _mesh->get_finest_lev() && flux_reg[l].size()) {
           flux_reg[l][q]->CrseAdd(Fnum_int[l][d][q], d,
                       0, 0, static_cast<int>(basefunc->Np_s),
-                      1.0, _mesh->get_Geom(l)); // Added Geometry and cast
+                      1.0, _mesh->get_Geom(l)); 
         }
 
         //The current level 'l' is the FINE grid for the l-1/l interface.
         if (l > 0 && flux_reg[l-1].size()) {
           flux_reg[l-1][q]->FineAdd(Fnum_int[l][d][q], d,
-                        0, 0, static_cast<int>(basefunc->Np_s), // Added cast back
+                        0, 0, static_cast<int>(basefunc->Np_s), 
                         1.0);
         }
       }
@@ -731,7 +731,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     update_U_w(l); 
   }
 
-  //AMR_flux_correction();
+  AMR_flux_correction();
   
 }
 

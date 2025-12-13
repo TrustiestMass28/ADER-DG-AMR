@@ -12,16 +12,12 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
 {
     auto _mesh =  numme->mesh.lock();
 
-    // Get coarse cell volume
-    auto vol = _mesh->get_dvol(lev);
+    int N = numme->quadrule->qMp_1d; 
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
     {
-        Eigen::VectorXd delta_u_w(numme->basefunc->Np_s);
-        Eigen::VectorXd f_delta(numme->basefunc->Np_s);
-
         for (MFIter mfi(*correction_mf, TilingIfNotGPU()); mfi.isValid(); ++mfi)
         {
             const Box& bx = mfi.tilebox();
@@ -34,34 +30,60 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
 
             amrex::ParallelFor(bx, [=] (int i, int j, int k) noexcept
             {
+                Eigen::VectorXd delta_u_w(numme->basefunc->Np_s);
+                Eigen::VectorXd f_delta(numme->basefunc->Np_s);
+
+                delta_u_w.setZero();
+                f_delta.setZero();
+
                 // The correction_mf only has one component (index 0).
-                //Real delta_F_over_vol = correction_arr(i, j, k, 0);
+                amrex::Real delta_F_over_vol = corr(i, j, k, 0);
 
-                //if (std::abs(delta_F_over_vol) < 1.e-15) {
-                //    return; // Using return is safer in a ParallelFor than continue
-                //}
-
-                // Recover the total conservation error ΔF for this cell
-                //amrex::Real delta_F_cell = delta_F_over_vol ;//* vol;
-
-                /*
+                amrex::Real wm;
                 // Construct the right-hand-side vector f_Δ
-                for (int j = 0; j < numme->basefunc->Np_s; ++j) {
-                    f_delta(j) = delta_F_over_vol * phi_j_integral(j);
+                for (int n = 0; n < numme->basefunc->Np_s; ++n) {
+
+                  //loop over spatial dimension to select each minus face
+                  for(int d=0; d<AMREX_SPACEDIM; ++d){
+                    //Integrate over all quadrature points on cell faces
+                    for(int q=0; q<numme->quadrule->qMp_s_bd;++q){ 
+                      wm = 1.0;
+                      for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
+                        if(d_!=d)
+                        {
+                          wm*=2.0/std::pow(std::assoc_legendre(N,1,numme->quadrule->xi_ref_quad_s_bdm[d][q][d_]),2.0);
+                        }
+                      }
+                      f_delta(n) += numme->basefunc->phi_s(n, numme->basefunc->basis_idx_s,numme->quadrule->xi_ref_quad_s_bdm[d][q])*wm;
+                    } 
+                  }
+
+                  Print() << "fdelta pre"<<f_delta(n) << std::endl;
+                  Print() << "delta_F_over_vol "<<delta_F_over_vol << std::endl;
+
+                  f_delta(n)*=(delta_F_over_vol/std::pow(2.0,AMREX_SPACEDIM-1));
+
+                  Print() << "fdelta "<<f_delta(n) << std::endl;
+
                 } 
                 
-                //for(int i=0; i<quadrule->qMp_s_bd;++i){ 
-                //  for(int j=0; j<basefunc->Np_s;++j){
-
-                quadmat_bd[d][j<=>basefunc->Np_s][i<quadrule->qMp_s_bd]
-
-                // Step 3: Solve M * δû = f_Δ to find the modal corrections
+                // Solve δû = (M)^{-1}f_Δ to find the modal corrections
+                // Minv is same inverse mass matrix used for classic 
+                // scatter/gather operations in DG
                 delta_u_w = Minv * f_delta;
+                
+                // Apply the correction to the modal coefficients
+                Print() <<"-------------------------------" << std::endl;
+                
+                for (int n = 0; n < numme->basefunc->Np_s; ++n) {
+                  AllPrint() << "Refluxing cell (" << i << "," << j << "," << k << "), mode " << n 
+                          << ": Δû = " << delta_u_w(n) 
+                          <<" , u_crse " << u_crse(i, j, k, n) <<std::endl;
+                          
+                    u_crse(i, j, k, n) += delta_u_w(n);
 
-                // Step 4: Apply the correction to the modal coefficients
-                for (int n = 0; n < Np; ++n) {
-                    u_crse_arr(i, j, k, n) += delta_u_w(n);
-                }*/
+                  AllPrint() << "Updated u_crse: " << u_crse(i, j, k, n) << std::endl;
+                }
             });
         }
     }
