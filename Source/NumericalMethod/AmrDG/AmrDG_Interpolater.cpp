@@ -36,53 +36,19 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
                 delta_u_w.setZero();
                 f_delta.setZero();
 
-                // The correction_mf only has one component (index 0).
-                amrex::Real delta_F_over_vol = corr(i, j, k, 0);
+                // Load the mismatch vector directly from Reflux output
+                for(int n=0; n<numme->basefunc->Np_s; ++n){
+                    f_delta(n) = corr(i,j,k,n);
+                }
 
-                amrex::Real wm;
-                // Construct the right-hand-side vector f_Δ
-                for (int n = 0; n < numme->basefunc->Np_s; ++n) {
-
-                  //loop over spatial dimension to select each minus face
-                  for(int d=0; d<AMREX_SPACEDIM; ++d){
-                    //Integrate over all quadrature points on cell faces
-                    for(int q=0; q<numme->quadrule->qMp_s_bd;++q){ 
-                      wm = 1.0;
-                      for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
-                        if(d_!=d)
-                        {
-                          wm*=2.0/std::pow(std::assoc_legendre(N,1,numme->quadrule->xi_ref_quad_s_bdm[d][q][d_]),2.0);
-                        }
-                      }
-                      f_delta(n) += numme->basefunc->phi_s(n, numme->basefunc->basis_idx_s,numme->quadrule->xi_ref_quad_s_bdm[d][q])*wm;
-                    } 
-                  }
-
-                  Print() << "fdelta pre"<<f_delta(n) << std::endl;
-                  Print() << "delta_F_over_vol "<<delta_F_over_vol << std::endl;
-
-                  f_delta(n)*=(delta_F_over_vol/std::pow(2.0,AMREX_SPACEDIM-1));
-
-                  Print() << "fdelta "<<f_delta(n) << std::endl;
-
-                } 
-                
                 // Solve δû = (M)^{-1}f_Δ to find the modal corrections
                 // Minv is same inverse mass matrix used for classic 
                 // scatter/gather operations in DG
                 delta_u_w = Minv * f_delta;
-                
-                // Apply the correction to the modal coefficients
-                Print() <<"-------------------------------" << std::endl;
-                
-                for (int n = 0; n < numme->basefunc->Np_s; ++n) {
-                  AllPrint() << "Refluxing cell (" << i << "," << j << "," << k << "), mode " << n 
-                          << ": Δû = " << delta_u_w(n) 
-                          <<" , u_crse " << u_crse(i, j, k, n) <<std::endl;
-                          
+              
+                // Update the coarse cell solution with the computed corrections
+                for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
                     u_crse(i, j, k, n) += delta_u_w(n);
-
-                  AllPrint() << "Updated u_crse: " << u_crse(i, j, k, n) << std::endl;
                 }
             });
         }

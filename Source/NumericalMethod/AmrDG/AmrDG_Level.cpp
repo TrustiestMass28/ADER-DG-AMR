@@ -229,6 +229,13 @@ void AmrDG::AMR_set_flux_registers()
 
   flux_reg.resize(_mesh->get_finest_lev()+1);
   //The flux register's job is to manage the flux exchange at the coarse-fine interface between two adjacent levels
+
+  // Resizing to Q will fill this level with 'nullptr' (empty unique_ptrs)
+  // This ensures flux_reg[0] exists and has the correct size, but holds no data.
+  if (flux_reg.size() > 0) {
+      flux_reg[0].resize(Q); 
+  }
+
   for (int lev = 1; lev <=_mesh->get_finest_lev(); ++lev) {
     flux_reg[lev].resize(Q);
     for(int q=0; q<Q; ++q){  
@@ -245,33 +252,83 @@ void AmrDG::AMR_set_flux_registers()
 
 void AmrDG::AMR_flux_correction()
 {
-    auto _mesh = mesh.lock();
+  auto _mesh = mesh.lock();
 
-    // Loop from the finest level `l` down to level 1
-    for (int l = _mesh->get_finest_lev(); l > 0; --l) {
+  // Loop from the finest level `l` down to level 1
+  for (int l = _mesh->get_finest_lev(); l > 0; --l) {
 
-      amrex::Vector<amrex::MultiFab> correction_mf(Q);
+    amrex::Vector<amrex::MultiFab> correction_mf(Q);
 
-      for(int q=0; q<Q; ++q){
-        if (flux_reg[l][q]) {
-            //  Get the scalar flux mismatch DeltaF for each coarse cell at level l-1.
-            // This MultiFab lives on the BoxArray of the coarse cells at the C/F interface.
-            correction_mf[q].define(U_w[l-1][q].boxArray(), U_w[l-1][q].DistributionMap(), 1, 0);
-            correction_mf[q].setVal(0.0);
-            
-            // Populate correction_mf with the mismatch values.
-            // The components [0...Q-1] of the flux register are refluxed into 
-            // the components [0...Q-1] of correction_mf.
-            flux_reg[l][q]->Reflux(correction_mf[q], 1.0, 0, 0, 1, _mesh->get_Geom(l-1));
-            //flux_reg[l][q]->Reflux(correction_mf[q], 1.0, 0, 0, Q, _mesh->get_Geom(l-1));
-            
-            // Call your new DG-specific reflux function to project the
-            // scalar mismatch onto the basis functions and update the solution.
-            amr_interpolator->reflux(&(U_w[l-1][q]),      // Coarse level solution to be corrected
-                                     &(correction_mf[q]),    // The scalar mismatch ΔF
-                                     l-1,             // The coarse level index
-                                     _mesh->get_Geom(l-1));
-        }
+    for(int q=0; q<Q; ++q){ 
+      if (flux_reg[l][q]) {
+          //  Get the flux mismatch DeltaF for each coarse cell at level l-1.
+          // This MultiFab lives on the BoxArray of the coarse cells at the C/F interface.
+          correction_mf[q].define(U_w[l-1][q].boxArray(), U_w[l-1][q].DistributionMap(), basefunc->Np_s, 0);
+          correction_mf[q].setVal(0.0);
+
+          //  Define a dummy "Volume" MultiFab
+          // The specialized Reflux() we need requires a volume argument.
+          // Since we want the raw integral \int (F_c - F_f) phi dS, 
+          // we pass 1.0 so AMReX doesn't divide by cell volume yet.
+          amrex::MultiFab dummy_vol(U_w[l-1][q].boxArray(), 
+                                  U_w[l-1][q].DistributionMap(), 
+                                  1, 0);
+          dummy_vol.setVal(1.0);
+          
+          // 3. Directional Reflux with Parity Correction
+          for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            // Iterate over every DG mode (basis function)
+            for (int n = 0; n < basefunc->Np_s; ++n) {
+              // Check Parity 
+              // For  Basis, is phi_n(1) == -phi_n(-1)?
+              // Assuming standard 1D Legendre or Tensor Product where 
+              // you know the parity of mode 'n' in direction 'd'.
+              // YOU MUST IMPLEMENT THIS CHECK:
+              bool is_odd = false;
+
+              // Retrieve the polynomial order of mode 'n' in the current normal direction 'd'
+              int order_in_normal_dir = basefunc->basis_idx_s[n][d];
+
+              // Check parity
+              // If the order is odd (1, 3, 5...), we must flip the sign on the High side
+              is_odd = (order_in_normal_dir % 2 != 0);
+
+              amrex::Real scale_lo = 1.0;
+              amrex::Real scale_high = is_odd ? -1.0 : 1.0;
+
+              //Update Coarse Cells on the LOW Side of Interface ---
+              // (These are the cells to the RIGHT of the flux face)
+              // Interface is their "Minus" face. Your stored flux is Phi(-1).
+              // MATCH -> Standard Update.
+              flux_reg[l][q]->Reflux(correction_mf[q], dummy_vol, 
+                                    amrex::Orientation(d, amrex::Orientation::low),
+                                    scale_lo,      // Scale (Add flux)
+                                    n, n, 1,  // src_comp, dst_comp, num_comp
+                                    _mesh->get_Geom(l-1));
+
+
+              //  Update Coarse Cells on the HIGH Side of Interface ---
+              // (These are the cells to the LEFT of the flux face)
+              // Interface is their "Plus" face. Your stored flux is Phi(-1).
+              // They need Phi(1).
+              // Even Mode: Phi(1) = Phi(-1). Standard Update OK.
+              // Odd Mode:  Phi(1) = -Phi(-1). We need to FLIP the sign.
+              flux_reg[l][q]->Reflux(correction_mf[q], dummy_vol, 
+                                    amrex::Orientation(d, amrex::Orientation::high),
+                                    scale_high, 
+                                    n, n, 1, 
+                                    _mesh->get_Geom(l-1));
+          }
+          }
+          //flux_reg[l][q]->Reflux(correction_mf[q], 1.0, 0, 0, basefunc->Np_s, _mesh->get_Geom(l-1));
+
+          // Call your new DG-specific reflux function to project the
+          // scalar mismatch onto the basis functions and update the solution.
+          amr_interpolator->reflux(&(U_w[l-1][q]),      // Coarse level solution to be corrected
+                                    &(correction_mf[q]),    // The scalar mismatch ΔF
+                                    l-1,             // The coarse level index
+                                    _mesh->get_Geom(l-1));
       }
     }
+  }
 } 
