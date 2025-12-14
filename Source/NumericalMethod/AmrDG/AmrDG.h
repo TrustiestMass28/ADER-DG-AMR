@@ -257,6 +257,10 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         void amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
                         Array4<Real> const& crse, int ccomp, int ncomp, IntVect const& ratio ) noexcept;
 
+        void average_down_flux(amrex::MultiFab& flux_fine, 
+                              int d) noexcept;
+
+
         void reflux(amrex::MultiFab* U_crse, const amrex::MultiFab* correction_mf,
                     int lev, const amrex::Geometry& crse_geom) noexcept;
 
@@ -265,6 +269,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         Box CoarseBox (const Box& fine, const IntVect& ratio);
 
         void interp_proj_mat();
+
+        void flux_proj_mat();
         
       private:      
 
@@ -288,6 +294,11 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         amrex::Vector<Eigen::MatrixXd> P_cf;
 
         amrex::Vector<Eigen::MatrixXd> P_fc;      
+
+        // [Dim][Child_Face_Idx][Polarity]
+        // Polarity 0: Fine(-) to Coarse(+)  (e.g., Left side of Fine Patch -> Right side of Coarse neighbor)
+        // Polarity 1: Fine(+) to Coarse(-)  (e.g., Right side of Fine Patch -> Left side of Coarse neighbor)
+        amrex::Vector<amrex::Vector<amrex::Vector<Eigen::MatrixXd>>> P_flux_fc;
 
         Eigen::MatrixXd M;
 
@@ -599,7 +610,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
     
-    if(n==10){ //safety break
+    if(n==1){ //safety break
       t=T+1;
     }
   }
@@ -723,6 +734,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
         //The current level 'l' is the FINE grid for the l-1/l interface.
         //For each fine level, store in their flux register the fine fluxes
         if (l > 0 && flux_reg[l].size()) {
+          amr_interpolator->average_down_flux(Fnum_int[l][d][q], d);
           flux_reg[l][q]->FineAdd(Fnum_int[l][d][q], d,
                         0, 0, static_cast<int>(basefunc->Np_s), 
                         1.0);

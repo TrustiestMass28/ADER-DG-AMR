@@ -12,6 +12,13 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
 {
     auto _mesh =  numme->mesh.lock();
 
+    amrex::Real vol = _mesh->get_dvol(lev);
+    amrex::Real inv_jac = std::pow(2.0, AMREX_SPACEDIM) / vol;
+
+    // Time: [-1, 1] -> [0, Dt]   => Factor: Dt / 2.0
+    // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
+   // amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
+
     int N = numme->quadrule->qMp_1d; 
 
 #ifdef AMREX_USE_OMP
@@ -44,13 +51,210 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
                 // Solve δû = (M)^{-1}f_Δ to find the modal corrections
                 // Minv is same inverse mass matrix used for classic 
                 // scatter/gather operations in DG
-                delta_u_w = Minv * f_delta;
+                delta_u_w = inv_jac*(Minv * f_delta);
               
                 // Update the coarse cell solution with the computed corrections
                 for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
                     u_crse(i, j, k, n) += delta_u_w(n);
                 }
             });
+        }
+    }
+}
+
+void AmrDG::L2ProjInterp::average_down_flux(amrex::MultiFab& flux_fine, int d) noexcept
+{
+
+  for (amrex::MFIter mfi(flux_fine); mfi.isValid(); ++mfi) {
+      
+      const amrex::Box& valid_bx = mfi.validbox();
+      
+      // Face-centered box for direction 'd'
+      const amrex::Box& face_bx = amrex::surroundingNodes(valid_bx, d);
+
+      auto arr = flux_fine.array(mfi);
+
+      amrex::ParallelFor(face_bx, [=] (int i, int j, int k) noexcept {
+          
+          // --- 1. Filter: Only process boundary faces ---
+          int polarity = -1;
+
+          if ( (d==0 && i == valid_bx.smallEnd(0)) || 
+                (d==1 && j == valid_bx.smallEnd(1)) || 
+                (d==2 && k == valid_bx.smallEnd(2)) ) 
+          {
+              polarity = 0; // Fine(-), Coarse(+)
+          }
+          else if ( (d==0 && i == valid_bx.bigEnd(0) + 1) || 
+                    (d==1 && j == valid_bx.bigEnd(1) + 1) || 
+                    (d==2 && k == valid_bx.bigEnd(2) + 1) ) 
+          {
+              polarity = 1; // Fine(+), Coarse(-)
+          }
+
+          // If internal face, skip projection (FluxRegister ignores it anyway)
+          if (polarity == -1) return;
+
+
+          // --- 2. Identify Child Index ---
+          // (Refinement Ratio = 2)
+          int child_idx = 0;
+          #if (AMREX_SPACEDIM == 2)
+              int t_idx = (d == 0) ? j : i;
+              child_idx = (t_idx % 2 != 0) ? 1 : 0; 
+          #elif (AMREX_SPACEDIM == 3)
+              int idx1, idx2;
+              if (d == 0) { idx1 = j; idx2 = k; }     
+              else if (d == 1) { idx1 = i; idx2 = k; } 
+              else { idx1 = i; idx2 = j; }             
+              
+              int c1 = (idx1 % 2 != 0) ? 1 : 0;
+              int c2 = (idx2 % 2 != 0) ? 1 : 0;
+              child_idx = c1 + 2*c2; 
+          #endif
+
+          // --- 3. In-Place Projection ---
+          // We need a temporary buffer because the new coefficients 
+          // depend on a linear combination of the old ones.
+          // (Small stack allocation is fine here)
+          double old_vals[20]; // Ensure this is large enough for Max Np (e.g. P3=4 modes)
+          
+          // Load old values
+          for (int r = 0; r < numme->basefunc->Np_s; ++r) {
+              old_vals[r] = arr(i,j,k,r);
+          }
+
+          // Compute new values and overwrite
+          for (int r = 0; r < numme->basefunc->Np_s; ++r) {
+              double val = 0.0;
+              for (int c = 0; c < numme->basefunc->Np_s; ++c) {
+                  val += P_flux_fc[d][child_idx][polarity](r, c) * old_vals[c];
+              }
+              arr(i,j,k,r) = val;
+          }
+      });
+  }  
+}
+
+void AmrDG::L2ProjInterp::flux_proj_mat()
+{
+    int num_face_children = (int)std::pow(2, AMREX_SPACEDIM - 1);
+    
+    // Resize: [Direction][ChildIndex][Polarity]
+    P_flux_fc.resize(AMREX_SPACEDIM);
+    for(int d=0; d<AMREX_SPACEDIM; ++d) {
+        P_flux_fc[d].resize(num_face_children);
+        for(int k=0; k<num_face_children; ++k) {
+             P_flux_fc[d][k].resize(2); // Two polarities
+             for(int p=0; p<2; ++p) {
+                 P_flux_fc[d][k][p].resize(numme->basefunc->Np_s, numme->basefunc->Np_s);
+                 P_flux_fc[d][k][p].setZero();
+             }
+        }
+    }
+
+    // Helper to generate signs {-1, 1} for tangential children
+    // Maps a linear child index 'l' to signs in the D-1 tangential dimensions
+    amrex::Vector<amrex::Vector<int>> child_signs(num_face_children);
+    
+    #if (AMREX_SPACEDIM == 1)
+        // 1D: Faces are points (0D). No tangential splitting.
+        child_signs[0] = {}; 
+    #elif (AMREX_SPACEDIM == 2)
+        // 2D: Faces are lines (1D). 2 children (Left/Right or Bottom/Top)
+        child_signs[0] = {-1}; // First child (Lower)
+        child_signs[1] = { 1}; // Second child (Upper)
+    #elif (AMREX_SPACEDIM == 3)
+        // 3D: Faces are quads (2D). 4 children.
+        // Order: (-,-), (+,-), (-,+), (+,+)
+        child_signs[0] = {-1, -1};
+        child_signs[1] = { 1, -1};
+        child_signs[2] = {-1,  1};
+        child_signs[3] = { 1,  1};
+    #endif
+
+    // Loop over Normal Directions
+    for(int d=0; d<AMREX_SPACEDIM; ++d) {
+
+        // Loop over Face Children (Tangential splits)
+        for(int l=0; l<num_face_children; ++l) {
+
+            // Tangential Shift Vector for this child
+            amrex::Vector<amrex::Real> shift(AMREX_SPACEDIM, 0.0);
+            
+            // Map the tangential signs to the correct 3D component (skipping d)
+            int t_idx = 0;
+            for(int k=0; k<AMREX_SPACEDIM; ++k) {
+                if(k == d) continue;
+                shift[k] = 0.5 * child_signs[l][t_idx];
+                t_idx++;
+            }
+
+            // --- Case 0: Fine(-) to Coarse(+) ---
+            // Fine face is at Local x_d = -1. Coarse face is at Local x_d = +1.
+            // We use 'Mkbdm' points (Minus boundary) for Fine integration.
+            for(int row=0; row<numme->basefunc->Np_s; ++row) {      // Coarse DOF
+                for(int col=0; col<numme->basefunc->Np_s; ++col) {  // Fine DOF
+                    
+                    amrex::Real sum = 0.0;
+                    for(int q=0; q<numme->quadrule->qMp_s_bd; ++q) {
+                        
+                        // 1. Get Fine Quadrature Point (on Minus face)
+                        amrex::Vector<amrex::Real> xi_fine = numme->quadrule->xi_ref_quad_s_bdm[d][q];
+
+                        // 2. Map to Coarse Coordinate System
+                        // Tangential: Scaled and Shifted. Normal: Fixed at +1 (Coarse Plus Face).
+                        amrex::Vector<amrex::Real> xi_coarse_mapped(AMREX_SPACEDIM);
+                        
+                        for(int k=0; k<AMREX_SPACEDIM; ++k) {
+                            if (k == d) {
+                                xi_coarse_mapped[k] = 1.0; // Fixed at Coarse Boundary (+)
+                            } else {
+                                // xi_fine[k] is in [-1, 1]. Map to child quadrant of [-1, 1].
+                                xi_coarse_mapped[k] = 0.5 * xi_fine[k] + shift[k]; 
+                            }
+                        }
+
+                        // 3. Integrate
+                        // numme->quadmat_bd[d][col][q] contains ( phi_fine_minus(col) * weight )
+                        // We multiply by phi_coarse evaluated at the mapped point
+                        sum += numme->quadmat_bd[d][col][q] * numme->basefunc->phi_s(row, numme->basefunc->basis_idx_s, xi_coarse_mapped);
+                    }
+                    P_flux_fc[d][l][0](row, col) = sum;
+                }
+            }
+
+            // --- Case 1: Fine(+) to Coarse(-) ---
+            // Fine face is at Local x_d = +1. Coarse face is at Local x_d = -1.
+            // We use 'Mkbdp' points (Plus boundary) for Fine integration.
+            for(int row=0; row<numme->basefunc->Np_s; ++row) {
+                for(int col=0; col<numme->basefunc->Np_s; ++col) {
+                    
+                    amrex::Real sum = 0.0;
+                    for(int q=0; q<numme->quadrule->qMp_s_bd; ++q) {
+                        
+                        amrex::Vector<amrex::Real> xi_fine = numme->quadrule->xi_ref_quad_s_bdp[d][q];
+                        amrex::Vector<amrex::Real> xi_coarse_mapped(AMREX_SPACEDIM);
+                        
+                        for(int k=0; k<AMREX_SPACEDIM; ++k) {
+                            if (k == d) {
+                                xi_coarse_mapped[k] = -1.0; // Fixed at Coarse Boundary (-)
+                            } else {
+                                xi_coarse_mapped[k] = 0.5 * xi_fine[k] + shift[k];
+                            }
+                        }
+
+                        // quadmat_bd for PLUS face? 
+                        // Assuming you have quadmat_bd_p similar to quadmat_bd (which was minus)
+                        // If not, you must compute phi_fine manually here:
+                        amrex::Real weight = numme->quad_weights_st_bd[d][q]; // Or equivalent spatial weight
+                        amrex::Real val_fine = numme->basefunc->phi_s(col, numme->basefunc->basis_idx_s, xi_fine);
+                        
+                        sum += (weight * val_fine) * numme->basefunc->phi_s(row, numme->basefunc->basis_idx_s, xi_coarse_mapped);
+                    }
+                    P_flux_fc[d][l][1](row, col) = sum;
+                }
+            }
         }
     }
 }
