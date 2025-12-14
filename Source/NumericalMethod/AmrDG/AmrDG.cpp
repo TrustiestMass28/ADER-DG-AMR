@@ -426,7 +426,7 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
     Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
     Fnum[lev][d][q].setVal(0.0);    
 
-    Fnum_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,1,0);    
+    Fnum_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
     Fnum_int[lev][d][q].setVal(0.0);    
   }
   
@@ -647,6 +647,9 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   auto _mesh = mesh.lock();
 
   amrex::Real dvol = _mesh->get_dvol(lev,d);
+  // Time: [-1, 1] -> [0, Dt]   => Factor: Dt / 2.0
+  // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
+  amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
 
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
@@ -763,7 +766,9 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         //Compute net numerical flux flowing betwene interfaces
         //I.e the time-space(bd) integrated numerical flux, for which
         //the values at quadrature points we actually just computed
-        amrex::ParallelFor(bx, [&] (int i, int j, int k) noexcept
+
+
+        amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
         {    
           amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
 
@@ -772,12 +777,13 @@ void AmrDG::numflux(int lev,int d,int M, int N,
             return; 
           }
 
-          fnum_int[q](i,j,k,0) = 0.0;
+          fnum_int[q](i,j,k,n) = 0.0;
+
           for(int m=0; m<M;++m){ //(D-1)+1
-            fnum_int[q](i,j,k,0) += fnum[q](i,j,k,m)*quad_weights_st_bd[d][m];
+            // fnum[q](i,j,k,m) holds the scalar Numerical Flux F* at this quad node
+            fnum_int[q](i,j,k,n) += fnum[q](i,j,k,m)*Mkbdm[d][n][m];
           }
-          fnum_int[q](i,j,k,0)*=(Dt/2.0);//Jacobian of temporal coordinate transform
-          fnum_int[q](i,j,k,0)*=(dvol/std::pow(2.0,AMREX_SPACEDIM-1));//Jacobian of spatial coordinate transform
+          fnum_int[q](i,j,k,n) *= jacobian;
         }); 
       }
     }

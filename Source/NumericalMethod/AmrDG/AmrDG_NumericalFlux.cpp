@@ -12,11 +12,11 @@ amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k,
 {
   
   //implementation of the numerical flux across interface
-  //---------
-  //    |        
-  //  L | R      
-  //    |
-  //---------
+  //---------------------
+  //|         |         |
+  //| idx-1 L | R  idx  | 
+  //|         |         | 
+  //---------------------
   //uL(idx) == up(idx-1)
   //uR(idx) == um(idx)
 
