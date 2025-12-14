@@ -269,6 +269,8 @@ void AmrDG::init()
   amr_interpolator->setNumericalMethod(shared_from_this());
 
   amr_interpolator->interp_proj_mat();
+
+  amr_interpolator->flux_proj_mat();
 }
 
 void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
