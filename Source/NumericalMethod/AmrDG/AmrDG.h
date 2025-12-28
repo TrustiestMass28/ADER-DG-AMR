@@ -569,9 +569,6 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
     
-    PlotFile(model_pde,U_w,n+1, t);
-
-    /*
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -613,8 +610,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
-    */
-    if(n==0){ //safety break
+    
+    if(n==1){ //safety break
       t=T+1;
     }
   }
@@ -658,11 +655,14 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
   //and then after everytime-step, sync the updated data
   auto _mesh = mesh.lock();
 
-  // Clear flux registers at beginning of timestep
-  for (int l = 1; l <= _mesh->get_finest_lev(); ++l) {
-    for(int q=0; q<Q; ++q){
-      if (flux_reg[l][q]) {
-          flux_reg[l][q]->setVal(0.0);
+  if ((_mesh->L > 1))
+  {
+    // Reset flux registers at beginning of timestep
+    for (int l = 1; l <= _mesh->get_finest_lev(); ++l) {
+      for(int q=0; q<Q; ++q){
+        if (flux_reg[l][q]) {
+            flux_reg[l][q]->setVal(0.0);
+        }
       }
     }
   }
@@ -717,67 +717,44 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       
       Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s,&(H_m[l][d]),&(H_p[l][d]),&(Fm[l][d]),&(Fp[l][d]),&(DFm[l][d]),&(DFp[l][d]));
       
-      // Store coarse and fine face integrated fluxes on coarse level
-      //The AMReX FluxRegister object already knows the exact locations of the coarse-fine interfaces. 
-      //It automatically picks out only the flux data from the faces that lie on
-      //these specific interfaces and ignores the rest.
-      //The Flux Register flux_reg[l] is stored at level l (Fine), 
-      //but it corrects the solution at level l-1 (Coarse).
+      if ((_mesh->L > 1))
+      {
+        // Store coarse and fine face integrated fluxes on coarse level
+        //The AMReX FluxRegister object already knows the exact locations of the coarse-fine interfaces. 
+        //It automatically picks out only the flux data from the faces that lie on
+        //these specific interfaces and ignores the rest.
+        //The Flux Register flux_reg[l] is stored at level l (Fine), 
+        //it stores flux mismatches between level l (fine) and level l-1 (coarse)
+        //it is then used to correct the solution at level l-1 (coarse)
 
-      //Compute the integrated projected numerical flux on b- face of current cell
-      for (int q = 0; q < Q; ++q) {
-        //The current level 'l' is the COARSE grid for the l/l+1 interface.
-        //For each fine level, store in their flux register the coarse fluxes
-        //Adds the flux from the coarse side.
-        if (l < _mesh->get_finest_lev() && flux_reg[l+1].size()) {
-          flux_reg[l+1][q]->CrseAdd(Fnum_int_c[l][d][q], d,
-                      0, 0, static_cast<int>(basefunc->Np_s),
-                      1.0, _mesh->get_Geom(l)); 
+        //Compute the integrated projected numerical flux on b- face of current cell
+        for (int q = 0; q < Q; ++q) {
+          //for each coarse level add their surface integrated numerical flux
+          //to the flux register of their immediate finer level
+          //The current level 'l' is the COARSE grid for the l/l+1 interface.
+          if (l < _mesh->get_finest_lev() && flux_reg[l+1].size()) {
+            flux_reg[l+1][q]->CrseAdd(Fnum_int_c[l][d][q], d,
+                        0, 0, static_cast<int>(basefunc->Np_s),
+                        1.0, _mesh->get_Geom(l)); 
+          }
+
+          //for each fine level add their surface integrated numerical flux
+          //to the flux register of the same fine level
+          //The current level 'l' is the FINE grid for the l-1/l interface.
+          if (l > 0 && flux_reg[l].size()) {
+            flux_reg[l][q]->FineAdd(Fnum_int_f[l][d][q], d,
+                          0, 0, static_cast<int>(basefunc->Np_s), 
+                          1.0);
+          }
         }
-
-        //The current level 'l' is the FINE grid for the l-1/l interface.
-        //For each fine level, store in their flux register the fine fluxes
-        //Adds the flux from the fine side.
-        if (l > 0 && flux_reg[l].size()) {
-          flux_reg[l][q]->FineAdd(Fnum_int_f[l][d][q], d,
-                        0, 0, static_cast<int>(basefunc->Np_s), 
-                        1.0);
-        }
-
-        //NB: in CrseAdd,FineAdd scaling factor of 1.0 implies
-        //    that Fnum_int_c and Fnum_int_f are already scaled by dt/dx
       }
     } 
-    
     //update corrector
     update_U_w(l); 
   }
-
   AMR_flux_correction();
 }
 
-  //TODO: there are two bugs left
-  //  -when computing Fnum_int we integrate it over b- boundary
-  //   but we should do it over both b- and b+. Because for each mode, the value of this integrated value
-  //    ia different depending on if we evalaute at b- or b1
-  //    If you input the exact same physical values (e.g., a constant vector of $1.0$) 
-  //    into the quadrature integration at the "boundary minus" (using Mkbdm) and the "boundary plus" 
-  //    (using Mkbdp), the resulting projected modal coefficients will differ based on the parity of 
-  //    the mode in the normal direction
-  //  -  Fnum_int is computed for each level, but we need to project fine one on coarse level before correcting and computing
-  //     the correction. Currently this is not done
-
-  /*
-  so the issue with minus and plus is that if we have a finer grid over a coarser one. On the left side, the fine-coarse 
-  interface willbe on the left of the covered coarse cell, so it will be okey there. While on right side, the fine-corse
-   itnerface will be on the right of the overlapped cell and so the correction will be incorrect there since we are correcting 
-   solution of coarse overlapped cell. 
-
-   Fortunately, the fluxes are linearly related when using Legendre basis
-   $$\mathbf{F}_{plus, k} = (-1)^k \cdot \mathbf{F}_{minus, k}$$
-   where k is the mode index in the normal direction to the face.
-   So we can compute Fnum_int on b- face and then get Fnum_int on b+ face using the above relation.
-  */
 template <typename EquationType>
 void AmrDG::flux(int lev, int d, int M,
                  const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
