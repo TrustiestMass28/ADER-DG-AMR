@@ -5,6 +5,69 @@
 
 using namespace amrex;
 
+void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
+                               const amrex::MultiFab* correction_mf,
+                               int lev,
+                               const amrex::Geometry& crse_geom) noexcept
+{
+    auto _mesh =  numme->mesh.lock();
+
+    amrex::Real vol = _mesh->get_dvol(lev);
+    amrex::Real inv_jac = std::pow(2.0, AMREX_SPACEDIM) / vol;
+
+    // Time: [-1, 1] -> [0, Dt]   => Factor: Dt / 2.0
+    // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
+    // amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
+
+    int N = numme->quadrule->qMp_1d; 
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+    {
+        for (MFIter mfi(*correction_mf, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            const Box& bx = mfi.tilebox();
+            
+            const amrex::FArrayBox * fab_corr = correction_mf->fabPtr(mfi);
+            amrex::Array4<const amrex::Real> corr = fab_corr->const_array();
+
+            amrex::FArrayBox* fab_u_crse = &(U_crse->get(mfi));
+            amrex::Array4<amrex::Real> u_crse = fab_u_crse->array();
+
+            amrex::ParallelFor(bx, [=] (int i, int j, int k) noexcept
+            {
+                Eigen::VectorXd delta_u_w(numme->basefunc->Np_s);
+                Eigen::VectorXd f_delta(numme->basefunc->Np_s);
+
+                delta_u_w.setZero();
+                f_delta.setZero();
+
+                // Load the mismatch vector directly from Reflux output
+                for(int n=0; n<numme->basefunc->Np_s; ++n){
+                    f_delta(n) = corr(i,j,k,n);
+                }
+
+                // Solve δû = (M)^{-1}f_Δ to find the modal corrections
+                // Minv is same inverse mass matrix used for classic 
+                // scatter/gather operations in DG
+                delta_u_w = inv_jac*(Minv * f_delta);
+              
+                // Update the coarse cell solution with the computed corrections
+                for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
+                    u_crse(i, j, k, n) += delta_u_w(n);
+                    //if(delta_u_w(n)!=0.0){
+                    //    amrex::Print() << "Reflux Update Cell (" << i << "," << j << "," << k << ") Mode " << n 
+                    //                  << " Delta: " << delta_u_w(n) << "\n";}
+                }
+
+                
+
+            });
+        }
+    }
+}
+
 const Eigen::MatrixXd& AmrDG::L2ProjInterp::get_flux_proj_mat(int d, int child_idx, int b) const {
     if (b == 1) {
         // Coarse cell is to the left, we need the High-side projection
@@ -13,7 +76,8 @@ const Eigen::MatrixXd& AmrDG::L2ProjInterp::get_flux_proj_mat(int d, int child_i
         // Default or Coarse cell to the right, use Low-side projection
         return P_flux_fc_low[d][child_idx];
     }
-  }
+}
+
 void AmrDG::L2ProjInterp::flux_proj_mat()
 {
     // 1. Setup dimensions
@@ -93,64 +157,6 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
                     P_flux_fc_high[d][k](r, m) = phi_c_high * w_p;
                 }
             }
-        }
-    }
-}
-
-void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
-                               const amrex::MultiFab* correction_mf,
-                               int lev,
-                               const amrex::Geometry& crse_geom) noexcept
-{
-    auto _mesh =  numme->mesh.lock();
-
-    amrex::Real vol = _mesh->get_dvol(lev);
-    amrex::Real inv_jac = std::pow(2.0, AMREX_SPACEDIM) / vol;
-
-    // Time: [-1, 1] -> [0, Dt]   => Factor: Dt / 2.0
-    // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
-   // amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
-
-    int N = numme->quadrule->qMp_1d; 
-
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-    {
-        for (MFIter mfi(*correction_mf, TilingIfNotGPU()); mfi.isValid(); ++mfi)
-        {
-            const Box& bx = mfi.tilebox();
-            
-            const amrex::FArrayBox * fab_corr = correction_mf->fabPtr(mfi);
-            amrex::Array4<const amrex::Real> corr = fab_corr->const_array();
-
-            amrex::FArrayBox* fab_u_crse = &(U_crse->get(mfi));
-            amrex::Array4<amrex::Real> u_crse = fab_u_crse->array();
-
-            amrex::ParallelFor(bx, [=] (int i, int j, int k) noexcept
-            {
-                Eigen::VectorXd delta_u_w(numme->basefunc->Np_s);
-                Eigen::VectorXd f_delta(numme->basefunc->Np_s);
-
-                delta_u_w.setZero();
-                f_delta.setZero();
-
-                // Load the mismatch vector directly from Reflux output
-                for(int n=0; n<numme->basefunc->Np_s; ++n){
-                    f_delta(n) = corr(i,j,k,n);
-                }
-
-                // Solve δû = (M)^{-1}f_Δ to find the modal corrections
-                // Minv is same inverse mass matrix used for classic 
-                // scatter/gather operations in DG
-                delta_u_w = inv_jac*(Minv * f_delta);
-              
-                // Update the coarse cell solution with the computed corrections
-                for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
-                    u_crse(i, j, k, n) += delta_u_w(n);
-                }
-
-            });
         }
     }
 }

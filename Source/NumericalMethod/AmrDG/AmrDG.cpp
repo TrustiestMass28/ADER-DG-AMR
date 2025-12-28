@@ -640,8 +640,12 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   amrex::Real dvol = _mesh->get_dvol(lev,d);
   // Time: [-1, 1] -> [0, Dt]   => Factor: Dt / 2.0
   // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
-  amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
 
+  amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
+  // Get domain to calculate relative indices
+  const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
+  const amrex::IntVect& dom_lo = domain.smallEnd();
+  
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
   amrex::Vector<amrex::MultiFab *> state_fnum_int_f(Q); 
@@ -653,6 +657,11 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   amrex::Vector<const amrex::MultiFab *> state_dfp(Q);
   amrex::Vector<const amrex::MultiFab *> state_um(Q);
   amrex::Vector<const amrex::MultiFab *> state_up(Q);
+
+  for (int q = 0; q < Q; ++q) {
+    Fnum_int_f[lev][d][q].setVal(0.0);
+    Fnum_int_c[lev][d][q].setVal(0.0);
+}
 
   for(int q=0 ; q<Q; ++q){
     state_um[q] = &((*U_ptr_m)[q]); 
@@ -752,37 +761,52 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         }
       }); 
 
-      //compute the b- faces integral evaluations of the numerical flux
-      amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
-      {    
-        amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
-        if(idx[d] == lo_idx[d]){ return;}
+      if ((_mesh->L > 1))
+      {
+        //compute the faces integral evaluations of the numerical flux
+        amrex::ParallelFor(_bx, N,[&] (int i, int j, int k, int n) noexcept
+        {    
+          amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
+          if(idx[d] == lo_idx[d]){ return;}
 
-        // We are at interface i-1/2.
-        // b = 1  => Coarse cell is at i-1 (Fine is at i). Face is HIGH/Plus side of Coarse.
-        // b = -1 => Coarse cell is at i (Fine is at i-1). Face is LOW/Minus side of Coarse.
-        int b;
-        amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
-        iv_left[d] -= 1; // Cell i-1
-        amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)}; // Cell i
+          //Set to zero before accumulation
+          for (int q = 0; q < Q; ++q) {
+            fnum_int_c[q](i,j,k,n) = 0.0;
+            fnum_int_f[q](i,j,k,n) = 0.0;
+          }
 
-        // Logic: If one neighbor is NOT in the current level's valid box, 
-        // but the other IS, we are at a coarse-fine interface.
-        bool left_is_fine  = bx.contains(iv_left);
-        bool right_is_fine = bx.contains(iv_right);
+          amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
+          iv_left[d] -= 1; // Cell i-1
+          amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)}; // Cell i
 
-        if (!left_is_fine && right_is_fine) b = 1;   // Coarse on left
-        else if (left_is_fine && !right_is_fine) b = -1; // Coarse on right
+          // Logic: If one neighbor is NOT in the current level's valid box, 
+          // but the other IS, we are at a coarse-fine interface.
 
-        //This cell might be a coarse neighbor.
-        if (lev < _mesh->get_finest_lev()) {
-            for(int q=0 ; q<Q; ++q){
-                fnum_int_c[q](i,j,k,n) = 0.0;
+          //TODO: BUG HERE IN BOOLENA LOGIC, CURRENTLY SKIPPING ALL INTERFACES
+          //ALSO CURRENTLY WORKS ONLY AT FINE LEVEL
+          /*
+          the current boolean logic is asymmetric: it assumes you’re looping over faces at a fine level, 
+          so one neighbor being outside _bx is interpreted as “fine cell”. That breaks when you’re at 
+          the coarse level, because now both neighbors may be coarse, or the face may be at a coarse-fine interface in the other direction.
+          */
+          bool left_is_fine  = _bx.contains(iv_left);
+          bool right_is_fine = _bx.contains(iv_right);
 
-                // Determine if face is Low or High relative to the coarse cell
-                // If side == 1, face is HIGH side of cell i-1
-                // If side == -1, face is LOW side of cell i
-                
+          if (left_is_fine != right_is_fine) {
+                            amrex::Print() << "Interface detected at (" << i << "," << j << "," << k 
+                               << ") : left_is_fine=" << left_is_fine 
+                               << ", right_is_fine=" << right_is_fine << "\n";
+            // Coarse-fine interface detected
+              
+            // We are at interface i-1/2.
+            // b = 1  => Coarse cell is at i-1 (Fine is at i). Face is HIGH/Plus side of Coarse.
+            // b = -1 => Coarse cell is at i (Fine is at i-1). Face is LOW/Minus side of Coarse.
+            // Exactly one side is coarse
+            int b = (!left_is_fine && right_is_fine) ? 1 : -1;
+
+            //compute coarse projection
+            if (lev < _mesh->get_finest_lev()) {
+              for(int q=0 ; q<Q; ++q){
                 for(int m=0; m<M; ++m){ 
                     if (b == 1) {
                         // High face projection
@@ -793,37 +817,35 @@ void AmrDG::numflux(int lev,int d,int M, int N,
                     }
                 }
                 fnum_int_c[q](i,j,k,n) *= jacobian;
-            }
-        }
-
-        if (lev > 0) {
-            // Get domain to calculate relative indices
-            const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
-            const amrex::IntVect& dom_lo = domain.smallEnd();
-
-            int child_idx = 0;
-            int bit_pos = 0;
-            for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-                if (dir == d) continue;
-                
-                // Correctly calculate position relative to the level domain lo
-                if ((idx[dir] - dom_lo[dir]) % 2 != 0) {
-                    child_idx |= (1 << bit_pos);
-                }
-                bit_pos++;
+              }
             }
 
-            const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, b);
+            //compute fine projection
+            if (lev > 0) {
+              int child_idx = 0;
+              int bit_pos = 0;
+              for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                  if (dir == d) continue;
+                  
+                  // Correctly calculate position relative to the level domain lo
+                  if ((idx[dir] - dom_lo[dir]) % 2 != 0) {
+                      child_idx |= (1 << bit_pos);
+                  }
+                  bit_pos++;
+              }
 
-            for(int q=0 ; q<Q; ++q) {
-                fnum_int_f[q](i,j,k,n) = 0.0;
-                for(int m=0; m<M; ++m) { 
-                    fnum_int_f[q](i,j,k,n) += P(n, m) * fnum[q](i,j,k,m);
-                }
-                fnum_int_f[q](i,j,k,n) *= jacobian;
+              const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, b);
+
+              for(int q=0 ; q<Q; ++q) {
+                  for(int m=0; m<M; ++m) { 
+                      fnum_int_f[q](i,j,k,n) += P(n, m) * fnum[q](i,j,k,m);
+                  }
+                  fnum_int_f[q](i,j,k,n) *= jacobian;
+              }
             }
-        }
-      }); 
+          }
+        }); 
+      }
     }
   }
 }
