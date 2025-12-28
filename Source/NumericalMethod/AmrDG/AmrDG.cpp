@@ -632,26 +632,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
                     amrex::Vector<amrex::MultiFab>* DF_ptr_m,
                     amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
-  /*
-  Growing the box on the lower side, and then skipping lowest index
-  during the parallel loop is done because we are iterating over mfi
-  defined based on the face centered MFab. Assuming cell centered box
-  is given by idx=0,...,N. The face centered box iter will select the 
-  cell centered MFab at indices idx=0,...,N+1. Cell N+1 is okey as it is 
-  the right ghost cell. So when computing face N+1, we will select as R state
-  the data in cell N+1.(NB: face index is at i-0.5, so always left side).
-  But when computing interface flux at idx=0, a non extended box would
-  retrieve Array4 of the cell centered MFab at idx=0 and thus
-  when computing flux at face idx=0, it would select as L state that is out
-  of bounds. By growing the box on the lower side, the face centered
-  iterator will select the cell centered MFab at idx=-1,...,N+1. And thus
-  when computing flux at face idx=0, it will select as L state the cell
-  value that is actually in cell idx=-1, i.e the left ghost cell and thus in
-  the selected iteration bounds.
-  We then ahve to skip in the parallel loop the lowest idx=-1 to avoid because that itnerface
-  value cannot be computed.
-  TLDR: it is done such that when we iterate, we select valid portison fo celle centered mfab
-  */
+ 
   auto _mesh = mesh.lock();
 
   amrex::Real dvol = _mesh->get_dvol(lev,d);
@@ -721,15 +702,13 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       for (MFIter mfi(*(state_fnum[0]), true); mfi.isValid(); ++mfi)
   #endif
     {
-      //externally grown tilebox
-
-      //grow the box only in the high-end along dimension d
-      //can be done because each MPI process has up-to date values of outer and inner ghost cells
-      //which are used only to compute the fluxes that will impact the tilebox (ot grown) of that 
-      //process
-
-
+      //Consider cell centered (valid) box [0,N] in each direction.
+      //MFiter defined over face centered MultiFab with valid box
+      //[0,N+1] in each direction (Face centered box has no ghost cells)
       const amrex::Box& _bx = mfi.tilebox();
+
+      //Grow the box on the lower side to be able to access the left ghost cell
+      //This make the box become [-1,N+1] in each direction
       amrex::Box bx = amrex::growLo(_bx, d, 1);
 
       //Get the LOCAL box limits for this specific rank/tile
@@ -763,69 +742,83 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
       {
         amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
+        if(idx[d] == lo_idx[d]){ return;}
 
-        if(idx[d] == lo_idx[d])
-        {
-          return; // Skip this index if it's on any boundary
-        }
         //check which indices it iterate across, i.e if last one is reachd
         for(int q=0 ; q<Q; ++q){
           fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
         }
       }); 
 
+      //compute the b- faces integral evaluations of the numerical flux
       amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
       {    
         amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
+        if(idx[d] == lo_idx[d]){ return;}
 
-        if(idx[d] == lo_idx[d])
-        {
-          return; 
-        }
+        // We are at interface i-1/2.
+        // b = 1  => Coarse cell is at i-1 (Fine is at i). Face is HIGH/Plus side of Coarse.
+        // b = -1 => Coarse cell is at i (Fine is at i-1). Face is LOW/Minus side of Coarse.
+        int b = 0; 
+        amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
+        iv_left[d] -= 1; // Cell i-1
+        amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)}; // Cell i
 
-        //Integrate the numerical flux at each quadrature node
-        //for each interface at index idx-1/2 along dimension d
-        //i.e the b- face for cell at idx 
-        
+        // Logic: If one neighbor is NOT in the current level's valid box, 
+        // but the other IS, we are at a coarse-fine interface.
+        bool left_is_fine  = bx.contains(iv_left);
+        bool right_is_fine = bx.contains(iv_right);
+
+        if (!left_is_fine && right_is_fine) b = 1;   // Coarse on left
+        else if (left_is_fine && !right_is_fine) b = -1; // Coarse on right
+
+        //This cell might be a coarse neighbor.
         if (lev < _mesh->get_finest_lev()) {
-          for(int q=0 ; q<Q; ++q){
-            //Coarse
-            fnum_int_c[q](i,j,k,n) = 0.0;
+            for(int q=0 ; q<Q; ++q){
+                fnum_int_c[q](i,j,k,n) = 0.0;
 
-            for(int m=0; m<M;++m){ //(D-1)+1
-              // fnum[q](i,j,k,m) holds the scalar Numerical Flux F* at this quad node
-              fnum_int_c[q](i,j,k,n) += fnum[q](i,j,k,m)*Mkbdm[d][n][m];
+                // Determine if face is Low or High relative to the coarse cell
+                // If side == 1, face is HIGH side of cell i-1
+                // If side == -1, face is LOW side of cell i
+                
+                for(int m=0; m<M; ++m){ 
+                    if (b == 1) {
+                        // High face projection
+                        fnum_int_c[q](i,j,k,n) += fnum[q](i,j,k,m) * Mkbdp[d][n][m];
+                    } else {
+                        // Low face (default) projection
+                        fnum_int_c[q](i,j,k,n) += fnum[q](i,j,k,m) * Mkbdm[d][n][m];
+                    }
+                }
+                fnum_int_c[q](i,j,k,n) *= jacobian;
             }
-            fnum_int_c[q](i,j,k,n) *= jacobian;
-          }
         }
 
+        //This cell might be a fine neighbor.
         if (lev > 0) {
-           // Calculate Child Index
-           int child_idx = 0;
-           int bit_pos = 0;
-           for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-               if (dir == d) continue;
-               //Assume ref ratio of 2
-               if (idx[dir] % 2 != 0) child_idx |= (1 << bit_pos);
-               bit_pos++;
-           }
+          // Calculate Child Index
+          int child_idx = 0;
+          int bit_pos = 0;
+          for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+              if (dir == d) continue;
+              //Assume ref ratio of 2
+              if (idx[dir] % 2 != 0) child_idx |= (1 << bit_pos);
+              bit_pos++;
+          }
 
-           // Access the matrix: P_flux_fc[Direction][ChildIndex]
-           // This returns "const Eigen::MatrixXd&"
-           const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx);
+          // Select matrix based on which side the coarse cell is!
+          // If side == 0, this isn't a coarse-fine boundary, but we fill it anyway
+          // for safety or internal level synchronization.
+          int side_param = (b == 0) ? -1 : b; 
+          const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, side_param);
 
-           for(int q=0 ; q<Q; ++q){
-             fnum_int_f[q](i,j,k,n) = 0.0;
-
-             // Perform Matrix-Vector product manually
-             // Vector(n) += Matrix(n, m) * Vector(m)
-             for(int m=0; m<M; ++m){ 
-                fnum_int_f[q](i,j,k,n) += P(n, m) * fnum[q](i,j,k,m);
-             }
-             
-             fnum_int_f[q](i,j,k,n) *= jacobian;
-           }
+          for(int q=0 ; q<Q; ++q) {
+              fnum_int_f[q](i,j,k,n) = 0.0;
+              for(int m=0; m<M; ++m) { 
+                  fnum_int_f[q](i,j,k,n) += P(n, m) * fnum[q](i,j,k,m);
+              }
+              fnum_int_f[q](i,j,k,n) *= jacobian;
+          }
         }
       }); 
     }

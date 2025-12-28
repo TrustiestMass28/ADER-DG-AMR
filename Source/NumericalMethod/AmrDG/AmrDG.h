@@ -257,7 +257,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         void amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
                         Array4<Real> const& crse, int ccomp, int ncomp, IntVect const& ratio ) noexcept;
 
-        const Eigen::MatrixXd& get_flux_proj_mat(int d, int child_idx) const ;
+        const Eigen::MatrixXd& get_flux_proj_mat(int d, int child_idx, int b) const ;
 
         void reflux(amrex::MultiFab* U_crse, const amrex::MultiFab* correction_mf,
                     int lev, const amrex::Geometry& crse_geom) noexcept;
@@ -293,10 +293,11 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         amrex::Vector<Eigen::MatrixXd> P_fc;      
 
-        // [Dim][Child_Face_Idx][Polarity]
-        // Polarity 0: Fine(-) to Coarse(+)  (e.g., Left side of Fine Patch -> Right side of Coarse neighbor)
-        // Polarity 1: Fine(+) to Coarse(-)  (e.g., Right side of Fine Patch -> Left side of Coarse neighbor)
-        amrex::Vector<amrex::Vector<Eigen::MatrixXd>> P_flux_fc;
+        // Matrices for projecting fine fluxes onto the COARSE LOW interface (xi = -1)
+        amrex::Vector<amrex::Vector<Eigen::MatrixXd>> P_flux_fc_low;
+
+        // Matrices for projecting fine fluxes onto the COARSE HIGH interface (xi = +1)
+        amrex::Vector<amrex::Vector<Eigen::MatrixXd>> P_flux_fc_high;
 
         Eigen::MatrixXd M;
 
@@ -601,8 +602,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
     dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
     //use as tolerance dt_outplt, i.e same order of magnitude
-    if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
-    else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
+    if(dtn_plt){PlotFile(model_pde,U_w,n, t,0);}
+    else if(dt_plt){PlotFile(model_pde,U_w,n, t,0);}
 
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
@@ -722,6 +723,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       for (int q = 0; q < Q; ++q) {
         //The current level 'l' is the COARSE grid for the l/l+1 interface.
         //For each fine level, store in their flux register the coarse fluxes
+        //Adds the flux from the coarse side.
         if (l < _mesh->get_finest_lev() && flux_reg[l+1].size()) {
           flux_reg[l+1][q]->CrseAdd(Fnum_int_c[l][d][q], d,
                       0, 0, static_cast<int>(basefunc->Np_s),
@@ -730,11 +732,15 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
         //The current level 'l' is the FINE grid for the l-1/l interface.
         //For each fine level, store in their flux register the fine fluxes
+        //Adds the flux from the fine side.
         if (l > 0 && flux_reg[l].size()) {
           flux_reg[l][q]->FineAdd(Fnum_int_f[l][d][q], d,
                         0, 0, static_cast<int>(basefunc->Np_s), 
                         1.0);
         }
+
+        //NB: in CrseAdd,FineAdd scaling factor of 1.0 implies
+        //    that Fnum_int_c and Fnum_int_f are already scaled by dt/dx
       }
     } 
     
