@@ -261,35 +261,28 @@ void AmrDG::AMR_flux_correction()
 
         for(int q=0; q<Q; ++q){ 
             if (flux_reg[l][q]) {
-                // 1. Get the flux mismatch DeltaF for each coarse cell at level l-1.
+                // Get the flux mismatch DeltaF for each coarse cell at level l-1.
                 amrex::MultiFab correction_mf(U_w[l-1][q].boxArray(), 
                                               U_w[l-1][q].DistributionMap(), 
                                               basefunc->Np_s, 0);
                 correction_mf.setVal(0.0);
 
-                // 2. Define a dummy "Volume" MultiFab set to 1.0 (to prevent division by volume)
+                // Define a dummy "Volume" MultiFab set to 1.0 (to prevent division by volume)
                 amrex::MultiFab dummy_vol(U_w[l-1][q].boxArray(), 
                                           U_w[l-1][q].DistributionMap(), 
                                           1, 0);
                 dummy_vol.setVal(1.0);
                 
                 // IMPORTANT ASSUMPTION FOR SCALING: 
-                // We use Reflux(..., 1.0, ...) to signal that the input data 
-                // (Fnum_int_f/c) already includes the time step and face area scaling.
-                
-                // Accumulate the TOTAL flux mismatch (Fc - Ff) * phi_n
-                // This call iterates over all faces (Low and High) and all directions (d) 
-                // along the coarse/fine interface, accumulating the result into correction_mf.
-                // We pass 1.0 as the scaling factor, *assuming* the input flux data 
-                // already has the correct time and area factors.
-                // NOTE: This call only works if your FluxRegister was initialized 
-                // to handle all components (0 to basefunc->Np_s-1).
+
+                // Reflux identifies cells in l-1 that touch level l
+                //Computes $\Delta F = \frac{1}{V} \int (F_{face, coarse} - F_{face, fine}) dt dA$.
+                //$$\Delta F = \frac{1}{V_{coarse}} \sum (F_{fine} \cdot dt_f \cdot A_f) - (F_{coarse} \cdot dt_c \cdot A_c)$$
                 flux_reg[l][q]->Reflux(correction_mf, dummy_vol, 
                                        1.0, 0, 0, basefunc->Np_s, 
                                        _mesh->get_Geom(l-1));
 
-                // 3. Call the DG-specific reflux function to project the
-                // scalar mismatch onto the basis functions and update the solution.
+                // reflux() updates U_w[l-1] (the coarse level)
                 amr_interpolator->reflux(&(U_w[l-1][q]),      // Coarse level solution to be corrected
                                          &(correction_mf),     // The total accumulated mismatch ΔF
                                          l-1,                  // The coarse level index

@@ -20,6 +20,8 @@ amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k,
   //uL(idx) == up(idx-1)
   //uR(idx) == um(idx)
 
+  //NB: computes normal flux in the positive d-direction
+
   amrex::Real C;
   int shift[] = {0,0,0};
   amrex::Real uR,uL,fR,fL,DfR,DfL;

@@ -176,7 +176,7 @@ class Solver
         template <typename EquationType>
         void PlotFile(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                                                     amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
-                                                    int tstep, amrex::Real time) const;
+                                                    int tstep, amrex::Real time, int level = -1) const;
                                                 
         //Apply boundary conditions by calling BC methods
         template <typename EquationType>
@@ -863,7 +863,56 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                                             amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
-                                            int tstep, amrex::Real time) const
+                                            int tstep, amrex::Real time, 
+                                            int level) const 
+{   
+    auto varNames = model_pde->getModelVarNames();
+    auto _mesh = mesh.lock();
+    
+    // Determine bounds based on the 'level' argument
+    int start_lev = (level < 0) ? 0 : level;
+    int end_lev   = (level < 0) ? _mesh->get_finest_lev() : level;
+    int num_levs  = end_lev - start_lev + 1;
+
+    for(int q = 0; q < Q; ++q) {
+        amrex::Vector<std::string> plot_var_name;
+        int nComp = X[0][q].nComp();
+        for(int m = 0; m < nComp; ++m) {
+            plot_var_name.push_back(varNames.names[q] + "_" + std::to_string(m));
+        }
+
+        // Keep your original naming convention
+        std::string pltfile_name = "../Results/Simulation Data/" + out_name_prefix + "_" + 
+                                   std::to_string(tstep) + "_q_" + std::to_string(q) + "_plt";
+
+        // Containers for the writer
+        amrex::Vector<const amrex::MultiFab*> mf_out;
+        amrex::Vector<amrex::Geometry> geom_out;
+        amrex::Vector<int> lvl_tstep;
+        amrex::Vector<amrex::IntVect> ref_ratio;
+
+        // Build vectors only for the levels we want
+        for (int l = start_lev; l <= end_lev; ++l) {
+            mf_out.push_back(&X[l][q]);
+            geom_out.push_back(_mesh->get_Geom(l));
+            lvl_tstep.push_back(tstep);
+            if (l < end_lev) {
+                ref_ratio.push_back(_mesh->get_refRatio(l));
+            }
+        }
+
+        // Use the MultiLevel writer for both cases to keep naming/structure identical
+        amrex::WriteMultiLevelPlotfile(pltfile_name, num_levs, mf_out, plot_var_name,
+                                       geom_out, time, lvl_tstep, ref_ratio);
+    }
+}
+
+/*
+template <typename NumericalMethodType>
+template <typename EquationType>
+void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                                            amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
+                                            int tstep, amrex::Real time, int level = -1) const
 {   
 
     auto varNames = model_pde->getModelVarNames();
@@ -913,6 +962,6 @@ void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<E
                                 _mesh->get_Geom(), time, lvl_tstep, _mesh->get_refRatio());
     }
     
-} 
+} */
 
 #endif 
