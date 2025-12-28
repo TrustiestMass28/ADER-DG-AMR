@@ -156,8 +156,8 @@ void AmrDG::set_ref_element_matrix()
         }
       }
 
-      //as convention use points and weights at the minus boundary bd_m
-      quad_weights_st_bd[d][i] = wm;
+      quad_weights_st_bdm[d][i] = wm;
+      quad_weights_st_bdp[d][i] = wp;
 
       for(int j=0; j<basefunc->Np_s;++j){
         Mkbdm[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdm[d][i])*wm;

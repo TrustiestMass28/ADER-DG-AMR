@@ -358,7 +358,9 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     
     amrex::Vector<amrex::Vector<std::unique_ptr<amrex::FluxRegister>>> flux_reg;
 
-    amrex::Vector<amrex::Vector<amrex::Real>> quad_weights_st_bd;
+    amrex::Vector<amrex::Vector<amrex::Real>> quad_weights_st_bdm;
+
+    amrex::Vector<amrex::Vector<amrex::Real>> quad_weights_st_bdp;
 
     //Vandermonde matrix
     amrex::Vector<amrex::Vector<amrex::Real>> V;
@@ -567,6 +569,9 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
     
+    PlotFile(model_pde,U_w,n+1, t);
+
+    /*
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -602,14 +607,14 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
     dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
     //use as tolerance dt_outplt, i.e same order of magnitude
-    if(dtn_plt){PlotFile(model_pde,U_w,n, t,0);}
-    else if(dt_plt){PlotFile(model_pde,U_w,n, t,0);}
+    if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
+    else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
 
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
-    
-    if(n==1){ //safety break
+    */
+    if(n==0){ //safety break
       t=T+1;
     }
   }
