@@ -35,5 +35,5 @@ amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k,
   DfR = dfm(i,j,k,m);     
   C = (amrex::Real)std::max((amrex::Real)std::abs(DfL),(amrex::Real)std::abs(DfR));
 
-  return 0.5*(fL+fR)-0.5*C*(uR-uL);  
+  return 0.5*((fL+fR)-C*(uR-uL));  
 }

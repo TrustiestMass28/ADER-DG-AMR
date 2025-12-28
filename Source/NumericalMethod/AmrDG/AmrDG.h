@@ -257,9 +257,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         void amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
                         Array4<Real> const& crse, int ccomp, int ncomp, IntVect const& ratio ) noexcept;
 
-        void average_down_flux(amrex::MultiFab& flux_fine, 
-                              int d) noexcept;
-
+        const Eigen::MatrixXd& get_flux_proj_mat(int d, int child_idx) const ;
 
         void reflux(amrex::MultiFab* U_crse, const amrex::MultiFab* correction_mf,
                     int lev, const amrex::Geometry& crse_geom) noexcept;
@@ -298,7 +296,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         // [Dim][Child_Face_Idx][Polarity]
         // Polarity 0: Fine(-) to Coarse(+)  (e.g., Left side of Fine Patch -> Right side of Coarse neighbor)
         // Polarity 1: Fine(+) to Coarse(-)  (e.g., Right side of Fine Patch -> Left side of Coarse neighbor)
-        amrex::Vector<amrex::Vector<amrex::Vector<Eigen::MatrixXd>>> P_flux_fc;
+        amrex::Vector<amrex::Vector<Eigen::MatrixXd>> P_flux_fc;
 
         Eigen::MatrixXd M;
 
@@ -549,7 +547,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
 
     //Remake existing levels and create new fine levels from coarse
-    if ((_mesh->L > 1) && (n == 0))
+    if ((_mesh->L > 1))
     {
       if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
         //TODO: adapt boolena condition to handle physical time
@@ -720,13 +718,12 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       //The Flux Register flux_reg[l] is stored at level l (Fine), 
       //but it corrects the solution at level l-1 (Coarse).
 
-
       //Compute the integrated projected numerical flux on b- face of current cell
       for (int q = 0; q < Q; ++q) {
         //The current level 'l' is the COARSE grid for the l/l+1 interface.
         //For each fine level, store in their flux register the coarse fluxes
         if (l < _mesh->get_finest_lev() && flux_reg[l+1].size()) {
-          flux_reg[l+1][q]->CrseAdd(Fnum_int[l][d][q], d,
+          flux_reg[l+1][q]->CrseAdd(Fnum_int_c[l][d][q], d,
                       0, 0, static_cast<int>(basefunc->Np_s),
                       1.0, _mesh->get_Geom(l)); 
         }
@@ -734,8 +731,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
         //The current level 'l' is the FINE grid for the l-1/l interface.
         //For each fine level, store in their flux register the fine fluxes
         if (l > 0 && flux_reg[l].size()) {
-          amr_interpolator->average_down_flux(Fnum_int[l][d][q], d);
-          flux_reg[l][q]->FineAdd(Fnum_int[l][d][q], d,
+          flux_reg[l][q]->FineAdd(Fnum_int_f[l][d][q], d,
                         0, 0, static_cast<int>(basefunc->Np_s), 
                         1.0);
         }
@@ -747,6 +743,8 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
   }
 
   AMR_flux_correction();
+}
+
   //TODO: there are two bugs left
   //  -when computing Fnum_int we integrate it over b- boundary
   //   but we should do it over both b- and b+. Because for each mode, the value of this integrated value
@@ -769,8 +767,6 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
    where k is the mode index in the normal direction to the face.
    So we can compute Fnum_int on b- face and then get Fnum_int on b+ face using the above relation.
   */
-}
-
 template <typename EquationType>
 void AmrDG::flux(int lev, int d, int M,
                  const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
