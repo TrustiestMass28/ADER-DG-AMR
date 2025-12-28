@@ -158,7 +158,8 @@ void AmrDG::init()
   DFp.resize(_mesh->L);
 
   Fnum.resize(_mesh->L);
-  Fnum_int.resize(_mesh->L);
+  Fnum_int_f.resize(_mesh->L);
+  Fnum_int_c.resize(_mesh->L);
 
 
   H_w.resize(_mesh->L); 
@@ -328,7 +329,8 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
   DFp[lev].resize(AMREX_SPACEDIM);
 
   Fnum[lev].resize(AMREX_SPACEDIM);
-  Fnum_int[lev].resize(AMREX_SPACEDIM);
+  Fnum_int_f[lev].resize(AMREX_SPACEDIM);
+  Fnum_int_c[lev].resize(AMREX_SPACEDIM);
 
 
   for(int d=0; d<AMREX_SPACEDIM; ++d){
@@ -339,7 +341,8 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
     DFm[lev][d].resize(Q);
     DFp[lev][d].resize(Q);
     Fnum[lev][d].resize(Q);
-    Fnum_int[lev][d].resize(Q);
+    Fnum_int_f[lev][d].resize(Q);
+    Fnum_int_c[lev][d].resize(Q);
 
     H_p[lev][d].resize(Q);
     H_m[lev][d].resize(Q);
@@ -428,8 +431,11 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
     Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
     Fnum[lev][d][q].setVal(0.0);    
 
-    Fnum_int[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
-    Fnum_int[lev][d][q].setVal(0.0);    
+    Fnum_int_f[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
+    Fnum_int_f[lev][d][q].setVal(0.0);    
+
+    Fnum_int_c[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
+    Fnum_int_c[lev][d][q].setVal(0.0);    
   }
   
   // Add verification that all data structures are properly defined
@@ -655,7 +661,8 @@ void AmrDG::numflux(int lev,int d,int M, int N,
 
   //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
-  amrex::Vector<amrex::MultiFab *> state_fnum_int(Q); 
+  amrex::Vector<amrex::MultiFab *> state_fnum_int_f(Q); 
+  amrex::Vector<amrex::MultiFab *> state_fnum_int_c(Q); 
   
   amrex::Vector<const amrex::MultiFab *> state_fm(Q);
   amrex::Vector<const amrex::MultiFab *> state_fp(Q); 
@@ -677,7 +684,8 @@ void AmrDG::numflux(int lev,int d,int M, int N,
     //TODO: should be passed as argument?
     state_fnum[q] = &(Fnum[lev][d][q]); 
 
-    state_fnum_int[q] = &(Fnum_int[lev][d][q]);  
+    state_fnum_int_f[q] = &(Fnum_int_f[lev][d][q]);  
+    state_fnum_int_c[q] = &(Fnum_int_c[lev][d][q]);
   }
 
 #ifdef AMREX_USE_OMP
@@ -687,8 +695,11 @@ void AmrDG::numflux(int lev,int d,int M, int N,
     amrex::Vector<amrex::FArrayBox *> fab_fnum(Q);
     amrex::Vector< amrex::Array4<amrex::Real> > fnum(Q);
 
-    amrex::Vector<amrex::FArrayBox *> fab_fnum_int(Q);
-    amrex::Vector< amrex::Array4<amrex::Real> > fnum_int(Q);
+    amrex::Vector<amrex::FArrayBox *> fab_fnum_int_f(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnum_int_f(Q);
+
+    amrex::Vector<amrex::FArrayBox *> fab_fnum_int_c(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnum_int_c(Q);
 
     
     amrex::Vector<const amrex::FArrayBox *> fab_fm(Q);
@@ -711,12 +722,12 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   #endif
     {
       //externally grown tilebox
-      //const amrex::Box& bx = mfi.tilebox();
+
       //grow the box only in the high-end along dimension d
       //can be done because each MPI process has up-to date values of outer and inner ghost cells
       //which are used only to compute the fluxes that will impact the tilebox (ot grown) of that 
       //process
-      //amrex::Box ibx = amrex::growHi(bx, d, 1);
+
 
       const amrex::Box& _bx = mfi.tilebox();
       amrex::Box bx = amrex::growLo(_bx, d, 1);
@@ -726,7 +737,8 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       
       for(int q=0 ; q<Q; ++q){
         fab_fnum[q]=&(state_fnum[q]->get(mfi));
-        fab_fnum_int[q]=&(state_fnum_int[q]->get(mfi));
+        fab_fnum_int_f[q]=&(state_fnum_int_f[q]->get(mfi));
+        fab_fnum_int_c[q]=&(state_fnum_int_c[q]->get(mfi));
   
         fab_fm[q] = state_fm[q]->fabPtr(mfi);
         fab_fp[q] = state_fp[q]->fabPtr(mfi);
@@ -736,7 +748,8 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         fab_up[q] = state_up[q]->fabPtr(mfi);
         
         fnum[q]=fab_fnum[q]->array();
-        fnum_int[q]=fab_fnum_int[q]->array();
+        fnum_int_f[q]=fab_fnum_int_f[q]->array();
+        fnum_int_c[q]=fab_fnum_int_c[q]->array();
 
         fm[q] = fab_fm[q]->const_array();
         fp[q] = fab_fp[q]->const_array();
@@ -746,48 +759,75 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         up[q] = fab_up[q]->const_array();
       }
             
-      for(int q=0 ; q<Q; ++q){
-        //compute the pointwise evaluations of the numerical flux
-        amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
+      //compute the pointwise evaluations of the numerical flux
+      amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
+      {
+        amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
+
+        if(idx[d] == lo_idx[d])
         {
-          amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
-
-          if(idx[d] == lo_idx[d])
-          {
-            return; // Skip this index if it's on any boundary
-          }
-          //check which indices it iterate across, i.e if last one is reachd
+          return; // Skip this index if it's on any boundary
+        }
+        //check which indices it iterate across, i.e if last one is reachd
+        for(int q=0 ; q<Q; ++q){
           fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
-        }); 
+        }
+      }); 
 
-        /*temporal and spatial integration of numerical fluxes
-        ıssue is that the numerical fluxes are computed at quadrature points
-        defined on reference element [-1,1]x[-1,1]...x[-1,1]x[-1,1] (D space + 1 time)
-        but the quadrature weights used are defined on [0,Dt]x[0,dx]...x[0,dx]x[0,dx]
-        thus the Jacobian of the transformation from reference to physical element is not taken into account*/
-        //Compute net numerical flux flowing betwene interfaces
-        //I.e the time-space(bd) integrated numerical flux, for which
-        //the values at quadrature points we actually just computed
+      amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
+      {    
+        amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
 
+        if(idx[d] == lo_idx[d])
+        {
+          return; 
+        }
 
-        amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
-        {    
-          amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
+        //Integrate the numerical flux at each quadrature node
+        //for each interface at index idx-1/2 along dimension d
+        //i.e the b- face for cell at idx 
+        
+        if (lev < _mesh->get_finest_lev()) {
+          for(int q=0 ; q<Q; ++q){
+            //Coarse
+            fnum_int_c[q](i,j,k,n) = 0.0;
 
-          if(idx[d] == lo_idx[d])
-          {
-            return; 
+            for(int m=0; m<M;++m){ //(D-1)+1
+              // fnum[q](i,j,k,m) holds the scalar Numerical Flux F* at this quad node
+              fnum_int_c[q](i,j,k,n) += fnum[q](i,j,k,m)*Mkbdm[d][n][m];
+            }
+            fnum_int_c[q](i,j,k,n) *= jacobian;
           }
+        }
 
-          fnum_int[q](i,j,k,n) = 0.0;
+        if (lev > 0) {
+           // Calculate Child Index
+           int child_idx = 0;
+           int bit_pos = 0;
+           for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+               if (dir == d) continue;
+               //Assume ref ratio of 2
+               if (idx[dir] % 2 != 0) child_idx |= (1 << bit_pos);
+               bit_pos++;
+           }
 
-          for(int m=0; m<M;++m){ //(D-1)+1
-            // fnum[q](i,j,k,m) holds the scalar Numerical Flux F* at this quad node
-            fnum_int[q](i,j,k,n) += fnum[q](i,j,k,m)*Mkbdm[d][n][m];
-          }
-          fnum_int[q](i,j,k,n) *= jacobian;
-        }); 
-      }
+           // Access the matrix: P_flux_fc[Direction][ChildIndex]
+           // This returns "const Eigen::MatrixXd&"
+           const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx);
+
+           for(int q=0 ; q<Q; ++q){
+             fnum_int_f[q](i,j,k,n) = 0.0;
+
+             // Perform Matrix-Vector product manually
+             // Vector(n) += Matrix(n, m) * Vector(m)
+             for(int m=0; m<M; ++m){ 
+                fnum_int_f[q](i,j,k,n) += P(n, m) * fnum[q](i,j,k,m);
+             }
+             
+             fnum_int_f[q](i,j,k,n) *= jacobian;
+           }
+        }
+      }); 
     }
   }
 }
