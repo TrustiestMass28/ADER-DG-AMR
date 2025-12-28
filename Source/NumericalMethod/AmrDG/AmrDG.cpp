@@ -233,7 +233,9 @@ void AmrDG::init()
                 amrex::Vector<amrex::Real>(quadrule->qMp_s_bd)));  
 
   //Initialize quadrature weights for cell faces st quadratures 
-  quad_weights_st_bd.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));  
+  quad_weights_st_bdm.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));  
+
+  quad_weights_st_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));  
 
   //Initialize generalized Element matrices for ADER-DG corrector
   Mk_corr.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(basefunc->Np_s));
@@ -759,7 +761,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         // We are at interface i-1/2.
         // b = 1  => Coarse cell is at i-1 (Fine is at i). Face is HIGH/Plus side of Coarse.
         // b = -1 => Coarse cell is at i (Fine is at i-1). Face is LOW/Minus side of Coarse.
-        int b = 0; 
+        int b;
         amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
         iv_left[d] -= 1; // Cell i-1
         amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)}; // Cell i
@@ -794,31 +796,32 @@ void AmrDG::numflux(int lev,int d,int M, int N,
             }
         }
 
-        //This cell might be a fine neighbor.
         if (lev > 0) {
-          // Calculate Child Index
-          int child_idx = 0;
-          int bit_pos = 0;
-          for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-              if (dir == d) continue;
-              //Assume ref ratio of 2
-              if (idx[dir] % 2 != 0) child_idx |= (1 << bit_pos);
-              bit_pos++;
-          }
+            // Get domain to calculate relative indices
+            const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
+            const amrex::IntVect& dom_lo = domain.smallEnd();
 
-          // Select matrix based on which side the coarse cell is!
-          // If side == 0, this isn't a coarse-fine boundary, but we fill it anyway
-          // for safety or internal level synchronization.
-          int side_param = (b == 0) ? -1 : b; 
-          const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, side_param);
+            int child_idx = 0;
+            int bit_pos = 0;
+            for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                if (dir == d) continue;
+                
+                // Correctly calculate position relative to the level domain lo
+                if ((idx[dir] - dom_lo[dir]) % 2 != 0) {
+                    child_idx |= (1 << bit_pos);
+                }
+                bit_pos++;
+            }
 
-          for(int q=0 ; q<Q; ++q) {
-              fnum_int_f[q](i,j,k,n) = 0.0;
-              for(int m=0; m<M; ++m) { 
-                  fnum_int_f[q](i,j,k,n) += P(n, m) * fnum[q](i,j,k,m);
-              }
-              fnum_int_f[q](i,j,k,n) *= jacobian;
-          }
+            const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, b);
+
+            for(int q=0 ; q<Q; ++q) {
+                fnum_int_f[q](i,j,k,n) = 0.0;
+                for(int m=0; m<M; ++m) { 
+                    fnum_int_f[q](i,j,k,n) += P(n, m) * fnum[q](i,j,k,m);
+                }
+                fnum_int_f[q](i,j,k,n) *= jacobian;
+            }
         }
       }); 
     }

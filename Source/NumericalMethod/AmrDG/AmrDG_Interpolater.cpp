@@ -85,11 +85,12 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
                     amrex::Real phi_c_high = numme->basefunc->phi_s(r, numme->basefunc->basis_idx_s, xi_c_high);
                     
                     // Get Fine Weight
-                    amrex::Real w_f = numme->quad_weights_st_bd[d][m];
+                    amrex::Real w_m = numme->quad_weights_st_bdm[d][m];
+                    amrex::Real w_p = numme->quad_weights_st_bdp[d][m];
                     
                     // --- C. Assignment ---
-                    P_flux_fc_low[d][k](r, m)  = phi_c_low  * w_f;
-                    P_flux_fc_high[d][k](r, m) = phi_c_high * w_f;
+                    P_flux_fc_low[d][k](r, m)  = phi_c_low  * w_m;
+                    P_flux_fc_high[d][k](r, m) = phi_c_high * w_p;
                 }
             }
         }
