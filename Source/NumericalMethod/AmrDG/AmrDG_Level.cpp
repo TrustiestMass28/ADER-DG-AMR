@@ -225,29 +225,61 @@ void AmrDG::AMR_average_fine_coarse()
 
 void AmrDG::AMR_set_flux_registers()
 {
-  auto _mesh = mesh.lock();
+    auto _mesh = mesh.lock();
 
-  flux_reg.resize(_mesh->get_finest_lev()+1);
-  //The flux register's job is to manage the flux exchange at the coarse-fine interface between two adjacent levels
+    flux_reg.resize(_mesh->get_finest_lev() + 1);
+    coarse_fine_interface_mask.resize(_mesh->get_finest_lev() + 1);
 
-  // Resizing to Q will fill this level with 'nullptr' (empty unique_ptrs)
-  // This ensures flux_reg[0] exists and has the correct size, but holds no data.
-  flux_reg[0].resize(Q); 
-  
-  //FluxRegister at level $l$ is used to synchronize the interface between level 
-  //$l$ and level $l-1$ (the coarse-fine interface).
-  for (int lev = 1; lev <=_mesh->get_finest_lev(); ++lev) {
-    flux_reg[lev].resize(Q);
-    for(int q=0; q<Q; ++q){  
-      flux_reg[lev][q] = std::make_unique<amrex::FluxRegister>(
-          U_w[lev][q].boxArray(),
-          U_w[lev][q].DistributionMap(),
-          _mesh->get_refRatio(lev-1),
-          lev,
-          basefunc->Np_s  // Number of components per equation
-      );
+    flux_reg[0].resize(Q); 
+    
+    for (int lev = 0; lev <= _mesh->get_finest_lev(); ++lev) {
+        coarse_fine_interface_mask[lev].resize(Q);
+
+        // Create a temporary mask for this level hierarchy
+        amrex::iMultiFab level_mask;
+        if (lev < _mesh->get_finest_lev()) {
+            // Identifies where cells at 'lev' are covered by 'lev+1'
+            level_mask = amrex::makeFineMask(
+                _mesh->get_BoxArray(lev), 
+                _mesh->get_DistributionMap(lev), 
+                _mesh->get_BoxArray(lev+1), 
+                _mesh->get_refRatio(lev), 
+                1, 0);
+        } else {
+            // Finest level: no fine cells above it
+            level_mask.define(_mesh->get_BoxArray(lev), 
+                              _mesh->get_DistributionMap(lev), 1, 0);
+            level_mask.setVal(0);
+        }
+
+        // Distribute the mask to each component with the correct ghost cells
+        for (int q = 0; q < Q; ++q) {
+            coarse_fine_interface_mask[lev][q].define(
+                _mesh->get_BoxArray(lev), 
+                _mesh->get_DistributionMap(lev), 
+                1, _mesh->nghost); // Use _mesh->nghost here
+
+            // Copy valid data from level_mask to the component mask
+            coarse_fine_interface_mask[lev][q].ParallelCopy(level_mask, 0, 0, 1);
+            
+            // Fill ghost cells so neighbor checks (i-1) work at patch boundaries
+            coarse_fine_interface_mask[lev][q].FillBoundary(_mesh->get_Geom(lev).periodicity());
+        }
+
+        // Set up FluxRegisters for synchronization with the level below
+        if (lev > 0) {
+            flux_reg[lev].resize(Q);
+            for(int q=0; q<Q; ++q){  
+                flux_reg[lev][q] = std::make_unique<amrex::FluxRegister>(
+                    _mesh->get_BoxArray(lev),
+                    _mesh->get_DistributionMap(lev),
+                    _mesh->get_refRatio(lev-1),
+                    lev,
+                    basefunc->Np_s
+                );
+            }
+        }
     }
-  }
 }
 
 void AmrDG::AMR_flux_correction()

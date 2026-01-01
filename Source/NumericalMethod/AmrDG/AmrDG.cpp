@@ -761,10 +761,15 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         }
       }); 
 
+
+
+
       if ((_mesh->L > 1))
       {
+        auto const& msk = coarse_fine_interface_mask[lev][0].const_array(mfi);
+
         //compute the faces integral evaluations of the numerical flux
-        amrex::ParallelFor(_bx, N,[&] (int i, int j, int k, int n) noexcept
+        amrex::ParallelFor_(bx, N,[&] (int i, int j, int k, int n) noexcept
         {    
           amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
           if(idx[d] == lo_idx[d]){ return;}
@@ -776,73 +781,66 @@ void AmrDG::numflux(int lev,int d,int M, int N,
           }
 
           amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
-          iv_left[d] -= 1; // Cell i-1
-          amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)}; // Cell i
+          iv_left[d] -= 1; //cell i-1
+          amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)};
 
-          // Logic: If one neighbor is NOT in the current level's valid box, 
-          // but the other IS, we are at a coarse-fine interface.
+          // Access mask: 0 = Coarse, 1 = Covered by Fine
+          int m_left  = msk(iv_left);
+          int m_right = msk(iv_right);
 
-          //TODO: BUG HERE IN BOOLENA LOGIC, CURRENTLY SKIPPING ALL INTERFACES
-          //ALSO CURRENTLY WORKS ONLY AT FINE LEVEL
-          /*
-          the current boolean logic is asymmetric: it assumes you’re looping over faces at a fine level, 
-          so one neighbor being outside _bx is interpreted as “fine cell”. That breaks when you’re at 
-          the coarse level, because now both neighbors may be coarse, or the face may be at a coarse-fine interface in the other direction.
-          */
-          bool left_is_fine  = _bx.contains(iv_left);
-          bool right_is_fine = _bx.contains(iv_right);
+          // --- CASE A: COARSE-FINE INTERFACE (Detected from Coarse Level) ---
+          // This fills fnum_int_c for use in CrseAdd
+          if (lev < _mesh->get_finest_lev() && m_left != m_right) 
+          {
+              // b=1: Coarse cell on left (iv_left), Fine on right. (Plus face of coarse)
+              // b=-1: Coarse cell on right (iv_right), Fine on left. (Minus face of coarse)
+              int b = (m_left == 0) ? 1 : -1;
+              auto& mat = (b == 1) ? Mkbdp[d] : Mkbdm[d];
 
-          if (left_is_fine != right_is_fine) {
-                            amrex::Print() << "Interface detected at (" << i << "," << j << "," << k 
-                               << ") : left_is_fine=" << left_is_fine 
-                               << ", right_is_fine=" << right_is_fine << "\n";
-            // Coarse-fine interface detected
-              
-            // We are at interface i-1/2.
-            // b = 1  => Coarse cell is at i-1 (Fine is at i). Face is HIGH/Plus side of Coarse.
-            // b = -1 => Coarse cell is at i (Fine is at i-1). Face is LOW/Minus side of Coarse.
-            // Exactly one side is coarse
-            int b = (!left_is_fine && right_is_fine) ? 1 : -1;
-
-            //compute coarse projection
-            if (lev < _mesh->get_finest_lev()) {
-              for(int q=0 ; q<Q; ++q){
-                for(int m=0; m<M; ++m){ 
-                    if (b == 1) {
-                        // High face projection
-                        fnum_int_c[q](i,j,k,n) += fnum[q](i,j,k,m) * Mkbdp[d][n][m];
-                    } else {
-                        // Low face (default) projection
-                        fnum_int_c[q](i,j,k,n) += fnum[q](i,j,k,m) * Mkbdm[d][n][m];
-                    }
+              for (int q = 0; q < Q; ++q) {
+                amrex::Real sum = 0.0;
+                for (int m = 0; m < M; ++m) {
+                    sum += fnum[q](i,j,k,m) * mat[n][m];
                 }
-                fnum_int_c[q](i,j,k,n) *= jacobian;
+                fnum_int_c[q](i,j,k,n) = sum * jacobian;
+            
               }
-            }
+          }
 
-            //compute fine projection
-            if (lev > 0) {
-              int child_idx = 0;
-              int bit_pos = 0;
-              for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-                  if (dir == d) continue;
-                  
-                  // Correctly calculate position relative to the level domain lo
-                  if ((idx[dir] - dom_lo[dir]) % 2 != 0) {
-                      child_idx |= (1 << bit_pos);
+          // --- FINE-COARSE INTERFACE (Detected from Fine Level) ---
+          // This fills fnum_int_f for use in FineAdd.
+          // Note: On the fine level, mask is all 0. We check if neighbor is "outside" this level.
+          if (lev > 0) 
+          {
+              // AMReX Utility: checks if a cell is physically inside the BoxArray of this level
+              bool left_valid  = _mesh->get_BoxArray(lev).contains(iv_left);
+              bool right_valid = _mesh->get_BoxArray(lev).contains(iv_right);
+
+              if (left_valid != right_valid) 
+              {
+                  // Orientation for fine-side projection
+                  // If left is invalid, the parent coarse cell is to the left (b=-1 for fine cell)
+                  int b = (!left_valid) ? -1 : 1; 
+
+                  // Calculate child index for the projection matrix P
+                  int child_idx = 0;
+                  int bit_pos = 0;
+                  for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                      if (dir == d) continue;
+                      if ((iv_right[dir] - dom_lo[dir]) % 2 != 0) child_idx |= (1 << bit_pos);
+                      bit_pos++;
                   }
-                  bit_pos++;
-              }
 
-              const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, b);
+                  const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, b);
 
-              for(int q=0 ; q<Q; ++q) {
-                  for(int m=0; m<M; ++m) { 
-                      fnum_int_f[q](i,j,k,n) += P(n, m) * fnum[q](i,j,k,m);
+                  for (int q = 0; q < Q; ++q) {
+                      amrex::Real sum = 0.0;
+                      for (int m = 0; m < M; ++m) {
+                          sum += P(n, m) * fnum[q](i,j,k,m);
+                      }
+                      fnum_int_f[q](i,j,k,n) = sum * jacobian; 
                   }
-                  fnum_int_f[q](i,j,k,n) *= jacobian;
               }
-            }
           }
         }); 
       }

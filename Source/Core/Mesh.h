@@ -90,6 +90,10 @@ class Mesh : public amrex::AmrCore
 
         const Vector<IntVect>& get_refRatio();
 
+        const amrex::BoxArray& get_BoxArray(int lev) const;
+
+        const amrex::DistributionMapping& get_DistributionMap(int lev) const;
+
         //Max number of levels
         //max_level 	=	index of max level
         //L 			= 	max number of levels
@@ -253,4 +257,15 @@ const Vector<IntVect>&  Mesh<NumericalMethodType>::get_refRatio()
     return refRatio();
 }
 
+template <typename NumericalMethodType>
+const amrex::BoxArray& Mesh<NumericalMethodType>::get_BoxArray(int lev) const
+{
+    return boxArray(lev);
+}
+
+template <typename NumericalMethodType>
+const amrex::DistributionMapping& Mesh<NumericalMethodType>::get_DistributionMap(int lev) const
+{
+    return DistributionMap(lev);
+}
 #endif 
