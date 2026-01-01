@@ -460,6 +460,10 @@ class Solver
         //Numerical flux approximation Fnum(x,t) integrated at coarse lvl
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum_int_c;
 
+        //Store at each coarse level the mask to identify cells
+        //at coarse-fine interface
+        amrex::Vector<amrex::Vector<amrex::iMultiFab>> coarse_fine_interface_mask;
+
         //Numerical flux approximation Fnum(x,t) integrated over boundary minus (-) b-
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnumm_int; 
 
