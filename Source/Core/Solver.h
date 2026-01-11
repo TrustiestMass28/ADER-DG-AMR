@@ -410,6 +410,9 @@ class Solver
         //Courant–Friedrichs–Lewy number
         amrex::Real CFL;
 
+        //Safety factor for time-step size computation
+        amrex::Real c_dt;
+
         //Time step size
         amrex::Real Dt;
 
@@ -910,62 +913,5 @@ void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<E
                                        geom_out, time, lvl_tstep, ref_ratio);
     }
 }
-
-/*
-template <typename NumericalMethodType>
-template <typename EquationType>
-void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                                            amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
-                                            int tstep, amrex::Real time, int level = -1) const
-{   
-
-    auto varNames = model_pde->getModelVarNames();
-
-    auto _mesh = mesh.lock();
-    //Output AMR U_w MFab modal data for all solution components, expected 
-    //to then plot the first mode,i.e cell average
-    
-    //using same timestep for all levels
-    amrex::Vector<int> lvl_tstep; 
-    for (int l = 0; l <= _mesh->get_finest_lev(); ++l)
-    {
-        lvl_tstep.push_back(tstep);
-    }
-
-    //get number of Mfab components stored in each Mfab of X
-    int N = X[0][0].nComp();
-
-    //loop over number of PDEs in the system
-    for(int q=0; q<Q; ++q){
-        amrex::Vector<std::string> plot_var_name;
-        //For the selected PDE solution component,
-        //get its name and for eahc of the MFab components
-        //add a idx component name m to the string
-        //usefull in case we have multiple modes
-        for(int m =0 ; m<N; ++m){
-            for (size_t i = 0; i < varNames.names.size(); ++i) {
-                if (i == q) { 
-                    const auto& var = varNames.names[i];    
-                    plot_var_name.push_back(var + "_" + std::to_string(m));
-                }
-            }
-        }
-
-        std::string name  = "../Results/Simulation Data/"+out_name_prefix+"_"+std::to_string(tstep)+"_q_"+std::to_string(q)+"_plt";
-        const std::string& pltfile_name = name;//amrex::Concatenate(name,5);
-        
-        //mf to output
-        amrex::Vector<const MultiFab*> mf_out;
-        for (int l = 0; l <=  _mesh->get_finest_lev(); ++l)
-        {
-            mf_out.push_back(&X[l][q]);           
-        }
-
-        //amrex::WriteSingleLevelPlotfile(pltfile, U_w[q],plot_modes_name, domain_geom, time, 0);
-        amrex::WriteMultiLevelPlotfile(pltfile_name, _mesh->get_finest_lev()+1, mf_out, plot_var_name,
-                                _mesh->get_Geom(), time, lvl_tstep, _mesh->get_refRatio());
-    }
-    
-} */
 
 #endif 
