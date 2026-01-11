@@ -45,11 +45,11 @@ void AmrDG::DEBUG_print_MFab()
   }
 }
 
-void AmrDG::settings(int _p, amrex::Real _T) {
+void AmrDG::settings(int _p, amrex::Real _T, amrex::Real _c_dt) {
   p = _p;
   T = _T;
+  c_dt = _c_dt;
 }
-
 
 void AmrDG::AMR_advanced_settings()
 {
@@ -72,35 +72,7 @@ void AmrDG::AMR_advanced_settings()
 }
 
 void AmrDG::init()
-{ /*
-  amrex::Vector<std::string> logo0 = {
-    "######################################",
-    "     _   __  __ ___     ___   ___ ",
-    "    /_\\ |  \\/  | _ \\___|   \\ / __|",
-    "   / _ \\| |\\/| |   /___| |) | (_ |",
-    "  /_/ \\_\\_|  |_|_|_\\   |___/ \\___|",
-    "",
-    "       +..+..+----+---------+",
-    "     ->|  |  |    |<==      |",
-    "       +..+..+----|         |",
-    "     ->|  |  |    |<==      |",
-    "       +----+..+..+----+----+",
-    "    ==>|    |  |  |    |    |",
-    "       +----+..+..+----+----+",
-    "     =>|    |  |  |    |    |",
-    "       +----+..+..+----+----+",
-    "                                      ",
-    "      Adaptive Mesh Refinement      ",
-    "                 &                  ",
-    "       Discontinuous Galerkin       ",
-    "######################################"
-  };
-
-  // Loop through the vector and print each line
-  for (const auto& line : logo0) {
-    Print() << line << std::endl;
-  }*/
-
+{ 
     const int width = 80;
     std::vector<std::string> logo = {
     "     _   __  __ ___     ___   ___ ",
@@ -198,17 +170,23 @@ void AmrDG::init()
 
   //Init data structure holdin quadrature data 
   quadrule->xi_ref_quad_s.resize(quadrule->qMp_s,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
+
   quadrule->xi_ref_quad_s_bdm.resize(AMREX_SPACEDIM,
                             amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_s_bd,
                             amrex::Vector<amrex::Real> (AMREX_SPACEDIM)));    
+
   quadrule->xi_ref_quad_s_bdp.resize(AMREX_SPACEDIM,
                             amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_s_bd,
                             amrex::Vector<amrex::Real> (AMREX_SPACEDIM)));    
+
   quadrule->xi_ref_quad_t.resize(quadrule->qMp_t,amrex::Vector<amrex::Real> (1)); 
+
   quadrule->xi_ref_quad_st.resize(quadrule->qMp_st,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
+
   quadrule->xi_ref_quad_st_bdm.resize(AMREX_SPACEDIM,
                             amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_st_bd,
-                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));                    
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));         
+
   quadrule->xi_ref_quad_st_bdp.resize(AMREX_SPACEDIM,
                             amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_st_bd,
                             amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
@@ -239,9 +217,13 @@ void AmrDG::init()
 
   //Initialize generalized Element matrices for ADER-DG corrector
   Mk_corr.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(basefunc->Np_s));
+
   Sk_corr.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
+
                 amrex::Vector<amrex::Real>(quadrule->qMp_st)));
+
   Mkbdm.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
+
                 amrex::Vector<amrex::Real>(quadrule->qMp_st_bd)));
 
   Mkbdp.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
@@ -251,14 +233,19 @@ void AmrDG::init()
 
   //Initialize generalized Element matrices for ADER predictor
   Mk_h_w.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
+
   Mk_h_w_inv.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
+
   Mk_pred.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_s));  
+
   Sk_pred.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_st,
                                   amrex::Vector<amrex::Real>(basefunc->Np_st)));
+
   Mk_pred_src.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
 
   Sk_predVinv.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_st,
                       amrex::Vector<amrex::Real>(quadrule->qMp_st)));
+                      
   Mk_pred_srcVinv.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(quadrule->qMp_st));
     
   //Construct system matrices

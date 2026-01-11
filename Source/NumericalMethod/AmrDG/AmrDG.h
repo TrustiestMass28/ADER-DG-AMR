@@ -59,7 +59,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     ~AmrDG();
 
-    void settings(int _p, amrex::Real _T);
+    void settings(int _p, amrex::Real _T, amrex::Real _c_dt);
 
     void init();
 
@@ -67,16 +67,19 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     template <typename EquationType>
     void evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                const std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>>& bdcond);
+                const std::shared_ptr<BoundaryCondition<EquationType,
+                NumericalMethodType>>& bdcond);
 
     template <typename EquationType>
     void time_integration(  const std::shared_ptr<ModelEquation<EquationType>>& model_pde, 
-                            const std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>>& bdcond,
+                            const std::shared_ptr<BoundaryCondition<EquationType,
+                            NumericalMethodType>>& bdcond,
                             amrex::Real time);
 
     template <typename EquationType>
     void ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde, 
-              const std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>>& bdcond,
+              const std::shared_ptr<BoundaryCondition<EquationType,
+              NumericalMethodType>>& bdcond,
               amrex::Real time);
 
     template <typename EquationType>
@@ -105,7 +108,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::MultiFab>& fmf, 
                               int icomp,int ncomp);
 
-    void AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf,int icomp, int ncomp);
+    void AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf,
+                      int icomp, int ncomp);
 
     void AMR_set_flux_registers();
 
@@ -126,7 +130,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     template <typename EquationType> 
     amrex::Real set_initial_condition_U(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                                        int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi) const;
+                                        int lev,int q,int i,int j,int k,
+                                        const amrex::Vector<amrex::Real>& xi) const;
 
     void get_U_from_U_w(int M, int N, amrex::Vector<amrex::MultiFab>* U_ptr,
                         amrex::Vector<amrex::MultiFab>* U_w_ptr,
@@ -170,7 +175,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                 amrex::Array4<const amrex::Real> dfp,
                 amrex::Array4<const amrex::Real> dfm);
 
-    amrex::Real setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev);
+    amrex::Real setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,
+                      int q, int lev);
     
     class BasisLegendre : public Basis
     {
@@ -246,8 +252,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                     RunOn            runon);
 
         void amr_scatter(int i, int j, int k, Array4<Real> const& fine, 
-                                            int fcomp, Array4<Real const> const& crse, int ccomp, 
-                                            int ncomp, IntVect const& ratio) noexcept;
+                                            int fcomp, Array4<Real const> const& crse, 
+                                            int ccomp, int ncomp, IntVect const& ratio) noexcept;
                                             
         void average_down(const MultiFab& S_fine, int fine_comp, MultiFab& S_crse, 
                           int crse_comp, int ncomp, const IntVect& ratio, 
@@ -255,7 +261,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         
         //AMR gater MUST be called from average down
         void amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
-                        Array4<Real> const& crse, int ccomp, int ncomp, IntVect const& ratio ) noexcept;
+                        Array4<Real> const& crse, int ccomp, 
+                        int ncomp, IntVect const& ratio ) noexcept;
 
         const Eigen::MatrixXd& get_flux_proj_mat(int d, int child_idx, int b) const ;
 
@@ -477,7 +484,9 @@ amrex::Real AmrDG::set_initial_condition_U_w(const std::shared_ptr<ModelEquation
 }
 
 template <typename EquationType> 
-amrex::Real AmrDG::set_initial_condition_U(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,int lev,int q,int i,int j,int k, const amrex::Vector<amrex::Real>& xi) const
+amrex::Real AmrDG::set_initial_condition_U(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                                            int lev,int q,int i,int j,int k, 
+                                            const amrex::Vector<amrex::Real>& xi) const
 {
   auto _mesh = mesh.lock();
 
@@ -504,7 +513,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   //Plot initial condition
   dtn_plt =  (dtn_outplt > 0);
   dt_plt = (dt_outplt > 0);
-  if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t,0);}
+  if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
   
   //Output t=0 norm
   L1Norm_DG_AMR(model_pde);
@@ -604,16 +613,16 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
     dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
     //use as tolerance dt_outplt, i.e same order of magnitude
-    if(dtn_plt){PlotFile(model_pde,U_w,n, t,0);}
-    else if(dt_plt){PlotFile(model_pde,U_w,n, t,0);}
+    if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
+    else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
 
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
     
-    if(n==10){ //safety break
-      t=T+1;
-    }
+    //if(n==10){ //safety break
+    //  t=T+1;
+    //}
   }
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -623,7 +632,9 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       //m_bar->mark_as_completed();
       m_bar.reset();
       amrex::Print()<< "\n";
-  } }
+  } 
+  Print() << "Total number of time steps: " << n << "\n";
+}
 
   amrex::ParallelDescriptor::Barrier();
 
@@ -719,10 +730,6 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
       
       if ((_mesh->L > 1))
       {
-        // Store coarse and fine face integrated fluxes on coarse level
-        //The AMReX FluxRegister object already knows the exact locations of the coarse-fine interfaces. 
-        //It automatically picks out only the flux data from the faces that lie on
-        //these specific interfaces and ignores the rest.
         //The Flux Register flux_reg[l] is stored at level l (Fine), 
         //it stores flux mismatches between level l (fine) and level l-1 (coarse)
         //it is then used to correct the solution at level l-1 (coarse)
@@ -752,7 +759,11 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     //update corrector
     update_U_w(l); 
   }
-  AMR_flux_correction();
+
+  if ((_mesh->L > 1))
+  {
+    AMR_flux_correction();
+  }
 }
 
 template <typename EquationType>
@@ -866,9 +877,6 @@ void AmrDG::flux_bd(int lev,int d, int M,
         {          
             (flux[q])(i,j,k,m) = model_pde->pde_flux(lev,d,q,m,i, j, k, &u, xi[m],_mesh);
             (dflux[q])(i,j,k,m) = model_pde->pde_dflux(lev,d,q,m,i, j, k, &u, xi[m],_mesh);
-            //if(lev == 1){
-            //  Print() <<(dflux[q])(i,j,k,m)<<"\n";
-            //}
         }); 
       }
     }
@@ -984,7 +992,7 @@ void AmrDG::set_Dt(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
 
   ParallelDescriptor::Barrier();
   ParallelDescriptor::ReduceRealMin(dt_min);
-  Dt = 0.9*dt_min;
+  Dt = c_dt*dt_min;
 }
 
 template <typename EquationType>
@@ -1038,212 +1046,7 @@ void AmrDG::source(int lev,int M,
     }
   } 
 }
-/*
-template <typename EquationType> 
-void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                          int _p, amrex::Vector<amrex::Vector<amrex::Real>> quad_pt, int N) const
-{
-  //for debugging purposes might be usefull to look at the norm on individual levels
-  //without discarting the overlap
-  //false== output norm of idividual levels
-  //true== output global norm
-  bool flag_no_AMR_overlap = true;
 
-  auto _mesh = mesh.lock();
- 
-    amrex::Vector<amrex::Vector<amrex::Real>> Lpnorm_multilevel;
-    Lpnorm_multilevel.resize(Q);
-    amrex::Vector<amrex::Real> V_level;
- 
-    for(int l=0; l<=_mesh->get_finest_lev(); ++l)
-    {
-      amrex::Vector<const amrex::MultiFab *> state_u_h(Q);  
-      amrex::Vector<const amrex::FArrayBox *> fab_u_h(Q);
-      amrex::Vector< amrex::Array4<const amrex::Real>> uh(Q);  
-      
-      amrex::Vector<amrex::MultiFab> U_h_DG;
-      U_h_DG.resize(Q);
-    
-      amrex::Vector<amrex::MultiFab> U_h_DG_intrsct_f;
-      U_h_DG_intrsct_f.resize(Q);
-      amrex::Vector<amrex::MultiFab> U_h_DG_intrsct_c;
-      U_h_DG_intrsct_c.resize(Q);
-      
-      for(int q=0; q<Q;++q){
-        amrex::BoxArray c_ba = U_w[l][q].boxArray();    
-        U_h_DG[q].define(c_ba, U_w[l][q].DistributionMap(), basefunc->Np_s, _mesh->nghost);      
-        amrex::MultiFab::Copy(U_h_DG[q], U_w[l][q], 0, 0, basefunc->Np_s, _mesh->nghost);        
-      }
-      
-      //get number of cells of full level and intersection level
-      amrex::BoxArray c_ba = U_w[l][0].boxArray();
-      int N_full =(int)(c_ba.numPts());
-      
-      int N_overlap=0;
-      if(l!=_mesh->get_finest_lev()){
-        amrex::BoxArray f_ba = U_w[l+1][0].boxArray();
-        amrex::BoxArray f_ba_c = f_ba.coarsen(_mesh->get_refRatio(l));
-        N_overlap=(int)(f_ba_c.numPts());
-      }
-      
-      auto dx= _mesh->get_Geom(l).CellSizeArray();  
-      amrex::Real vol = 0.0;
-      #if (AMREX_SPACEDIM == 1)
-        vol = dx[0];
-      #elif (AMREX_SPACEDIM == 2)
-        vol = dx[0]*dx[1];
-      #elif (AMREX_SPACEDIM == 3)
-        vol = dx[0]*dx[1]*dx[2];
-      #endif
-
-      V_level.push_back((amrex::Real)(vol*(amrex::Real)(N_full-N_overlap)));
-
-      //Compute Lp norm on full level
-      for(int q=0; q<Q;++q){state_u_h[q] = &(U_h_DG[q]);}
-      
-      //vector to accumulate all the full level norm (reduction sum of all cells norms)
-      amrex::Vector<amrex::Real> Lpnorm_full;
-      Lpnorm_full.resize(Q);
-      amrex::Vector<amrex::Vector<amrex::Real>> Lpnorm_full_tmp;
-      Lpnorm_full_tmp.resize(Q);
-      
-      #ifdef AMREX_USE_OMP
-      #pragma omp parallel
-      #endif
-      {
-        for (MFIter mfi(*(state_u_h)[0],true); mfi.isValid(); ++mfi){
-          const amrex::Box& bx_tmp = mfi.tilebox();
-
-          for(int q=0 ; q<Q; ++q){
-            fab_u_h[q] = state_u_h[q]->fabPtr(mfi);
-            uh[q] = fab_u_h[q]->const_array();
-          }
-            
-            
-          if(l!=_mesh->get_finest_lev()){
-
-            amrex::BoxArray f_ba = U_w[l+1][0].boxArray();
-            amrex::BoxArray ba_c = f_ba.coarsen(_mesh->get_refRatio(l));
-            const amrex::BoxList f_ba_lst(ba_c);
-            
-            amrex::BoxList  f_ba_lst_compl = complementIn(bx_tmp,f_ba_lst);
-                
-            amrex::ParallelFor(bx_tmp,[&] (int i, int j, int k) noexcept
-            {
-              bool flag_is_overlap = false;
-              //
-              for (const amrex::Box& bx : f_ba_lst_compl)
-              {
-                amrex::IntVect iv(AMREX_D_DECL(i, j, k));
-                if(bx.contains(iv))
-                {
-                  flag_is_overlap=true; // This flag is TRUE if cell (i,j,k) is NOT covered by a finer level
-                }          
-              }
-              
-              // ***************************************************************
-              // *** MINIMAL CORRECTION IS HERE: Changed from !flag_is_overlap
-              // ***************************************************************
-              // We compute the norm if the cell is NOT overlapped, which is
-              // when flag_is_overlap is true.
-              if(flag_is_overlap)
-              {
-                for(int q=0 ; q<Q; ++q){
-                  amrex::Real cell_Lpnorm =0.0;
-                  amrex::Real w;
-                  amrex::Real f;
-                  
-                  for (int m = 0; m < std::pow(N,AMREX_SPACEDIM); ++m){
-                    //quad weights for each quadrature point
-                    w = 1.0;
-                    for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
-                      w*=2.0/std::pow(std::assoc_legendre(N,1,quad_pt[m][d_]),2);
-                    }
-
-                    amrex::Real u_h = 0.0;          
-                    for (int n = 0; n < basefunc->Np_s; ++n){  
-                      u_h+=uh[q](i,j,k,n)*(basefunc->phi_s(n,basefunc->basis_idx_s,quad_pt[m]));
-                    }
-                        
-                    amrex::Real u = 0.0;
-                    u = set_initial_condition_U(model_pde,l,q,i,j,k, quad_pt[m]);
-                    
-                    f = std::pow(std::abs(u-u_h),(amrex::Real)_p);
-                    cell_Lpnorm += (f*w);
-                    }
-                    amrex::Real coeff = vol/std::pow(2.0,AMREX_SPACEDIM);
-                    #pragma omp critical
-                    {
-                      Lpnorm_full_tmp[q].push_back(cell_Lpnorm*coeff);  
-                    }
-                  }          
-                }
-            });
-          }  
-          else
-          {
-            amrex::ParallelFor(bx_tmp,[&] (int i, int j, int k) noexcept
-            {
-              for(int q=0 ; q<Q; ++q){
-                amrex::Real cell_Lpnorm =0.0;
-                amrex::Real w;
-                amrex::Real f;
-                
-                for (int m = 0; m < std::pow(N,AMREX_SPACEDIM); ++m){
-                  //quad weights for each quadrature point
-                  w = 1.0;
-                  for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
-                    w*=2.0/std::pow(std::assoc_legendre(N,1,quad_pt[m][d_]),2);
-                  }
-                  
-                  amrex::Real u_h = 0.0;          
-                  for (int n = 0; n < basefunc->Np_s; ++n){  
-                    u_h+=uh[q](i,j,k,n)*(basefunc->phi_s(n,basefunc->basis_idx_s,quad_pt[m]));
-                  }
-                      
-                  amrex::Real u = 0.0;
-                  u = set_initial_condition_U(model_pde,l,q,i,j,k, quad_pt[m]);
-                      
-                  f = std::pow(std::abs(u-u_h),(amrex::Real)_p);
-                  cell_Lpnorm += (f*w);
-                  }
-                  amrex::Real coeff = vol/std::pow(2.0,AMREX_SPACEDIM);
-                  #pragma omp critical
-                  {
-                    Lpnorm_full_tmp[q].push_back(cell_Lpnorm*coeff);  
-                  }
-                }      
-            });    
-          }  
-        }
-      }
-      for(int q=0 ; q<Q; ++q){
-        amrex::Real global_Lpnorm = 0.0;
-        global_Lpnorm = std::accumulate(Lpnorm_full_tmp[q].begin(),
-                                          Lpnorm_full_tmp[q].end(), 0.0);
-                                          //level norm for cells of this rank
-                                
-        ParallelDescriptor::ReduceRealSum(global_Lpnorm);//sum up all the ranks level norms
-        Lpnorm_full[q] = global_Lpnorm;
-      } 
-      
-      for(int q=0 ; q<Q; ++q){
-        Lpnorm_multilevel[q].push_back((amrex::Real)Lpnorm_full[q]);      
-      }      
-    }
-    
-    amrex::Real V_amr = (amrex::Real)std::accumulate(V_level.begin(),V_level.end(), 0.0);  
-    for(int q=0 ; q<Q; ++q){
-      amrex::Real Lpnorm = std::accumulate(Lpnorm_multilevel[q].begin(),
-                                             Lpnorm_multilevel[q].end(), 0.0);
-                                             
-      Lpnorm=std::pow(Lpnorm/V_amr, 1.0/(amrex::Real)_p);
-      Print().SetPrecision(17)<<"--multilevel--"<<"\n";
-      Print().SetPrecision(17)<< "L"<<_p<<" error norm:  "<<Lpnorm<<" | "<<
-                          "DG Order:  "<<p+1<<" | solution component: "<<q<<"\n";
-    }  
-  
-}*/
 template <typename EquationType> 
 void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                                   int _p, amrex::Vector<amrex::Vector<amrex::Real>> quad_pt, int N) const
