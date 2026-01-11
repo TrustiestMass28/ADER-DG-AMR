@@ -568,7 +568,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
-    
+    /*
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -594,7 +594,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       for(int q=0 ; q<Q; ++q){
         std::swap(U_w[l][q],_mf[q]);  
       }
-    }
+    }*/
+      
   
     // Update timestep idx and physical time
     n+=1;
