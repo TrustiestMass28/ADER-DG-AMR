@@ -504,7 +504,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   //Plot initial condition
   dtn_plt =  (dtn_outplt > 0);
   dt_plt = (dt_outplt > 0);
-  if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
+  if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t,0);}
   
   //Output t=0 norm
   L1Norm_DG_AMR(model_pde);
@@ -568,7 +568,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
-    /*
+    
     //limit solution
     //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
 
@@ -594,9 +594,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       for(int q=0 ; q<Q; ++q){
         std::swap(U_w[l][q],_mf[q]);  
       }
-    }*/
+    }
       
-  
     // Update timestep idx and physical time
     n+=1;
     t+=Dt;
@@ -605,14 +604,14 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
     dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
     //use as tolerance dt_outplt, i.e same order of magnitude
-    if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
-    else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
+    if(dtn_plt){PlotFile(model_pde,U_w,n, t,0);}
+    else if(dt_plt){PlotFile(model_pde,U_w,n, t,0);}
 
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
     
-    if(n==1){ //safety break
+    if(n==10){ //safety break
       t=T+1;
     }
   }

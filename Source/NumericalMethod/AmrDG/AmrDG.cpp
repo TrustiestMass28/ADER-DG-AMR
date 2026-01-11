@@ -713,17 +713,12 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       for (MFIter mfi(*(state_fnum[0]), true); mfi.isValid(); ++mfi)
   #endif
     {
-      //Consider cell centered (valid) box [0,N] in each direction.
-      //MFiter defined over face centered MultiFab with valid box
-      //[0,N+1] in each direction (Face centered box has no ghost cells)
-      const amrex::Box& _bx = mfi.tilebox();
 
-      //Grow the box on the lower side to be able to access the left ghost cell
-      //This make the box become [-1,N+1] in each direction
-      amrex::Box bx = amrex::growLo(_bx, d, 1);
+      const amrex::Box& bx = mfi.tilebox();    //[0,N]
+      //amrex::Box bx = amrex.:growLo(bx, d, 1);  // [-1,N]
 
       //Get the LOCAL box limits for this specific rank/tile
-      const amrex::IntVect& lo_idx = bx.smallEnd();
+      //const amrex::IntVect& lo_idx = bx.smallEnd();
       
       for(int q=0 ; q<Q; ++q){
         fab_fnum[q]=&(state_fnum[q]->get(mfi));
@@ -752,16 +747,15 @@ void AmrDG::numflux(int lev,int d,int M, int N,
       //compute the pointwise evaluations of the numerical flux
       amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
       {
-        amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
-        if(idx[d] == lo_idx[d]){ return;}
+        //skip first index since no flux to compute there
+        //amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
+        //if(idx[d] == lo_idx[d]){ return;}
 
         //check which indices it iterate across, i.e if last one is reachd
         for(int q=0 ; q<Q; ++q){
           fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
         }
       }); 
-
-
 
 
       if ((_mesh->L > 1))
@@ -771,8 +765,8 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         //compute the faces integral evaluations of the numerical flux
         amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
         {    
-          amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
-          if(idx[d] == lo_idx[d]){ return;}
+          //amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
+          //if(idx[d] == lo_idx[d]){ return;}
 
           //Set to zero before accumulation
           for (int q = 0; q < Q; ++q) {
