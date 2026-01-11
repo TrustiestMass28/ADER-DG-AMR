@@ -19,6 +19,10 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
     // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
     // amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
 
+    // Access the interface mask for the coarse level 'lev'
+    // This mask was created in AmrDG::AMR_set_flux_registers()
+    auto const& msk = numme->coarse_fine_interface_mask[lev][0];
+
     int N = numme->quadrule->qMp_1d; 
 
 #ifdef AMREX_USE_OMP
@@ -35,34 +39,49 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
             amrex::FArrayBox* fab_u_crse = &(U_crse->get(mfi));
             amrex::Array4<amrex::Real> u_crse = fab_u_crse->array();
 
+            // Get the Array4 for the mask
+            auto const& msk_arr = msk.const_array(mfi);
+
             amrex::ParallelFor(bx, [=] (int i, int j, int k) noexcept
             {
-                Eigen::VectorXd delta_u_w(numme->basefunc->Np_s);
-                Eigen::VectorXd f_delta(numme->basefunc->Np_s);
 
-                delta_u_w.setZero();
-                f_delta.setZero();
+                if (msk_arr(i,j,k) == 0) return;
 
-                // Load the mismatch vector directly from Reflux output
-                for(int n=0; n<numme->basefunc->Np_s; ++n){
-                    f_delta(n) = corr(i,j,k,n);
+                bool is_at_interface = false;
+
+                // Interface Detector: Check if any neighbor is Overlapped (mask == 1)
+                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                    amrex::IntVect iv_plus{AMREX_D_DECL(i,j,k)};
+                    amrex::IntVect iv_minus{AMREX_D_DECL(i,j,k)};
+                    
+                    iv_plus[d]  += 1;
+                    iv_minus[d] -= 1;
+
+                   
+                    // Since self (msk_arr(i,j,k)) is 0, we look for a neighbor that is 1.
+                    if (msk_arr(iv_plus) == 1 || msk_arr(iv_minus) == 1) {
+                        is_at_interface = true;
+                        break;
+                    }
                 }
 
-                // Solve δû = (M)^{-1}f_Δ to find the modal corrections
-                // Minv is same inverse mass matrix used for classic 
-                // scatter/gather operations in DG
-                delta_u_w = inv_jac*(Minv * f_delta);
+                // If the cell is Adjacent (0) AND touches a Fine region (1), apply reflux
+                if (is_at_interface) 
+                {
+                    Eigen::VectorXd delta_u_w(numme->basefunc->Np_s);
+                    Eigen::VectorXd f_delta(numme->basefunc->Np_s);
+
+                    for(int n=0; n<numme->basefunc->Np_s; ++n){
+                        f_delta(n) = corr(i,j,k,n);
+                    }
+
+                    // Solve the modal update: δû = (M)^{-1} f_Δ
+                    delta_u_w = inv_jac * (Minv * f_delta);
               
-                // Update the coarse cell solution with the computed corrections
-                for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
-                    u_crse(i, j, k, n) += delta_u_w(n);
-                    //if(delta_u_w(n)!=0.0){
-                    //    amrex::Print() << "Reflux Update Cell (" << i << "," << j << "," << k << ") Mode " << n 
-                    //                  << " Delta: " << delta_u_w(n) << "\n";}
+                    for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
+                        u_crse(i, j, k, n) =0.7;//+= delta_u_w(n);
+                    }
                 }
-
-                
-
             });
         }
     }

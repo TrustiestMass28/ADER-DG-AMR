@@ -769,7 +769,7 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         auto const& msk = coarse_fine_interface_mask[lev][0].const_array(mfi);
 
         //compute the faces integral evaluations of the numerical flux
-        amrex::ParallelFor_(bx, N,[&] (int i, int j, int k, int n) noexcept
+        amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
         {    
           amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
           if(idx[d] == lo_idx[d]){ return;}
