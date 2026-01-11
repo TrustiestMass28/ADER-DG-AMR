@@ -45,43 +45,32 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
             amrex::ParallelFor(bx, [=] (int i, int j, int k) noexcept
             {
 
-                if (msk_arr(i,j,k) == 0) return;
+              if (msk_arr(i,j,k) != 0) return;
 
-                bool is_at_interface = false;
+              bool is_at_interface = false;
+              amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
 
-                // Interface Detector: Check if any neighbor is Overlapped (mask == 1)
-                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                    amrex::IntVect iv_plus{AMREX_D_DECL(i,j,k)};
-                    amrex::IntVect iv_minus{AMREX_D_DECL(i,j,k)};
-                    
-                    iv_plus[d]  += 1;
-                    iv_minus[d] -= 1;
+              for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                  amrex::IntVect unit_dir = amrex::IntVect::TheDimensionVector(d);
+                  if (msk_arr(iv + unit_dir) == 1 || msk_arr(iv - unit_dir) == 1) {
+                      is_at_interface = true;
+                      break;
+                  }
+              }
 
-                   
-                    // Since self (msk_arr(i,j,k)) is 0, we look for a neighbor that is 1.
-                    if (msk_arr(iv_plus) == 1 || msk_arr(iv_minus) == 1) {
-                        is_at_interface = true;
-                        break;
-                    }
-                }
+              if (is_at_interface) 
+              {
+                  Eigen::VectorXd f_delta(numme->basefunc->Np_s);
+                  for(int n=0; n<numme->basefunc->Np_s; ++n){
+                      f_delta(n) = corr(i,j,k,n);
+                  }
 
-                // If the cell is Adjacent (0) AND touches a Fine region (1), apply reflux
-                if (is_at_interface) 
-                {
-                    Eigen::VectorXd delta_u_w(numme->basefunc->Np_s);
-                    Eigen::VectorXd f_delta(numme->basefunc->Np_s);
+                  Eigen::VectorXd delta_u_w = inv_jac * (Minv * f_delta);
 
-                    for(int n=0; n<numme->basefunc->Np_s; ++n){
-                        f_delta(n) = corr(i,j,k,n);
-                    }
-
-                    // Solve the modal update: δû = (M)^{-1} f_Δ
-                    delta_u_w = inv_jac * (Minv * f_delta);
-              
-                    for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
-                        u_crse(i, j, k, n) =0.7;//+= delta_u_w(n);
-                    }
-                }
+                  for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
+                      u_crse(i, j, k, n) += delta_u_w(n); 
+                  }
+              }
             });
         }
     }
