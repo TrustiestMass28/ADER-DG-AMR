@@ -452,18 +452,18 @@ void AmrDG::set_initial_condition(const std::shared_ptr<ModelEquation<EquationTy
     for (MFIter mfi(*(state_uw[0]),true); mfi.isValid(); ++mfi)
     #endif   
     {
-      const amrex::Box& bx = mfi.tilebox();
+      const amrex::Box& bx = mfi.growntilebox();  // Include ghost cells for IC
 
       for(int q=0 ; q<Q; ++q){
         fab_uw[q] = &(state_uw[q]->get(mfi));
         uw[q] = fab_uw[q]->array();
-      } 
-      
+      }
+
       for(int q=0; q<Q; ++q){
         amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
-        { 
-          uw[q](i,j,k,n) = set_initial_condition_U_w(model_pde,lev,q,n,i, j, k);  
-        });          
+        {
+          uw[q](i,j,k,n) = set_initial_condition_U_w(model_pde,lev,q,n,i, j, k);
+        });
       }
     }   
   }
@@ -531,10 +531,12 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
   }
 
-  //Synch ghost cells inside same level across MPI processes
-  //(during init ghost are not filled)
+  //Synch ghost cells between patches at same level across MPI processes.
+  //Ghost cells at fine-coarse interface were already filled during init
+  //(via growntilebox for analytical IC, or InterpFromCoarseLevel for interpolated IC).
+  //FillBoundary only handles same-level patch boundaries, not fine-coarse interface.
   for(int l=0; l<=_mesh->get_finest_lev(); ++l){
-    for(int q=0; q<Q; ++q){ 
+    for(int q=0; q<Q; ++q){
       Solver<NumericalMethodType>::FillBoundary(&(U_w[l][q]),l);
     }
   }
@@ -773,7 +775,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
   if ((_mesh->L > 1))
   {
-    AMR_flux_correction();
+    //AMR_flux_correction();
   }
 }
 
