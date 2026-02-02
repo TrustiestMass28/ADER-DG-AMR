@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
       {
         //code here if you want different coefficients 
         //for each level of refinement
-        if(l==0){amr_c[l] = 2.5;}
+        if(l==0){amr_c[l] = 1.5;}
         else{amr_c[l] = 1.0;}
       }
 
@@ -111,11 +111,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 16;
+            n_cell_x = 64;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 16;
+            n_cell_y = 64;
 
 
             L_z_lo   = 0.0;
