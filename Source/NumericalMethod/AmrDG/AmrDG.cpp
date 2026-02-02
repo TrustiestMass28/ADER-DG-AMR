@@ -95,48 +95,60 @@ void AmrDG::init()
     "        Discontinuous Galerkin      ",
   };
 
-    // Print top border (80 #)
-    amrex::Print() << std::string(width, '#') << "\n";
+  // Print top border (80 #)
+  amrex::Print() << std::string(width, '#') << "\n";
 
-    for (const auto& line : logo) {
-        int offset = 3; // shift left by 5 spaces
-        int padding = ((width - static_cast<int>(line.size())) / 2) - offset;
-        // If padding < 0 means line longer than width, just print it as is
-        if (padding < 0) {
-            amrex::Print() << line << "\n";
-        } else {
-            // Left pad with spaces to center
-            amrex::Print() << std::string(padding, ' ') << line << "\n";
-        }
-    }
+  for (const auto& line : logo) {
+      int offset = 3; // shift left by 5 spaces
+      int padding = ((width - static_cast<int>(line.size())) / 2) - offset;
+      // If padding < 0 means line longer than width, just print it as is
+      if (padding < 0) {
+          amrex::Print() << line << "\n";
+      } else {
+          // Left pad with spaces to center
+          amrex::Print() << std::string(padding, ' ') << line << "\n";
+      }
+  }
 
-    // Print bottom border (80 #)
-    amrex::Print() << std::string(width, '#') << "\n";
+  // Print bottom border (80 #)
+  amrex::Print() << std::string(width, '#') << "\n";
 
   auto _mesh = mesh.lock();
   
   //Set vectors size
   U_w.resize(_mesh->L); 
+
   U.resize(_mesh->L); 
+
   if(flag_source_term){S.resize(_mesh->L);}
+
   U_center.resize(_mesh->L); 
 
   F.resize(_mesh->L);
+
   Fm.resize(_mesh->L);
+
   Fp.resize(_mesh->L);
 
   DF.resize(_mesh->L);
+
   DFm.resize(_mesh->L);
+
   DFp.resize(_mesh->L);
 
   Fnum.resize(_mesh->L);
+
   Fnum_int_f.resize(_mesh->L);
+
   Fnum_int_c.resize(_mesh->L);
 
 
   H_w.resize(_mesh->L); 
+
   H.resize(_mesh->L); 
+
   H_p.resize(_mesh->L);
+
   H_m.resize(_mesh->L);
 
   //Basis function
@@ -150,7 +162,9 @@ void AmrDG::init()
 
   //basis functions d.o.f idx mapper
   basefunc->basis_idx_s.resize(basefunc->Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
+
   basefunc->basis_idx_t.resize(basefunc->Np_st, amrex::Vector<int>(1));
+
   basefunc->basis_idx_st.resize(basefunc->Np_st, amrex::Vector<int>(AMREX_SPACEDIM+1));  
   //basis_idx_t for each of the Np_st basis func, stores the idx of the time polynomial,
   //thats why it has basefunc->Np_st. This because when we ened to evalaute temporal basis
@@ -202,6 +216,7 @@ void AmrDG::init()
   //Initialize generalized Vandermonde matrix (only volume, no boudnary version)
   //and their inverse
   V.resize(quadrule->qMp_st,amrex::Vector<amrex::Real> (basefunc->Np_st)); 
+
   Vinv.resize(basefunc->Np_st,amrex::Vector<amrex::Real> (quadrule->qMp_st));
 
   //Initialize L2 projeciton quadrature matrix
@@ -298,6 +313,7 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 { 
   //Init data structures for level for all solution components of the system
   U_w[lev].resize(Q); 
+
   U[lev].resize(Q);
   
   if(flag_source_term){S[lev].resize(Q);}
@@ -305,44 +321,54 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
   U_center[lev].resize(Q); 
   
   H_w[lev].resize(Q); 
+
   H[lev].resize(Q);  
 
   H_p[lev].resize(AMREX_SPACEDIM);
+
   H_m[lev].resize(AMREX_SPACEDIM);
 
   F[lev].resize(AMREX_SPACEDIM);
+
   Fm[lev].resize(AMREX_SPACEDIM);
+
   Fp[lev].resize(AMREX_SPACEDIM);
+
   DF[lev].resize(AMREX_SPACEDIM);
+
   DFm[lev].resize(AMREX_SPACEDIM);
+
   DFp[lev].resize(AMREX_SPACEDIM);
 
   Fnum[lev].resize(AMREX_SPACEDIM);
+
   Fnum_int_f[lev].resize(AMREX_SPACEDIM);
+
   Fnum_int_c[lev].resize(AMREX_SPACEDIM);
 
 
   for(int d=0; d<AMREX_SPACEDIM; ++d){
     F[lev][d].resize(Q);
+
     Fm[lev][d].resize(Q);
+
     Fp[lev][d].resize(Q);
+
     DF[lev][d].resize(Q);
+
     DFm[lev][d].resize(Q);
+
     DFp[lev][d].resize(Q);
+
     Fnum[lev][d].resize(Q);
+
     Fnum_int_f[lev][d].resize(Q);
+
     Fnum_int_c[lev][d].resize(Q);
 
     H_p[lev][d].resize(Q);
+
     H_m[lev][d].resize(Q);
-  }
-  
-  // Add verification that all data structures are properly sized
-  AMREX_ASSERT(U_w[lev].size() == Q);
-  AMREX_ASSERT(H_w[lev].size() == Q);
-  AMREX_ASSERT(F[lev].size() == AMREX_SPACEDIM);
-  for(int d = 0; d < AMREX_SPACEDIM; ++d) {
-    AMREX_ASSERT(F[lev][d].size() == Q);
   }
   
   // Add MPI synchronization after data structure initialization
@@ -355,15 +381,9 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
 { 
   auto _mesh = mesh.lock();
 
-  // Add safety checks for data structure sizes
-  AMREX_ASSERT(lev < H_w.size());
-  AMREX_ASSERT(lev < U_w.size());
-  AMREX_ASSERT(lev < F.size());
-  AMREX_ASSERT(q < H_w[lev].size());
-  AMREX_ASSERT(q < U_w[lev].size());
-
   H_w[lev][q].define(ba, dm, basefunc->Np_st, _mesh->nghost);
   H_w[lev][q].setVal(0.0);
+
   H[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
   H[lev][q].setVal(0.0);
   
@@ -380,18 +400,7 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
   if(flag_source_term){S[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
   S[lev][q].setVal(0.0);}
 
-  //idc_curl_K[lev].define(ba, dm,1,0);
-  //idc_curl_K[lev].setVal(0.0);
-  //idc_div_K[lev].define(ba, dm,1,0);
-  //idc_div_K[lev].setVal(0.0);
-  //idc_grad_K[lev].define(ba, dm,1,0);
-  //idc_grad_K[lev].setVal(0.0);
-    
   for(int d=0; d<AMREX_SPACEDIM; ++d){ 
-    // Add safety checks for F arrays
-    AMREX_ASSERT(d < F[lev].size());
-    AMREX_ASSERT(q < F[lev][d].size());
-    
     H_p[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
     H_p[lev][d][q].setVal(0.0);
 
@@ -425,13 +434,6 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
 
     Fnum_int_c[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
     Fnum_int_c[lev][d][q].setVal(0.0);    
-  }
-  
-  // Add verification that all data structures are properly defined
-  AMREX_ASSERT(H_w[lev][q].isDefined());
-  AMREX_ASSERT(U_w[lev][q].isDefined());
-  for(int d = 0; d < AMREX_SPACEDIM; ++d) {
-    AMREX_ASSERT(F[lev][d][q].isDefined());
   }
 }
 
@@ -797,11 +799,12 @@ void AmrDG::numflux(int lev,int d,int M, int N,
               bool left_valid  = _mesh->get_BoxArray(lev).contains(iv_left);
               bool right_valid = _mesh->get_BoxArray(lev).contains(iv_right);
 
-              if (left_valid != right_valid) 
+              if (left_valid != right_valid)
               {
                   // Orientation for fine-side projection
-                  // If left is invalid, the parent coarse cell is to the left (b=-1 for fine cell)
-                  int b = (!left_valid) ? -1 : 1; 
+                  // If left is invalid, coarse is on LEFT -> interface is coarse's PLUS face (ξ=+1)
+                  // If right is invalid, coarse is on RIGHT -> interface is coarse's MINUS face (ξ=-1)
+                  int b = (!left_valid) ? 1 : -1; 
 
                   // Calculate child index for the projection matrix P
                   int child_idx = 0;
@@ -1037,191 +1040,3 @@ void AmrDG::update_H_w(int lev)
   // Add MPI synchronization after updating H_w for all components
   amrex::ParallelDescriptor::Barrier();
 }
-
-///////////////////////////////////////////////////////////////////////////
-
-
-/*
-class AmrDG : public amrex::AmrCore, public NumericalMethod
-{
-  public: 
-
-    AmrDG(const RealBox& _rb, int _max_level,const Vector<int>& _n_cell, int _coord, 
-          Vector<IntVect> const& _ref_ratios, Array<int,AMREX_SPACEDIM> const& _is_per,
-          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
-          amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi, 
-          amrex::Vector<amrex::Vector<int>> _bc_lo_type,
-          amrex::Vector<amrex::Vector<int>> _bc_hi_type, amrex::Real _T,
-          amrex::Real _CFL, int _p,
-          int _t_regrid, int _t_outplt//, 
-          //std::string _limiter_type, amrex::Real _TVB_M, 
-          //amrex::Vector<amrex::Real> _AMR_TVB_C,
-          //amrex::Vector<amrex::Real> _AMR_curl_C, 
-          //amrex::Vector<amrex::Real> _AMR_div_C, 
-          //amrex::Vector<amrex::Real> _AMR_grad_C, 
-          //amrex::Vector<amrex::Real> _AMR_sec_der_C,
-          //amrex::Real _AMR_sec_der_indicator, amrex::Vector<amrex::Real> _AMR_C
-          , int _t_limit);
-
-///////////////////////////////////////////////////////////////////////////
-    //DG 
-    //Initial Conditions, and level initialization
-    void InitialCondition(int lev);
-    
-    amrex::Real Initial_Condition_U_w(int lev,int q,int n,int i,int j,int k) const;
-    
-    amrex::Real Initial_Condition_U(int lev,int q,int i,int j,int k,
-                                    amrex::Vector<amrex::Real> xi) const;
- 
-      //Modal expansion
-    void get_U_from_U_w(int c, amrex::Vector<amrex::MultiFab>* U_w_ptr, 
-                        amrex::Vector<amrex::MultiFab>* U_ptr,
-                        amrex::Vector<amrex::Real> xi, bool is_predictor);
-                                                          
-    void get_u_from_u_w(int c, int i, int j, int k,
-                        amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                        amrex::Vector<amrex::Array4< amrex::Real>>* u ,
-                        amrex::Vector<amrex::Real> xi); 
-                        
-    void get_u_from_u_w(int c, int i, int j, int k,
-                        amrex::Vector<amrex::Array4< amrex::Real>>* uw, 
-                        amrex::Vector<amrex::Array4< amrex::Real>>* u ,
-                        amrex::Vector<amrex::Real> xi);      
-  
-                                    
-///////////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////////
-//LIMTIING/TAGGING
-
-    amrex::Real minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
-                        bool &troubled_flag, int l) const;
-    
-    amrex::Real minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3, 
-                        bool &troubled_flag) const;  
-
-
-    void Limiter_w(int lev); //, amrex::TagBoxArray& tags, char tagval
-    
-    void Limiter_linear_tvb(int i, int j, int k, 
-                              amrex::Vector<amrex::Array4<amrex::Real>>* uw, 
-                              amrex::Vector<amrex::Array4<amrex::Real>>* um,
-                              amrex::Vector<amrex::Array4<amrex::Real>>* up, 
-                              amrex::Vector<amrex::Array4<amrex::Real>>* vw,
-                              //amrex::Vector<amrex::Array4<amrex::Real>>* um_cpy,
-                              int lev);  
-
-    void AMRIndicator_tvb(int i, int j, int k,
-                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                          amrex::Vector<amrex::Array4<amrex::Real>>* um,
-                          amrex::Vector<amrex::Array4<amrex::Real>>* up,
-                          int l, amrex::Array4<char> const& tag,char tagval, 
-                          bool& any_trouble); 
-                          
-    void AMRIndicator_second_derivative(int i, int j, int k, 
-                                        amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                                        int l,amrex::Array4<char> const& tag,
-                                        char tagval, bool& any_trouble);    
-                                        
-    void AMRIndicator_curl(int i, int j, int k,
-                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                          amrex::Array4<amrex::Real> const & curl_indicator,int l, 
-                          bool flag_local,amrex::Array4<char> const& tag,
-                          char tagval,bool& any_trouble);
-                          
-    void AMRIndicator_div(int i, int j, int k,
-                          amrex::Vector<amrex::Array4<const amrex::Real>>* uw, 
-                          amrex::Array4<amrex::Real> const & div_indicator,int l, 
-                          bool flag_local,amrex::Array4<char> const& tag,
-                          char tagval,bool& any_trouble);
-                          
-    void AMRIndicator_grad(int i, int j, int k,
-                          amrex::Vector<amrex::Array4<const  amrex::Real>>* uw, 
-                          amrex::Array4<amrex::Real> const & grad_indicator,int l, 
-                          bool flag_local,amrex::Array4<char> const& tag,
-                          char tagval,bool& any_trouble);
-
-
-    
-    //Model Equation/Simulation settings and variables    
-    
-    int t_limit;
-    std::string limiter_type;
-
-
-    amrex::Vector<amrex::Real> AMR_C;
-    
-    amrex::Real AMR_curl_indicator;
-    amrex::Vector<amrex::Real> AMR_curl_C;
-    amrex::Vector<amrex::MultiFab> idc_curl_K;
-
-    amrex::Real AMR_div_indicator;
-    amrex::Vector<amrex::Real> AMR_div_C;
-    amrex::Vector<amrex::MultiFab> idc_div_K;
-    
-    amrex::Real AMR_grad_indicator;
-    amrex::Vector<amrex::Real> AMR_grad_C;
-    amrex::Vector<amrex::MultiFab> idc_grad_K;    
-    
-    amrex::Real AMR_sec_der_indicator;
-    amrex::Vector<amrex::Real> AMR_sec_der_C;
-    
-    amrex::Real TVB_M;
-    amrex::Vector<amrex::Real> AMR_TVB_C;
-///////////////////////////////////////////////////////////////////////////
-};
-*/
-///////////////////////////////////////////////////////////////////////////////////////////////////
-/*
-
-#include <AMReX_AmrCore.H>
-#include <AMReX_FluxRegister.H>
-
-#include <AMReX_Interpolater.H>
-#include <AMReX_ParallelDescriptor.H>
-#include <AMReX_ParmParse.H>
-#include <AMReX_MultiFab.H>
-#include <AMReX_MultiFabUtil.H>
-#include <AMReX_FillPatchUtil.H>
-#include <AMReX_PlotFileUtil.H>
-#include <AMReX_VisMF.H>
-#include <AMReX_PhysBCFunct.H>
-#include <AMReX_Print.H>
-#include <cmath>
-#include <math.h>
-#include <AMReX_FillPatcher.H>
-#ifdef AMREX_MEM_PROFILING
-#include <AMReX_MemProfiler.H>
-#endif
-BOUNDARY CONDITIONS
-
-///////////////////////////////////////////////////////////////////////
-LIMITING AND REFINING ADVANCED
-
-  //std::string _limiter_type, 
-  //amrex::Real _TVB_M,
-  //amrex::Vector<amrex::Real> _AMR_TVB_C ,
-  //amrex::Vector<amrex::Real> _AMR_curl_C, 
-  //amrex::Vector<amrex::Real> _AMR_div_C,  
-  //amrex::Vector<amrex::Real> _AMR_grad_C, 
-  //amrex::Vector<amrex::Real> _AMR_sec_der_C,
-  //amrex::Real _AMR_sec_der_indicator, 
-  //amrex::Vector<amrex::Real> _AMR_C, 
-  int _t_limit
-
-  t_limit  = _t_limit;
-  AMR_curl_C = _AMR_curl_C;
-  AMR_div_C = _AMR_div_C;
-  AMR_grad_C = _AMR_grad_C;
-  AMR_sec_der_C = _AMR_sec_der_C;
-  AMR_sec_der_indicator = _AMR_sec_der_indicator;
-  AMR_TVB_C = _AMR_TVB_C;
-  AMR_C = _AMR_C;
-  
-    limiter_type = _limiter_type;
-  TVB_M = _TVB_M;
-
-  idc_curl_K.resize(L);
-  idc_div_K.resize(L);
-  idc_grad_K.resize(L);
-*/

@@ -23,11 +23,17 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 1;
+      int p  = 2; //polynomial degree
       amrex::Real T = 10.0;
       amrex::Real c_dt = 0.9; //safety factor for CFL condition
 
       sim.setNumericalSettings(p,T,c_dt);
+
+      //VALIDATION MODE
+      //Set to true for convergence tests: uses analytical IC at all levels
+      //Set to false for normal AMR: levels > 0 use projection from coarser level
+      bool validation_mode = true;
+      sim.setValidationMode(validation_mode);
 
       //IO
       int dtn_outplt = -1;
@@ -36,12 +42,12 @@ int main(int argc, char* argv[])
       sim.setIO(dtn_outplt, dt_outplt);
 
       //AMR
-      int max_level =1;            // number of levels = max_level + 1
+      int max_level =1;             // number of levels = max_level + 1
                                     // max_level=0 single level simulation
                                     // max_level>0 multi  level simulation
                                     // max_level==idx of maximum fine lvl
 
-      int dtn_regrid  = 1;          // try regrid every n timesteps
+      int dtn_regrid  = 10;          // try regrid every n timesteps
       int nghost = 1;               //number of ghost cells, dont change
       amrex::Real dt_regrid = -1;    //regrid every dt time, negative wont use it
                               
@@ -50,8 +56,8 @@ int main(int argc, char* argv[])
       {
         //code here if you want different coefficients 
         //for each level of refinement
-        if(l==0){amr_c[l] = 0.8;}
-        else{amr_c[l] = 0.7;}
+        if(l==0){amr_c[l] = 2.5;}
+        else{amr_c[l] = 1.0;}
       }
 
       //BOUNDARY CONDITION
@@ -105,11 +111,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 256;
+            n_cell_x = 16;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 256;
+            n_cell_y = 16;
 
 
             L_z_lo   = 0.0;

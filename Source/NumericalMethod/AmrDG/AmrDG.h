@@ -503,6 +503,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
 {
 
   bool dtn_plt; bool dt_plt; int n; amrex::Real t; std::ostringstream oss;
+  int last_progress = 0;  // Track last progress for bar updates
 
   auto _mesh = mesh.lock();
 
@@ -523,9 +524,10 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   
   if (amrex::ParallelDescriptor::IOProcessor()) {
     if (m_bar) {
-        amrex::Print()<< "\n";
-        m_bar->set_option(indicators::option::PostfixText{"Simulating..."});
+        std::cout << "\n";
+        m_bar->set_option(indicators::option::PostfixText{"0% Starting simulation..."});
         m_bar->set_progress(0);
+        std::cout << std::flush;
     }
   }
 
@@ -543,18 +545,24 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       if (m_bar) {
         oss.str("");
         oss.clear();
-        
+
         // Calculate progress percentage
         int progress = static_cast<int>((t / T) * 100.0);
         progress = std::clamp(progress, 0, 100);
-        m_bar->set_progress(progress);
 
         // Update the text to show current time vs total time
-        
-        oss << "t = " << std::fixed << std::setprecision(5) << t
+        oss << std::fixed << std::setprecision(0) << progress << "% "
+          << "t = " << std::fixed << std::setprecision(4) << t
           << " / " << T
           << " | Dt = " << std::scientific << std::setprecision(2) << Dt;
         m_bar->set_option(indicators::option::PostfixText{oss.str()});
+
+        // Use tick() to advance the bar visually
+        while (last_progress < progress) {
+          m_bar->tick();
+          last_progress++;
+        }
+        std::cout << std::flush;
       }
     }
 
@@ -626,15 +634,18 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   }
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
-  if (m_bar && !m_bar->is_completed()) {
-      m_bar->set_option(indicators::option::PostfixText{"Done"});
-      m_bar->set_progress(100);
-      //m_bar->mark_as_completed();
-      m_bar.reset();
-      amrex::Print()<< "\n";
-  } 
-  Print() << "Total number of time steps: " << n << "\n";
-}
+    if (m_bar && !m_bar->is_completed()) {
+        m_bar->set_option(indicators::option::PostfixText{"100% Done"});
+        m_bar->set_progress(100);
+        m_bar->mark_as_completed();
+        std::cout << std::flush;
+    }
+    m_bar.reset();
+    // Restore cursor visibility
+    std::cout << "\033[?25h" << std::flush;
+    std::cout << "\n";
+    Print() << "Total number of time steps: " << n << "\n";
+  }
 
   amrex::ParallelDescriptor::Barrier();
 

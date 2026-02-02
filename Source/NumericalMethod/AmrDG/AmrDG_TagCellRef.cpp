@@ -10,44 +10,32 @@ void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Re
   const int   tagval = TagBox::SET;
 
   auto _mesh = mesh.lock();
-  /*
-  amrex::Vector<amrex::MultiFab> tmp_U_p(Q);
-  amrex::Vector<amrex::MultiFab> tmp_U_m(Q);
-  for(int q=0 ; q<Q; ++q){
-    tmp_U_p[q].define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), qMpbd, nghost);
-    tmp_U_p[q].setVal(0.0);
-    
-    tmp_U_m[q].define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), qMpbd, nghost);
-    tmp_U_m[q].setVal(0.0);
-  }
- 
-  amrex::MultiFab& state_curl_indicator =idc_curl_K[lev];
-  amrex::MultiFab& state_div_indicator =idc_div_K[lev];
-  amrex::MultiFab& state_grad_indicator =idc_grad_K[lev];
+
+  const auto prob_lo = _mesh->get_Geom(lev).ProbLoArray();
+  const auto prob_hi = _mesh->get_Geom(lev).ProbHiArray();
+  const auto dx      = _mesh->get_Geom(lev).CellSizeArray();
+
+  // Vortex parameters
+  constexpr Real x0 = 5.0;
+  constexpr Real y0 = 5.0;
+  constexpr Real u_infty = 1.0;
+  constexpr Real v_infty = 0.0;  // Change to 1.0 for diagonal motion
+
+  // Domain size (for periodic wrapping)
+  const Real Lx = prob_hi[0] - prob_lo[0];
+  const Real Ly = prob_hi[1] - prob_lo[1];
   
-
-  bool any_trouble = false;//flag used to indicate if any troubled cells have been found at all
-
-  amrex::Vector<amrex::MultiFab *> state_tmp_um(Q);
-  amrex::Vector<amrex::MultiFab *> state_tmp_up(Q);
-  */
   amrex::Vector<const amrex::MultiFab *> state_uw(Q);
 
   for(int q=0; q<Q; ++q){
-    //state_tmp_um[q]=&(tmp_U_m[q]);
-    //state_tmp_up[q]=&(tmp_U_p[q]);
     state_uw[q]=&(U_w[lev][q]); 
   }
+
 #ifdef AMREX_USE_OMP
 #pragma omp parallel 
 #endif
   {
-    /*
-    amrex::Vector< amrex::FArrayBox *> fab_tmp_um(Q);
-    amrex::Vector< amrex::Array4<amrex::Real> > tmp_um(Q);
-    amrex::Vector< amrex::FArrayBox *> fab_tmp_up(Q);
-    amrex::Vector< amrex::Array4<  amrex::Real> > tmp_up(Q);
-    */
+
     amrex::Vector<const amrex::FArrayBox *> fab_uw(Q);
     amrex::Vector< amrex::Array4< const amrex::Real> > uw(Q);   
 
@@ -59,75 +47,58 @@ void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Re
     {
       const amrex::Box& bx = mfi.tilebox();  
       const auto tagfab  = tags.array(mfi);
-
-      /*
-      amrex::FArrayBox& fab_curl_indicator = state_curl_indicator[mfi];
-      amrex::FArrayBox& fab_div_indicator = state_div_indicator[mfi];
-      amrex::FArrayBox& fab_grad_indicator = state_div_indicator[mfi];*/
-          
+ 
       for(int q=0 ; q<Q; ++q){
-        //fab_tmp_um[q] = &((*(state_tmp_um[q]))[mfi]);
-        //fab_tmp_up[q] = &((*(state_tmp_up[q]))[mfi]);
         fab_uw[q] = state_uw[q]->fabPtr(mfi);
         
-        //tmp_um[q] = (*(fab_tmp_um[q])).array();
-        //tmp_up[q] = (*(fab_tmp_up[q])).array();
         uw[q] = fab_uw[q]->const_array();
       }
               
-      //amrex::Array4<Real> const& curl_indicator = fab_curl_indicator.array();
-      //amrex::Array4<Real> const& div_indicator = fab_div_indicator.array();
-      //amrex::Array4<Real> const& grad_indicator = fab_grad_indicator.array();
-      
       amrex::Dim3 lo = lbound(bx);
       amrex::Dim3 hi = ubound(bx);
-      //AMR_curl_indicator = 0.0;
-      //AMR_div_indicator = 0.0;
-      
+
+      // Vortex center: static (fixed) or dynamic (follows vortex)
+      // When validation_mode=true (flag_analytical_ic), use static refinement for convergence tests
+      // When validation_mode=false, use dynamic refinement that tracks the vortex
+      Real xc, yc;
+      if (flag_analytical_ic) {
+        // VALIDATION MODE: Fixed refinement region for convergence testing
+        xc = x0;
+        yc = y0;
+      } else {
+        // PRODUCTION MODE: Refinement follows vortex motion
+        xc = x0 + u_infty * time;
+        yc = y0 + v_infty * time;
+      }
+
       amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
       {
-        //AMRIndicator_tvb(i, j, k, &uw, &tmp_um,&tmp_up, lev, tagfab, tagval, any_trouble);
-        //AMRIndicator_curl(i, j, k, &uw, curl_indicator, lev, true , tagfab, tagval, any_trouble);
-        //AMRIndicator_div(i, j, k, &uw, div_indicator, lev, true , tagfab, tagval, any_trouble);
-        //AMRIndicator_grad(i, j, k, &uw, grad_indicator, lev, true , tagfab, tagval, any_trouble);
-        //AMRIndicator_second_derivative(i, j, k,&uw, lev , tagfab, tagval, any_trouble);
-        //if(uw[0](i,j,k,0)<=AMR_C[lev])
-        if(uw[0](i,j,k,0)<=_mesh->amr_c[lev])
-        {
-          tagfab(i,j,k)=tagval;
+        Real x = prob_lo[0] + (i + 0.5) * dx[0];
+        Real y = prob_lo[1] + (j + 0.5) * dx[1];
+        
+        // Compute minimum distance with periodic wrapping
+        Real dx_vortex = x - xc;
+        Real dy_vortex = y - yc;
+        
+        // Apply periodic wrapping (minimum image convention)
+        // Wrap dx to [-Lx/2, Lx/2]
+        if (dx_vortex > Lx/2.0)  dx_vortex -= Lx;
+        if (dx_vortex < -Lx/2.0) dx_vortex += Lx;
+        
+        // Wrap dy to [-Ly/2, Ly/2]
+        if (dy_vortex > Ly/2.0)  dy_vortex -= Ly;
+        if (dy_vortex < -Ly/2.0) dy_vortex += Ly;
+        
+        // Distance to nearest periodic image
+        Real r = std::sqrt(dx_vortex*dx_vortex + dy_vortex*dy_vortex);
+        
+        if (r <= std::pow(_mesh->amr_c[lev], 2)) {
+          tagfab(i,j,k) = tagval;
         }
       });
-      /*
-      //TODO: execute below only if using curl_euler,div_euler or grad_euler
-        #ifdef AMREX_USE_OMP
-        #pragma omp single if(omp_get_thread_num() ==0)
-        #endif
-        {
-          //Get the number of cells in each dimension of the domain
-          int Nc= (int)CountCells(lev);//might have problems if we have more than 2 billion cells
-                   
-          if(equation_type == "2d_euler" || equation_type == "2d_euler_am"){
-            AMR_div_indicator=std::sqrt(AMR_div_indicator/Nc);
-            AMR_grad_indicator=std::sqrt(AMR_div_indicator/Nc);
-          }
-          else if(equation_type == "3d_euler" || equation_type == "3d_euler_am"){
-            AMR_curl_indicator=std::sqrt(AMR_curl_indicator/Nc);
-            AMR_div_indicator=std::sqrt(AMR_div_indicator/Nc);
-            AMR_grad_indicator=std::sqrt(AMR_div_indicator/Nc);
-          }
-        }
-        
-        amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
-        {          
-          AMRIndicator_curl(i, j, k, &uw, curl_indicator, lev, true , tagfab, tagval, any_trouble);
-          AMRIndicator_div(i, j, k, &uw, div_indicator, lev, true , tagfab, tagval, any_trouble);
-          AMRIndicator_grad(i, j, k, &uw, grad_indicator, lev, true , tagfab, tagval, any_trouble);
-        });
-        */
     }
   }
 }
-    
 /*
 void AmrDG::AMRIndicator_tvb(int i, int j, int k,
                             amrex::Vector<amrex::Array4<const amrex::Real>>* uw,
