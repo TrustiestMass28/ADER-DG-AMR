@@ -50,6 +50,12 @@ class Solver
             static_cast<NumericalMethodType*>(this)->settings(std::forward<Args>(args)...);
         }
 
+        //Set validation mode: if true, use analytical IC at all levels (for convergence tests)
+        //If false (default), levels > 0 use projection from coarser level
+        void setValidationMode(bool use_analytical_ic) {
+            flag_analytical_ic = use_analytical_ic;
+        }
+
         //TODO: pass all tempaltes of other classes from which Solver might need data to init
         //like stuff from geometry for number of levels,...
         template <typename EquationType>
@@ -402,7 +408,11 @@ class Solver
         int Q_unique; 
 
         //Flag to indicate if source term is considered
-        bool flag_source_term;  
+        bool flag_source_term;
+
+        //Flag to indicate if analytical IC should be used at all levels (for validation/convergence tests)
+        //If false, levels > 0 use projection from coarser level
+        bool flag_analytical_ic = false;
 
         //spatial (approxiamtion) order
         int p;
@@ -544,8 +554,12 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
 
 	//Init progress bar
     if (amrex::ParallelDescriptor::IOProcessor()) {
+        // Hide cursor during progress bar display
+        std::cout << "\033[?25l" << std::flush;
+
+        // Bar width 50 + brackets/text ~30 = ~80 chars (classic terminal width)
         m_bar.emplace(
-            indicators::option::BarWidth{90},
+            indicators::option::BarWidth{100},
             indicators::option::Start{"["},
             indicators::option::Fill{"█"},
             indicators::option::Lead{"█"},
@@ -559,6 +573,7 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
             indicators::option::Stream{std::cout},  //CRITICAL for in-place update
             indicators::option::MaxProgress{100} // REQUIRED for set_progress(0–100)
         );
+        std::cout << std::flush;
     }
 
     //AmrCore.h function initialize multilevel mesh, geometry, Box array and DistributionMap
@@ -649,14 +664,19 @@ template <typename EquationType>
 void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<ModelEquation<EquationType>>& model_pde)
 {
     auto _mesh = mesh.lock();
-   
+
     //Define IC on single coarse mesh
     static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,0);
-    
+
     if (_mesh->L > 1) {
         for(int l=1; l<_mesh->L; ++l){
-            AMR_interpolate_initial_condition(l);
-            //static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,l);
+            if (flag_analytical_ic) {
+                //Validation mode: use analytical IC at all levels
+                static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,l);
+            } else {
+                //Normal AMR mode: project from coarser level
+                AMR_interpolate_initial_condition(l);
+            }
         }
     }
 }

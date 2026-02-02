@@ -48,6 +48,10 @@ class Simulation
 
     void setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix = "");
 
+    //Set validation mode: if true, use analytical IC at all levels (for convergence tests)
+    //If false (default), levels > 0 use projection from coarser level
+    void setValidationMode(bool use_analytical_ic);
+
     int getQ();
 
   private:
@@ -165,6 +169,12 @@ int Simulation<NumericalMethodType,EquationType>::getQ()
 {
   //to be called only after ModelEquation object has been init
   return model->Q_model;
+}
+
+template <typename NumericalMethodType,typename EquationType>
+void Simulation<NumericalMethodType,EquationType>::setValidationMode(bool use_analytical_ic)
+{
+  solver->setValidationMode(use_analytical_ic);
 }
 
 #endif // SIMULATION_H
