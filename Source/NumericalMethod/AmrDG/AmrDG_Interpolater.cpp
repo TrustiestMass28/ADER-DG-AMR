@@ -90,7 +90,7 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
 {
     // 1. Setup dimensions
     int num_face_children = (int)std::pow(2, AMREX_SPACEDIM - 1);
-    int num_q_pts = numme->quadrule->qMp_s_bd; // Fine quadrature points on face
+    int num_q_pts = numme->quadrule->qMp_st_bd; // Space-time boundary quadrature points on face
 
     // 2. Resize Outer Vectors [Direction]
     P_flux_fc_low.resize(AMREX_SPACEDIM);
@@ -130,8 +130,8 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
                     
                     // --- A. Geometry/Mapping Logic ---
                     
-                    // Get Fine Quad Point (on reference face)
-                    amrex::Vector<amrex::Real> xi_f = numme->quadrule->xi_ref_quad_s_bdm[d][m];
+                    // Get Fine Quad Point (space-time boundary point)
+                    const auto& xi_f = numme->quadrule->xi_ref_quad_st_bdm[d][m];
                     
                     // Map to Coarse Parent Coordinate System for both sides
                     amrex::Vector<amrex::Real> xi_c_low(AMREX_SPACEDIM);
