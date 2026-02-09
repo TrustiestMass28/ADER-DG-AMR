@@ -500,7 +500,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
 
   //Set timestep idx and time
   n=0;
-  t= 0.0;  
+  t= 0.0;
+  int n_regrids = 0;
 
   //Plot initial condition
   dtn_plt =  (dtn_outplt > 0);
@@ -522,6 +523,14 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
   }
 
+  //Initial regrid to create proper AMR hierarchy from full-domain initialization
+  //and set up flux registers. This must happen before time stepping.
+  if(_mesh->L > 1){
+    _mesh->regrid(0, t);
+    amrex::ParallelDescriptor::Barrier();
+    AMR_set_flux_registers();
+  }
+
   //Synch ghost cells between patches at same level across MPI processes.
   //Ghost cells at fine-coarse interface were already filled during init
   //(via growntilebox for analytical IC, or InterpFromCoarseLevel for interpolated IC).
@@ -531,7 +540,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       Solver<NumericalMethodType>::FillBoundary(&(U_w[l][q]),l);
     }
   }
-  
+
   while(t<T)
   {  
     if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -562,10 +571,19 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //Remake existing levels and create new fine levels from coarse
     if ((_mesh->L > 1))
     {
+      bool do_regrid = false;
       if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
-        //TODO: adapt boolena condition to handle physical time
-        //interval dt_regrid
+        do_regrid = true;
+      }
+      if((_mesh->dt_regrid > 0) && (t >= _mesh->t_next_regrid - 1.0e-14)){
+        do_regrid = true;
+      }
+      if(do_regrid){
+        n_regrids++;
         _mesh->regrid(0, t);
+        while(_mesh->t_next_regrid <= t + 1.0e-14){
+          _mesh->t_next_regrid += _mesh->dt_regrid;
+        }
         amrex::ParallelDescriptor::Barrier();
 
         //clear old flux register
@@ -574,7 +592,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         //construct new flux register on new grid
         AMR_set_flux_registers();
       }
-    }  
+    }
     
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
@@ -620,10 +638,10 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
-    
-    //if(n==10){ //safety break
-    //  t=T+1;
-    //}
+    /*
+    if(n==1){ //safety break
+      t=T+1;
+    }*/
   }
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -638,6 +656,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     std::cout << "\033[?25h" << std::flush;
     std::cout << "\n";
     Print() << "Total number of time steps: " << n << "\n";
+    Print() << "Total number of regrids: " << n_regrids << "\n";
   }
 
   amrex::ParallelDescriptor::Barrier();
@@ -746,7 +765,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
           if (l < _mesh->get_finest_lev() && flux_reg[l+1].size()) {
             flux_reg[l+1][q]->CrseAdd(Fnum_int_c[l][d][q], d,
                         0, 0, static_cast<int>(basefunc->Np_s),
-                        1.0, _mesh->get_Geom(l)); 
+                        -1.0, _mesh->get_Geom(l));
           }
 
           //for each fine level add their surface integrated numerical flux

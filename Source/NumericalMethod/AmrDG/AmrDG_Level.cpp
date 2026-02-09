@@ -240,11 +240,11 @@ void AmrDG::AMR_set_flux_registers()
         if (lev < _mesh->get_finest_lev()) {
             // Identifies where cells at 'lev' are covered by 'lev+1'
             level_mask = amrex::makeFineMask(
-                _mesh->get_BoxArray(lev), 
-                _mesh->get_DistributionMap(lev), 
-                _mesh->get_BoxArray(lev+1), 
-                _mesh->get_refRatio(lev), 
-                1, 0);
+                _mesh->get_BoxArray(lev),
+                _mesh->get_DistributionMap(lev),
+                _mesh->get_BoxArray(lev+1),
+                _mesh->get_refRatio(lev),
+                0, 1);
         } else {
             // Finest level: no fine cells above it
             level_mask.define(_mesh->get_BoxArray(lev), 
