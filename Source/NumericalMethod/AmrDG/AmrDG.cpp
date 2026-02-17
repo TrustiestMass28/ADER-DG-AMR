@@ -437,34 +437,47 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
   }
 }
 
-void AmrDG::get_U_from_U_w(int M, int N, amrex::Vector<amrex::MultiFab>& _U,
-                          const amrex::Vector<amrex::MultiFab>& _U_w,
+void AmrDG::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>* U_ptr,
+                          amrex::Vector<amrex::MultiFab>* U_w_ptr, 
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-  //Can evalaute U_w (Np_s) at boundary using bd quadrature pts qM_s_bd or
+  //Can evalaute U_w (Np_s) at boundary using bd quadrature pts qM_s_bd or 
   //for the entire cell using qM_s
   //M=quadrule->qM_s;
   //N=basefunc->qM_s
+
+  amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
+  amrex::Vector<amrex::MultiFab *> state_u(Q); 
+
+  for(int q=0; q<Q; ++q){
+    state_u_w[q]=&((*U_w_ptr)[q]);    
+    state_u[q]=&((*U_ptr)[q]);  
+  } 
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel
 #endif
     {
-      amrex::Vector<amrex::Array4<const amrex::Real>> uw(Q);
-      amrex::Vector<amrex::Array4<amrex::Real>> u(Q);
-
-      #ifdef AMREX_USE_OMP
-      for (MFIter mfi(_U_w[0], MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+      amrex::Vector<const amrex::FArrayBox *> fab_u_w(Q);
+      amrex::Vector< amrex::Array4<const amrex::Real>> uw(Q);  
+      amrex::Vector<amrex::FArrayBox *> fab_u(Q);
+      amrex::Vector<amrex::Array4<amrex::Real>> u(Q);  
+    
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(*(state_u_w[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
       #else
-      for (MFIter mfi(_U_w[0], true); mfi.isValid(); ++mfi)
+      for (MFIter mfi(*(state_u_w[0]),true); mfi.isValid(); ++mfi)
       #endif
       {
         const amrex::Box& bx = mfi.growntilebox();
 
         for(int q=0 ; q<Q; ++q){
-          uw[q] = _U_w[q].const_array(mfi);
-          u[q] = _U[q].array(mfi);
-        }
+          fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
+          uw[q] = fab_u_w[q]->const_array();
+              
+          fab_u[q] = &(state_u[q]->get(mfi));
+          u[q] = fab_u[q]->array();
+        } 
 
         for(int q=0 ; q<Q; ++q){
           amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
@@ -472,115 +485,145 @@ void AmrDG::get_U_from_U_w(int M, int N, amrex::Vector<amrex::MultiFab>& _U,
             for(int m = 0; m<M ; ++m){
               (u[q])(i,j,k,m)=0.0;
             }
-          });
+          }); 
 
           amrex::ParallelFor(bx,N,[&] (int i, int j, int k,int n) noexcept
-          {
+          { 
             for(int m = 0; m<M ; ++m){
-              (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_s(n,basefunc->basis_idx_s,xi[m]));
+              (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_s(n,basefunc->basis_idx_s,xi[m])); 
             }
-          });
-
-        }
-      }
+          });  
+                
+        }      
+      }  
     }
 }
 
-void AmrDG::get_H_from_H_w(int M, int N, amrex::Vector<amrex::MultiFab>& _H,
-                          const amrex::Vector<amrex::MultiFab>& _H_w,
+void AmrDG::get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>* H_ptr,
+                          amrex::Vector<amrex::MultiFab>* H_w_ptr, 
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-  //Can evalaute H_w (Np_st) at boundary using bd quadrature pts qM_st_bd or
+  //int qM = xi.size();
+
+  //Can evalaute H_w (Np_st) at boundary using bd quadrature pts qM_st_bd or 
   //for the entire cell using qM_st
+
+  amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
+  amrex::Vector<amrex::MultiFab *> state_u(Q); 
+
+  for(int q=0; q<Q; ++q){
+    state_u_w[q]=&((*H_w_ptr)[q]);    
+    state_u[q]=&((*H_ptr)[q]);  
+  } 
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel
 #endif
     {
-      amrex::Vector<amrex::Array4<const amrex::Real>> hw(Q);
-      amrex::Vector<amrex::Array4<amrex::Real>> h(Q);
+      amrex::Vector<const amrex::FArrayBox *> fab_u_w(Q);
+      amrex::Vector< amrex::Array4<const amrex::Real>> uw(Q);  
+      amrex::Vector<amrex::FArrayBox *> fab_u(Q);
+      amrex::Vector<amrex::Array4<amrex::Real>> u(Q);  
 
-      #ifdef AMREX_USE_OMP
-      for (MFIter mfi(_H_w[0], MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(*(state_u_w[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
       #else
-      for (MFIter mfi(_H_w[0], true); mfi.isValid(); ++mfi)
+      for (MFIter mfi(*(state_u_w[0]),true); mfi.isValid(); ++mfi)
       #endif
       {
         const amrex::Box& bx = mfi.growntilebox();
 
         for(int q=0 ; q<Q; ++q){
-          hw[q] = _H_w[q].const_array(mfi);
-          h[q] = _H[q].array(mfi);
-        }
+          fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
+          uw[q] = fab_u_w[q]->const_array();
+
+          fab_u[q] = &(state_u[q]->get(mfi));
+          u[q] = fab_u[q]->array();
+        } 
         for(int q=0 ; q<Q; ++q){
           amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
           {
             for(int m = 0; m<M ; ++m){
-              (h[q])(i,j,k,m)=0.0;
+              (u[q])(i,j,k,m)=0.0;
             }
-          });
-
+          }); 
+    
           amrex::ParallelFor(bx,N,[&] (int i, int j, int k,int n) noexcept
-          {
+          { 
             for(int m = 0; m<M ; ++m){
-              (h[q])(i,j,k,m)+=((hw[q])(i,j,k,n)*basefunc->phi_st(n,basefunc->basis_idx_st,xi[m]));
+              (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_st(n,basefunc->basis_idx_st,xi[m])); 
             }
-          });
-        }
-      }
+          });            
+        }      
+      }  
     }
 }
 
-void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>& _U_w,
-                          amrex::Vector<amrex::MultiFab>& _H_w)
+void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>* U_w_ptr, 
+                          amrex::Vector<amrex::MultiFab>* H_w_ptr)
 {
+
+  amrex::Vector<const amrex::MultiFab *> state_u_w(Q);   
+  amrex::Vector<amrex::MultiFab *> state_h_w(Q); 
+
+  for(int q=0; q<Q; ++q){
+    state_u_w[q]=&((*U_w_ptr)[q]);
+    state_h_w[q]=&((*H_w_ptr)[q]); 
+  } 
+
   #ifdef AMREX_USE_OMP
   #pragma omp parallel
   #endif
-  {
+  { 
+    amrex::Vector<amrex::FArrayBox *> fab_h_w(Q);
     amrex::Vector<amrex::Array4<amrex::Real>> hw(Q);
-    amrex::Vector<amrex::Array4<const amrex::Real>> uw(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_u_w(Q);
+    amrex::Vector<amrex::Array4<const amrex::Real>> uw(Q);   
 
-    #ifdef AMREX_USE_OMP
-    for (MFIter mfi(_H_w[0], MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+    #ifdef AMREX_USE_OMP  
+    for (MFIter mfi(*(state_h_w[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
     #else
-    for (MFIter mfi(_H_w[0], true); mfi.isValid(); ++mfi)
+    for (MFIter mfi(*(state_h_w[0]),true); mfi.isValid(); ++mfi)
     #endif
     {
       const amrex::Box& bx = mfi.growntilebox();
 
-      for(int q=0 ; q<Q; ++q){
-        uw[q] = _U_w[q].const_array(mfi);
-        hw[q] = _H_w[q].array(mfi);
+      for(int q=0 ; q<Q; ++q){      
+        fab_u_w[q] = state_u_w[q]->fabPtr(mfi);
+        fab_h_w[q] = &(state_h_w[q]->get(mfi));
+
+        uw[q] = fab_u_w[q]->const_array();
+        hw[q] = fab_h_w[q]->array();
       }
 
       for(int q=0 ; q<Q; ++q){
         amrex::ParallelFor(bx, basefunc->Np_st,[&] (int i, int j, int k, int n) noexcept
-        {
+        {   
           if(n<basefunc->Np_s)
           {
             //set first Np_s modes of H_w equalt to U_w
-            amrex::Real tmp = (uw[q])(i,j,k,n);
-            (hw[q])(i,j,k,n)=tmp;
-          }
+            amrex::Real tmp = (uw[q])(i,j,k,n); 
+            (hw[q])(i,j,k,n)=tmp;  
+          } 
           else
           {
             (hw[q])(i,j,k,n)=0.0;
-          }
-        });
-      }
-    }
-  }
+          }                
+        }); 
+      }      
+    }  
+  }  
 }
 
 void AmrDG::numflux(int lev,int d,int M, int N,
-                    const amrex::Vector<amrex::MultiFab>& _U_m,
-                    const amrex::Vector<amrex::MultiFab>& _U_p,
-                    const amrex::Vector<amrex::MultiFab>& _F_m,
-                    const amrex::Vector<amrex::MultiFab>& _F_p,
-                    const amrex::Vector<amrex::MultiFab>& _DF_m,
-                    const amrex::Vector<amrex::MultiFab>& _DF_p)
+                    amrex::Vector<amrex::MultiFab>* U_ptr_m, 
+                    amrex::Vector<amrex::MultiFab>* U_ptr_p,
+                    amrex::Vector<amrex::MultiFab>* F_ptr_m,
+                    amrex::Vector<amrex::MultiFab>* F_ptr_p,
+                    amrex::Vector<amrex::MultiFab>* DF_ptr_m,
+                    amrex::Vector<amrex::MultiFab>* DF_ptr_p)
 {
+ 
   auto _mesh = mesh.lock();
 
   amrex::Real dvol = _mesh->get_dvol(lev,d);
@@ -591,46 +634,103 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   // Get domain to calculate relative indices
   const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
   const amrex::IntVect& dom_lo = domain.smallEnd();
+  
+  //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
+  amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
+  amrex::Vector<amrex::MultiFab *> state_fnum_int_f(Q); 
+  amrex::Vector<amrex::MultiFab *> state_fnum_int_c(Q); 
+  
+  amrex::Vector<const amrex::MultiFab *> state_fm(Q);
+  amrex::Vector<const amrex::MultiFab *> state_fp(Q); 
+  amrex::Vector<const amrex::MultiFab *> state_dfm(Q);
+  amrex::Vector<const amrex::MultiFab *> state_dfp(Q);
+  amrex::Vector<const amrex::MultiFab *> state_um(Q);
+  amrex::Vector<const amrex::MultiFab *> state_up(Q);
 
-  //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2
   for (int q = 0; q < Q; ++q) {
     Fnum_int_f[lev][d][q].setVal(0.0);
     Fnum_int_c[lev][d][q].setVal(0.0);
+}
+
+  for(int q=0 ; q<Q; ++q){
+    state_um[q] = &((*U_ptr_m)[q]); 
+    state_up[q] = &((*U_ptr_p)[q]); 
+
+    state_fm[q] = &((*F_ptr_m)[q]);
+    state_fp[q] = &((*F_ptr_p)[q]);
+
+    state_dfm[q] = &((*DF_ptr_m)[q]);
+    state_dfp[q] = &((*DF_ptr_p)[q]);
+
+    //TODO: should be passed as argument?
+    state_fnum[q] = &(Fnum[lev][d][q]); 
+
+    state_fnum_int_f[q] = &(Fnum_int_f[lev][d][q]);  
+    state_fnum_int_c[q] = &(Fnum_int_c[lev][d][q]);
   }
 
 #ifdef AMREX_USE_OMP
-#pragma omp parallel
+#pragma omp parallel 
 #endif
   {
-    amrex::Vector<amrex::Array4<amrex::Real>> fnum(Q);
-    amrex::Vector<amrex::Array4<amrex::Real>> fnum_int_f(Q);
-    amrex::Vector<amrex::Array4<amrex::Real>> fnum_int_c(Q);
-    amrex::Vector<amrex::Array4<const amrex::Real>> fm(Q);
-    amrex::Vector<amrex::Array4<const amrex::Real>> fp(Q);
-    amrex::Vector<amrex::Array4<const amrex::Real>> dfm(Q);
-    amrex::Vector<amrex::Array4<const amrex::Real>> dfp(Q);
-    amrex::Vector<amrex::Array4<const amrex::Real>> um(Q);
-    amrex::Vector<amrex::Array4<const amrex::Real>> up(Q);
+    amrex::Vector<amrex::FArrayBox *> fab_fnum(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnum(Q);
 
+    amrex::Vector<amrex::FArrayBox *> fab_fnum_int_f(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnum_int_f(Q);
+
+    amrex::Vector<amrex::FArrayBox *> fab_fnum_int_c(Q);
+    amrex::Vector< amrex::Array4<amrex::Real> > fnum_int_c(Q);
+
+    
+    amrex::Vector<const amrex::FArrayBox *> fab_fm(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > fm(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_fp(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > fp(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_dfm(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > dfm(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_dfp(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > dfp(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_um(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > um(Q);
+    amrex::Vector<const amrex::FArrayBox *> fab_up(Q);
+    amrex::Vector< amrex::Array4< const amrex::Real> > up(Q);
+    
   #ifdef AMREX_USE_OMP
-    for (MFIter mfi(Fnum[lev][d][0], MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+    for (MFIter mfi(*(state_fnum[0]), MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
   #else
-    for (MFIter mfi(Fnum[lev][d][0], true); mfi.isValid(); ++mfi)
+      for (MFIter mfi(*(state_fnum[0]), true); mfi.isValid(); ++mfi)
   #endif
     {
+
       const amrex::Box& bx = mfi.tilebox();    //[0,N]
+      //amrex::Box bx = amrex.:growLo(bx, d, 1);  // [-1,N]
 
+      //Get the LOCAL box limits for this specific rank/tile
+      //const amrex::IntVect& lo_idx = bx.smallEnd();
+      
       for(int q=0 ; q<Q; ++q){
-        fnum[q] = Fnum[lev][d][q].array(mfi);
-        fnum_int_f[q] = Fnum_int_f[lev][d][q].array(mfi);
-        fnum_int_c[q] = Fnum_int_c[lev][d][q].array(mfi);
+        fab_fnum[q]=&(state_fnum[q]->get(mfi));
+        fab_fnum_int_f[q]=&(state_fnum_int_f[q]->get(mfi));
+        fab_fnum_int_c[q]=&(state_fnum_int_c[q]->get(mfi));
+  
+        fab_fm[q] = state_fm[q]->fabPtr(mfi);
+        fab_fp[q] = state_fp[q]->fabPtr(mfi);
+        fab_dfm[q] = state_dfm[q]->fabPtr(mfi);
+        fab_dfp[q] = state_dfp[q]->fabPtr(mfi);
+        fab_um[q] = state_um[q]->fabPtr(mfi);
+        fab_up[q] = state_up[q]->fabPtr(mfi);
+        
+        fnum[q]=fab_fnum[q]->array();
+        fnum_int_f[q]=fab_fnum_int_f[q]->array();
+        fnum_int_c[q]=fab_fnum_int_c[q]->array();
 
-        fm[q] = _F_m[q].const_array(mfi);
-        fp[q] = _F_p[q].const_array(mfi);
-        dfm[q] = _DF_m[q].const_array(mfi);
-        dfp[q] = _DF_p[q].const_array(mfi);
-        um[q] = _U_m[q].const_array(mfi);
-        up[q] = _U_p[q].const_array(mfi);
+        fm[q] = fab_fm[q]->const_array();
+        fp[q] = fab_fp[q]->const_array();
+        dfm[q] = fab_dfm[q]->const_array();
+        dfp[q] = fab_dfp[q]->const_array();
+        um[q] = fab_um[q]->const_array();
+        up[q] = fab_up[q]->const_array();
       }
             
       //compute the pointwise evaluations of the numerical flux
@@ -740,31 +840,51 @@ void AmrDG::update_U_w(int lev)
   amrex::Real vol = _mesh->get_dvol(lev);
 
   for(int q=0; q<Q; ++q){
-    amrex::MultiFab state_rhs;
-    state_rhs.define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), basefunc->Np_s, _mesh->nghost);
-    state_rhs.setVal(0.0);
+    amrex::MultiFab& state_u_w = U_w[lev][q];
 
+    amrex::MultiFab state_rhs;
+    state_rhs.define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), basefunc->Np_s, _mesh->nghost); 
+    state_rhs.setVal(0.0);
+    
+    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
+    amrex::Vector<const amrex::MultiFab *> state_fnum(AMREX_SPACEDIM); 
+
+    for(int d = 0; d < AMREX_SPACEDIM; ++d){
+      state_f[d]=&(F[lev][d][q]); 
+      state_fnum[d]=&(Fnum[lev][d][q]); 
+    }
+    
 #ifdef AMREX_USE_OMP
-#pragma omp parallel
+#pragma omp parallel 
 #endif
     {
-      amrex::Vector<amrex::Array4<const amrex::Real>> f(AMREX_SPACEDIM);
-      amrex::Vector<amrex::Array4<const amrex::Real>> fnum(AMREX_SPACEDIM);
+      amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
+      amrex::Vector<const amrex::FArrayBox *> fab_fnum(AMREX_SPACEDIM);
 
-      #ifdef AMREX_USE_OMP
-      for (MFIter mfi(U_w[lev][q], MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+      amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);   
+      amrex::Vector<amrex::Array4<const amrex::Real> > fnum(AMREX_SPACEDIM); 
+
+      
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(state_u_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
       #else
-      for (MFIter mfi(U_w[lev][q], true); mfi.isValid(); ++mfi)
-      #endif
+      for (MFIter mfi(state_u_w,true); mfi.isValid(); ++mfi)
+      #endif 
       {
         const amrex::Box& bx = mfi.tilebox();
-
-        amrex::Array4<amrex::Real> const& uw = U_w[lev][q].array(mfi);
-        amrex::Array4<amrex::Real> const& rhs = state_rhs.array(mfi);
-
+        
+        amrex::FArrayBox& fab_u_w = state_u_w[mfi];
+        amrex::Array4<amrex::Real> const& uw = fab_u_w.array();
+  
+        amrex::FArrayBox& fab_rhs = state_rhs[mfi];
+        amrex::Array4<amrex::Real> const& rhs = fab_rhs.array();
+        
         for(int d = 0; d < AMREX_SPACEDIM; ++d){
-          f[d] = F[lev][d][q].const_array(mfi);
-          fnum[d] = Fnum[lev][d][q].const_array(mfi);
+          fab_f[d]=state_f[d]->fabPtr(mfi);
+          fab_fnum[d]=state_fnum[d]->fabPtr(mfi);
+          
+          f[d]= fab_f[d]->const_array();
+          fnum[d]= fab_fnum[d]->const_array();
         } 
 
         amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
@@ -797,8 +917,10 @@ void AmrDG::update_U_w(int lev)
         }
 
         if(flag_source_term)
-        {
-          amrex::Array4<amrex::Real> const& source = S[lev][q].array(mfi);
+        { 
+          amrex::MultiFab& state_source = S[lev][q];
+          amrex::FArrayBox& fab_source = state_source[mfi];
+          amrex::Array4<amrex::Real> const& source = fab_source.array();
           for  (int m = 0; m < quadrule->qMp_st; ++m){
             amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
             {
@@ -821,37 +943,53 @@ void AmrDG::update_U_w(int lev)
 }
 
 void AmrDG::update_H_w(int lev)
-{
+{ 
   auto _mesh = mesh.lock();
 
   for(int q=0; q<Q; ++q)
   {
     const auto dx = _mesh->get_dx(lev);
+    
+    amrex::MultiFab& state_h_w = H_w[lev][q];
+    amrex::MultiFab& state_u_w = U_w[lev][q];
+    
+    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM);  
 
+    for(int d = 0; d < AMREX_SPACEDIM; ++d){
+      state_f[d]=&(F[lev][d][q]); 
+    }
+    
     amrex::MultiFab state_rhs;
-    state_rhs.define(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), basefunc->Np_st, _mesh->nghost);
-    state_rhs.setVal(0.0);
-
+    state_rhs.define(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), basefunc->Np_st, _mesh->nghost); 
+    state_rhs.setVal(0.0); 
+    
 #ifdef AMREX_USE_OMP
-#pragma omp parallel
+#pragma omp parallel 
 #endif
     {
-      amrex::Vector<amrex::Array4<const amrex::Real>> f(AMREX_SPACEDIM);
-
-      #ifdef AMREX_USE_OMP
-      for (MFIter mfi(H_w[lev][q], MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+      amrex::Vector<const amrex::FArrayBox *> fab_f(AMREX_SPACEDIM);
+      amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);  
+    
+      #ifdef AMREX_USE_OMP  
+      for (MFIter mfi(state_h_w,MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)    
       #else
-      for (MFIter mfi(H_w[lev][q], true); mfi.isValid(); ++mfi)
-      #endif
+      for (MFIter mfi(state_h_w,true); mfi.isValid(); ++mfi)
+      #endif  
       {
         const amrex::Box& bx = mfi.growntilebox();
+        
+        amrex::FArrayBox& fab_h_w = state_h_w[mfi];
+        amrex::Array4<amrex::Real> const& hw = fab_h_w.array();
 
-        amrex::Array4<amrex::Real> const& hw = H_w[lev][q].array(mfi);
-        amrex::Array4<amrex::Real> const& uw = U_w[lev][q].array(mfi);
-        amrex::Array4<amrex::Real> const& rhs = state_rhs.array(mfi);
-
+        amrex::FArrayBox& fab_u_w = state_u_w[mfi];
+        amrex::Array4<amrex::Real> const& uw = fab_u_w.array();
+        
+        amrex::FArrayBox& fab_rhs = state_rhs[mfi];
+        amrex::Array4<amrex::Real> const& rhs = fab_rhs.array();
+        
         for(int d = 0; d < AMREX_SPACEDIM; ++d){
-          f[d] = F[lev][d][q].const_array(mfi);
+          fab_f[d]=state_f[d]->fabPtr(mfi);
+          f[d]= fab_f[d]->const_array();
         } 
         
         for(int m =0; m<basefunc->Np_s; ++m)
@@ -876,12 +1014,14 @@ void AmrDG::update_H_w(int lev)
         }
       
         if(flag_source_term){
-          amrex::Array4<amrex::Real> const& source = S[lev][q].array(mfi);
-
+          amrex::MultiFab& state_source = S[lev][q];
+          amrex::FArrayBox& fab_source = state_source[mfi];
+          amrex::Array4<amrex::Real> const& source = fab_source.array();
+        
           for(int m =0; m<quadrule->qMp_st; ++m)
           {
             amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
-            {
+            {        
               rhs(i,j,k,n)+=(Dt/2.0)*Mk_pred_srcVinv[n][m]*source(i,j,k,m);
             });
           }
