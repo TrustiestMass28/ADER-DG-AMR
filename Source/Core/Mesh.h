@@ -105,10 +105,7 @@ class Mesh : public amrex::AmrCore
         int dtn_regrid = 0;  
 
         //Regrid physical time interval
-        amrex::Real dt_regrid = 0;
-
-        //Next physical time at which regrid should occur
-        amrex::Real t_next_regrid = 0.0;
+        amrex::Real dt_regrid = 0;  
 
         //Number of ghost cells
         int nghost= 1;    
