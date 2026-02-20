@@ -597,8 +597,7 @@ void Compressible_Euler::pde_BC(int lev, int dim,int side, int q,  int quad_pt_i
   //Ubc_valid: conserved bc
   
   //Ubc is equivalent to modes of closest valid cell evalauted at interface with ghost cell
-  amrex::Vector<const amrex::MultiFab *> state_u_w(numerical_pde->Q); 
-  amrex::Vector<const amrex::FArrayBox *> fab_u_w(numerical_pde->Q);
+  amrex::Vector<const amrex::MultiFab *> state_u_w(numerical_pde->Q);
   amrex::Vector<amrex::Array4<const amrex::Real>> uw(numerical_pde->Q);   
   
   for(int qq=0; qq<numerical_pde->Q; ++qq){
@@ -620,9 +619,8 @@ void Compressible_Euler::pde_BC(int lev, int dim,int side, int q,  int quad_pt_i
   for (MFIter mfi(numerical_pde->U_w[lev][q]); mfi.isValid(); ++mfi)
   {
     Box const& bx = mfi.growntilebox();
-    for(int qq=0 ; qq<numerical_pde->Q; ++qq){      
-      fab_u_w[qq] = state_u_w[qq]->fabPtr(mfi);
-      uw[qq] = fab_u_w[qq]->const_array();
+    for(int qq=0 ; qq<numerical_pde->Q; ++qq){
+      uw[qq] = state_u_w[qq]->const_array(mfi);
     } 
 
     if(side==-1 && bx.contains(iv+IntVect::TheDimensionVector(dim))){
