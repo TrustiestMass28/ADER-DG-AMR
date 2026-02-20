@@ -506,6 +506,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
 
   bool dtn_plt; bool dt_plt; int n; amrex::Real t; std::ostringstream oss;
   int last_progress = 0;  // Track last progress for bar updates
+  amrex::Real t_last_regrid = 0.0; // Track last regrid time for dt_regrid
+  int n_regrids = 0; // Total number of regrids performed
 
   auto _mesh = mesh.lock();
 
@@ -576,9 +578,10 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //Skip in validation mode: tagging is static, so regrid produces the same grid.
     if ((_mesh->L > 1)) //&& !flag_analytical_ic)
     {
-      if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
-        //TODO: adapt boolena condition to handle physical time
-        //interval dt_regrid
+      bool do_regrid_dtn = (_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0);
+      bool do_regrid_dt  = (_mesh->dt_regrid > 0) && (t - t_last_regrid >= _mesh->dt_regrid - 1e-12);
+
+      if(do_regrid_dtn || do_regrid_dt){
         _mesh->regrid(0, t);
         amrex::ParallelDescriptor::Barrier();
 
@@ -587,6 +590,9 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
 
         //construct new flux register on new grid
         AMR_set_flux_registers();
+
+        t_last_regrid = t;
+        n_regrids++;
       }
     }  
     
@@ -648,6 +654,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     std::cout << "\033[?25h" << std::flush;
     std::cout << "\n";
     Print() << "Total number of time steps: " << n << "\n";
+    Print() << "Total number of regrids: " << n_regrids << "\n";
   }
   //*/
   amrex::ParallelDescriptor::Barrier();

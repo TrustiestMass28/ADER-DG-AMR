@@ -65,7 +65,7 @@ void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Re
         // VALIDATION MODE: Fixed refinement region for convergence testing
         //xc = x0;
         //yc = y0;
-        //} else {
+
         // PRODUCTION MODE: Refinement follows vortex motion
         xc = x0 + u_infty * time;
         yc = y0 + v_infty * time;
