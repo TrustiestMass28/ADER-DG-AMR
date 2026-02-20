@@ -262,8 +262,8 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
           }
           
           //Use pre-computed QuadratureMatrix quadmat
-          sum_cf += (numme->quadmat[j][q]*numme->basefunc->phi_s(m,numme->basefunc->basis_idx_s,xi_ref_shift));
-          sum_fc += (numme->quadmat[m][q]*numme->basefunc->phi_s(j,numme->basefunc->basis_idx_s,xi_ref_shift));
+          sum_cf += (numme->quadmat(j,q)*numme->basefunc->phi_s(m,numme->basefunc->basis_idx_s,xi_ref_shift));
+          sum_fc += (numme->quadmat(m,q)*numme->basefunc->phi_s(j,numme->basefunc->basis_idx_s,xi_ref_shift));
         }
 
         P_cf[l](j, m)= sum_cf;

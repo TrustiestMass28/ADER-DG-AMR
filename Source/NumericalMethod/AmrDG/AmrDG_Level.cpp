@@ -20,13 +20,6 @@ void AmrDG::AMR_clear_level_data(int lev)
         vec2D.clear();
     };
 
-    auto clear_mfab_vec3D = [&](auto& vec3D) {
-        for (auto& vec2D : vec3D) {
-            clear_mfab_vec2D(vec2D);
-        }
-        vec3D.clear();
-    };
-
     // Per-component fields
     clear_mfab_vec(U[lev]);
     clear_mfab_vec(U_w[lev]);
@@ -37,18 +30,34 @@ void AmrDG::AMR_clear_level_data(int lev)
 
     // Per-dimension per-component fields
     clear_mfab_vec2D(F[lev]);
-    clear_mfab_vec2D(DF[lev]);
-    clear_mfab_vec2D(Fm[lev]);
-    clear_mfab_vec2D(DFm[lev]);
-    clear_mfab_vec2D(Fp[lev]);
-    clear_mfab_vec2D(DFp[lev]);
+    clear_mfab_vec(Fm[lev]);
+    clear_mfab_vec(DFm[lev]);
+    clear_mfab_vec(Fp[lev]);
+    clear_mfab_vec(DFp[lev]);
     clear_mfab_vec2D(Fnum[lev]);
+    clear_mfab_vec2D(Fnum_int_f[lev]);
+    clear_mfab_vec2D(Fnum_int_c[lev]);
 
     // H-related fields
     clear_mfab_vec(H[lev]);
     clear_mfab_vec(H_w[lev]);
-    clear_mfab_vec2D(H_p[lev]);
-    clear_mfab_vec2D(H_m[lev]);
+    clear_mfab_vec(H_p[lev]);
+    clear_mfab_vec(H_m[lev]);
+
+    // RHS temporaries
+    rhs_corr[lev].clear();
+    rhs_pred[lev].clear();
+
+    // Precomputed C-F interface face data
+    if (lev < static_cast<int>(cf_face_b_coarse.size())) {
+        clear_mfab_vec(cf_face_b_coarse[lev]);
+    }
+    if (lev < static_cast<int>(cf_face_b_fine.size())) {
+        clear_mfab_vec(cf_face_b_fine[lev]);
+    }
+    if (lev < static_cast<int>(cf_face_child_idx.size())) {
+        clear_mfab_vec(cf_face_child_idx[lev]);
+    }
 }
 
 void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
@@ -390,10 +399,10 @@ void AmrDG::AMR_set_flux_registers()
 
         // --- FLUX REGISTER INITIALIZATION ---
         // Created for lev > 0 to handle flux conservation at the interface with lev-1.
-        
+
         if (lev > 0) {
             flux_reg[lev].resize(Q);
-            for(int q=0; q<Q; ++q){  
+            for(int q=0; q<Q; ++q){
                 flux_reg[lev][q] = std::make_unique<amrex::FluxRegister>(
                     _mesh->get_BoxArray(lev),
                     _mesh->get_DistributionMap(lev),
@@ -401,6 +410,93 @@ void AmrDG::AMR_set_flux_registers()
                     lev,
                     basefunc->Np_s // Pass DG-specific number of points/degrees of freedom
                 );
+            }
+        }
+    }
+
+    // --- PRECOMPUTE C-F INTERFACE FACE DATA ---
+    // Build face-centered iMultiFabs that encode interface direction and child index.
+    // These are read by numflux() instead of recomputing from masks every timestep.
+    cf_face_b_coarse.resize(_mesh->get_finest_lev() + 1);
+    cf_face_b_fine.resize(_mesh->get_finest_lev() + 1);
+    cf_face_child_idx.resize(_mesh->get_finest_lev() + 1);
+
+    for (int lev = 0; lev <= _mesh->get_finest_lev(); ++lev) {
+        const amrex::BoxArray& ba = _mesh->get_BoxArray(lev);
+        const amrex::DistributionMapping& dm = _mesh->get_DistributionMap(lev);
+
+        cf_face_b_coarse[lev].resize(AMREX_SPACEDIM);
+        cf_face_b_fine[lev].resize(AMREX_SPACEDIM);
+        cf_face_child_idx[lev].resize(AMREX_SPACEDIM);
+
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            amrex::BoxArray face_ba = convert(ba, amrex::IntVect::TheDimensionVector(d));
+
+            cf_face_b_coarse[lev][d].define(face_ba, dm, 1, 0);
+            cf_face_b_coarse[lev][d].setVal(0);
+
+            cf_face_b_fine[lev][d].define(face_ba, dm, 1, 0);
+            cf_face_b_fine[lev][d].setVal(0);
+
+            cf_face_child_idx[lev][d].define(face_ba, dm, 1, 0);
+            cf_face_child_idx[lev][d].setVal(0);
+
+            // Coarse side: detect C-F interface faces with ownership rule
+            if (lev < _mesh->get_finest_lev()) {
+                for (amrex::MFIter mfi(cf_face_b_coarse[lev][d]); mfi.isValid(); ++mfi) {
+                    const amrex::Box& fbx = mfi.tilebox();
+                    auto const& bc_arr = cf_face_b_coarse[lev][d][mfi].array();
+                    auto const& msk = coarse_fine_interface_mask[lev].const_array(mfi);
+                    int face_lo_d = fbx.smallEnd(d);
+
+                    amrex::ParallelFor(fbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                        amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
+                        iv_left[d] -= 1;
+                        amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)};
+
+                        // Ownership rule: skip lo face of tile (previous tile's hi face)
+                        if (iv_left[d] >= face_lo_d) {
+                            int ml = msk(iv_left);
+                            int mr = msk(iv_right);
+                            if (ml != mr) {
+                                bc_arr(i,j,k) = (ml == 0) ? 1 : -1;
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Fine side: detect F-C interface faces and compute child sub-face index
+            if (lev > 0) {
+                for (amrex::MFIter mfi(cf_face_b_fine[lev][d]); mfi.isValid(); ++mfi) {
+                    const amrex::Box& fbx = mfi.tilebox();
+                    auto const& bf_arr = cf_face_b_fine[lev][d][mfi].array();
+                    auto const& ci_arr = cf_face_child_idx[lev][d][mfi].array();
+                    auto const& vmsk = fine_level_valid_mask[lev].const_array(mfi);
+
+                    amrex::ParallelFor(fbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                        amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
+                        iv_left[d] -= 1;
+                        amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)};
+
+                        int vl = vmsk(iv_left);
+                        int vr = vmsk(iv_right);
+
+                        if (vl != vr) {
+                            int b = (vl == 0) ? 1 : -1;
+                            bf_arr(i,j,k) = b;
+
+                            int child_idx = 0;
+                            int bit_pos = 0;
+                            for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                                if (dir == d) continue;
+                                if (iv_right[dir] % 2 != 0) child_idx |= (1 << bit_pos);
+                                bit_pos++;
+                            }
+                            ci_arr(i,j,k) = child_idx;
+                        }
+                    });
+                }
             }
         }
     }

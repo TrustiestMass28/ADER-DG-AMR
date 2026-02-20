@@ -457,18 +457,16 @@ class Solver
 
         //Physical flux F(x,t)
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> F;
-        //  derivative
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> DF;
 
         //Physical flux F(x,t) evaluated at boundary minus (-) b-
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fm;
+        amrex::Vector<amrex::Vector<amrex::MultiFab>> Fm;
         //  derivative
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> DFm;
+        amrex::Vector<amrex::Vector<amrex::MultiFab>> DFm;
 
         //Physical flux F(x,t) evaluated at boundary plus (+) b+
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fp;
+        amrex::Vector<amrex::Vector<amrex::MultiFab>> Fp;
         //  derivative
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> DFp;
+        amrex::Vector<amrex::Vector<amrex::MultiFab>> DFp;
 
         //Numerical flux approximation Fnum(x,t)
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum;
@@ -487,6 +485,15 @@ class Solver
         //Ghost cells filled via FillBoundary (handles periodicity correctly).
         //Used for periodic-aware fine-coarse interface detection in numflux.
         amrex::Vector<amrex::iMultiFab> fine_level_valid_mask;
+
+        //Precomputed C-F interface face data per level per dimension [lev][d]
+        //Face-centered iMultiFabs, 1 component, 0 ghost cells
+        //b_coarse: +1/-1 = interface direction (with ownership rule), 0 = not C-F
+        amrex::Vector<amrex::Vector<amrex::iMultiFab>> cf_face_b_coarse;
+        //b_fine: +1/-1 = interface direction, 0 = not F-C
+        amrex::Vector<amrex::Vector<amrex::iMultiFab>> cf_face_b_fine;
+        //child sub-face index (0 to 2^(D-1)-1), valid only where cf_face_b_fine != 0
+        amrex::Vector<amrex::Vector<amrex::iMultiFab>> cf_face_child_idx;
 
         //Numerical flux approximation Fnum(x,t) integrated over boundary minus (-) b-
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnumm_int; 

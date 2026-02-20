@@ -9,114 +9,47 @@ void AmrDG::set_vandermat()
 {
   for(int i=0; i<quadrule->qMp_st; ++i){
     for(int j=0; j<basefunc->Np_st; ++j){
-      V[i][j] = basefunc->phi_st(j,basefunc->basis_idx_st,quadrule->xi_ref_quad_st[i]);//modPhi_j(x_i)==V_{ij}
-      //V[i][j] =  modPhi(j, xi_ref_equidistant[i]);
+      V(i,j) = basefunc->phi_st(j,basefunc->basis_idx_st,quadrule->xi_ref_quad_st[i]);//modPhi_j(x_i)==V_{ij}
     }
-  } 
+  }
 
-  //inverse vandermonde matrix
-  Eigen::MatrixXd V_eigen(quadrule->qMp_st, basefunc->Np_st);
-  for (int i = 0; i < quadrule->qMp_st; ++i) {
-    for (int j = 0; j < basefunc->Np_st; ++j) {
-        V_eigen(i, j) = V[i][j];
-    }
-  }
-  
-  //Eigen::MatrixXd Vinv_eigen(mNp,qMp);
-  //Vinv_eigen= V_eigen.completeOrthogonalDecomposition().pseudoInverse(); 
-  
-  Eigen::JacobiSVD<Eigen::MatrixXd> svd(V_eigen, Eigen::ComputeThinU | Eigen::ComputeThinV);
-  Eigen::VectorXd singularValues = svd.singularValues();  
-  Eigen::MatrixXd Vinv_eigen = svd.matrixV() * singularValues.asDiagonal().inverse() 
-                              * svd.matrixU().transpose();
- 
-  //Eigen::MatrixXd Vinv_eigen(mNp,qMp);
-  //Vinv_eigen=((V_eigen.transpose()*V_eigen).inverse())*(V_eigen.transpose());
-  
-  for (int i = 0; i < basefunc->Np_st; ++i) {
-    for (int j = 0; j < quadrule->qMp_st; ++j) {
-        Vinv[i][j] = Vinv_eigen(i, j);
-    }
-  }
+  //inverse vandermonde matrix via SVD
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(V, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  Eigen::VectorXd singularValues = svd.singularValues();
+  Vinv = svd.matrixV() * singularValues.asDiagonal().inverse()
+       * svd.matrixU().transpose();
 }
 
 void AmrDG::set_ref_element_matrix()
 {
   //Generate matrices used for predictor step
   for(int j=0; j<basefunc->Np_st;++j){
-    
+
     for(int i=0; i<basefunc->Np_st;++i){
-      Mk_h_w[j][i]= refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
-                    -refMat_tphiDtphi(j,i));  
-                    
+      Mk_h_w(j,i)= refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
+                    -refMat_tphiDtphi(j,i));
+
       for(int d=0; d<AMREX_SPACEDIM; ++d){
-        Sk_pred[d][j][i]   = refMat_tphitphi(j,i)*refMat_phiDphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st,d);  
-      }      
-      Mk_pred_src[j][i] =refMat_tphitphi(j,i)*refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st);
+        Sk_pred[d](j,i)   = refMat_tphitphi(j,i)*refMat_phiDphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st,d);
+      }
+      Mk_pred_src(j,i) =refMat_tphitphi(j,i)*refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st);
     }
-    
+
     for(int i=0; i<basefunc->Np_s;++i){
-      Mk_pred[j][i] = basefunc->phi_t(j,-1.0)*refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_s);
+      Mk_pred(j,i) = basefunc->phi_t(j,-1.0)*refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_s);
     }
   }
 
-  Eigen::MatrixXd Sk_pred_eigen(basefunc->Np_st,basefunc->Np_st);
-  Eigen::MatrixXd Mk_s_eigen(basefunc->Np_st,basefunc->Np_st);
-  Eigen::MatrixXd Vinv_eigen(basefunc->Np_st,quadrule->qMp_st);
-  Eigen::MatrixXd Sk_predVinv_eigen(basefunc->Np_st,quadrule->qMp_st);
-  Eigen::MatrixXd Mk_sVinv_eigen(basefunc->Np_st,quadrule->qMp_st);
-  
-  for (int n = 0; n < basefunc->Np_st; ++n) {
-    for (int m = 0; m < quadrule->qMp_st; ++m){
-      Vinv_eigen(n, m) = Vinv[n][m];
-    }
-  }
+  //Compute pre-multiplied matrices: Mk_pred_srcVinv = Mk_pred_src * Vinv
+  Mk_pred_srcVinv = Mk_pred_src * Vinv;
 
-  for(int n=0; n<basefunc->Np_st;++n){
-    for(int m=0; m<basefunc->Np_st;++m){
-      Mk_s_eigen(n,m)=Mk_pred_src[n][m]; 
-    }
-  }
-  
-  Mk_sVinv_eigen = Mk_s_eigen*Vinv_eigen;
-  
-  for (int n = 0; n < basefunc->Np_st; ++n) {
-    for (int m = 0; m < quadrule->qMp_st; ++m) {
-      Mk_pred_srcVinv[n][m] = Mk_sVinv_eigen(n, m);  
-    }
-  }
-
+  //Compute pre-multiplied matrices: Sk_predVinv[d] = Sk_pred[d] * Vinv
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    for(int n=0; n<basefunc->Np_st;++n){
-      for(int m=0; m<basefunc->Np_st;++m){
-        Sk_pred_eigen(n,m)=Sk_pred[d][n][m];        
-      }
-    }
-    
-    Sk_predVinv_eigen = Sk_pred_eigen*Vinv_eigen;
-    
-    for (int n = 0; n < basefunc->Np_st; ++n) {
-      for (int m = 0; m < quadrule->qMp_st; ++m) {
-        Sk_predVinv[d][n][m] = Sk_predVinv_eigen(n, m);  
-      }
-    }    
+    Sk_predVinv[d] = Sk_pred[d] * Vinv;
   }
 
-  Eigen::MatrixXd Mk_h_w_eigen(basefunc->Np_st, basefunc->Np_st);
-  for (int n = 0; n < basefunc->Np_st; ++n) {
-    for (int m = 0; m < basefunc->Np_st; ++m) {
-      Mk_h_w_eigen(n, m) = Mk_h_w[n][m];
-    }
-  }
-    
-  Eigen::MatrixXd Mk_h_w_inv_eigen(basefunc->Np_st, basefunc->Np_st);
-  Mk_h_w_inv_eigen = Mk_h_w_eigen.inverse(); 
- 
-  for (int n = 0; n < basefunc->Np_st; ++n) {
-    for (int m = 0; m < basefunc->Np_st; ++m) {
-      Mk_h_w_inv[n][m] = Mk_h_w_inv_eigen(n, m);
-    }
-  }
+  //Compute inverse of Mk_h_w
+  Mk_h_w_inv = Mk_h_w.inverse();
   
   //Generate matrices used for Gaussian quadrature, they contain in ADER-DG step  
   //using same i,j idx convention as in documentation for readability
@@ -129,30 +62,30 @@ void AmrDG::set_ref_element_matrix()
 
   for(int j=0; j<basefunc->Np_s;++j){
     for(int i=0; i<basefunc->Np_s;++i){
-      Mk_corr[j][i] = refMat_phiphi(j,basefunc->basis_idx_s,i,basefunc->basis_idx_s);
+      Mk_corr(j,i) = refMat_phiphi(j,basefunc->basis_idx_s,i,basefunc->basis_idx_s);
     }
-  }  
-  
+  }
+
   //Here, use qMp_st because ists quadrature of a double int_t int_dx integral
   //therefore has D+1 pts
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    for(int i=0; i<quadrule->qMp_st;++i){  
+    for(int i=0; i<quadrule->qMp_st;++i){
       w = 1.0;
       for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
         w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st[i][d_]),2.0);
       }
       for(int j=0; j<basefunc->Np_s;++j){
-        Sk_corr[d][j][i] = basefunc->dphi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st[i],d)*w;  
+        Sk_corr[d](j,i) = basefunc->dphi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st[i],d)*w;
       }
     }
-    for(int i=0; i<quadrule->qMp_st_bd;++i){ 
+    for(int i=0; i<quadrule->qMp_st_bd;++i){
       wm = 1.0;
       wp = 1.0;
       for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
         if(d_!=d)
         {
           wm*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st_bdm[d][i][d_]),2.0);
-          wp*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st_bdp[d][i][d_]),2.0);   
+          wp*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st_bdp[d][i][d_]),2.0);
         }
       }
 
@@ -160,38 +93,38 @@ void AmrDG::set_ref_element_matrix()
       quad_weights_st_bdp[d][i] = wp;
 
       for(int j=0; j<basefunc->Np_s;++j){
-        Mkbdm[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdm[d][i])*wm;
-        Mkbdp[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdp[d][i])*wp;
-      } 
+        Mkbdm[d](j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdm[d][i])*wm;
+        Mkbdp[d](j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdp[d][i])*wp;
+      }
     }
   }
-   
-  for(int i=0; i<quadrule->qMp_st;++i){  
+
+  for(int i=0; i<quadrule->qMp_st;++i){
     w = 1.0;
     for(int d=0; d<AMREX_SPACEDIM+1; ++d){
       w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st[i][d]),2.0);
     }
     for(int j=0; j<basefunc->Np_s;++j){
-      Mk_corr_src[j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st[i])*w;
+      Mk_corr_src(j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st[i])*w;
     }
   }
-  
-  //general volume integral quadrature matrix with only spatial nodes 
+
+  //general volume integral quadrature matrix with only spatial nodes
   //(i.e for only spatial integrals)
   //used for the BC,IC
-  for(int i=0; i<quadrule->qMp_s;++i){  
+  for(int i=0; i<quadrule->qMp_s;++i){
     w = 1.0;
     for(int d=0; d<AMREX_SPACEDIM; ++d){
       w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_s[i][d]),2.0);
     }
     for(int j=0; j<basefunc->Np_s;++j){
-      quadmat[j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s[i])*w;
+      quadmat(j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s[i])*w;
     }
   }
 
   //general surface integral quadrature matrix with only spatial boundary nodes
   //used for flux registers
-  for(int i=0; i<quadrule->qMp_s_bd;++i){ 
+  for(int i=0; i<quadrule->qMp_s_bd;++i){
     for(int d=0; d<AMREX_SPACEDIM; ++d){
       wm = 1.0;
       for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
@@ -201,10 +134,10 @@ void AmrDG::set_ref_element_matrix()
         }
 
         for(int j=0; j<basefunc->Np_s;++j){
-          quadmat_bd[d][j][i] = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s_bdm[d][i])*wm;
+          quadmat_bd[d](j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s_bdm[d][i])*wm;
         }
       }
-    } 
+    }
   }
 }
 
