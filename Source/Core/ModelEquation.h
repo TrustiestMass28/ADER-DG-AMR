@@ -92,6 +92,12 @@ class ModelEquation
                         const amrex::Vector<amrex::Real>& xi,
                         const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
 
+  //Per-cell tagging criterion for AMR refinement
+  template <typename NumericalMethodType>
+  bool pde_tag_cell_refinement(int lev, int i, int j, int k,
+                               amrex::Real time, amrex::Real amr_c_lev,
+                               const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
+
   //This function is required to be implemented by the user such that
   //corrections can be made to floating point roundings which can
   //lead to unphysical results. Depending on the application
@@ -212,4 +218,13 @@ amrex::Real ModelEquation<EquationType>::pde_IC(int lev, int q, int i,int j,int 
   return static_cast<const EquationType*>(this)->pde_IC(lev,q,i,j,k,xi,mesh);
 }
 
-#endif 
+template <typename EquationType>
+template <typename NumericalMethodType>
+bool ModelEquation<EquationType>::pde_tag_cell_refinement(int lev, int i, int j, int k,
+                                                          amrex::Real time, amrex::Real amr_c_lev,
+                                                          const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const
+{
+  return static_cast<const EquationType*>(this)->pde_tag_cell_refinement(lev, i, j, k, time, amr_c_lev, mesh);
+}
+
+#endif

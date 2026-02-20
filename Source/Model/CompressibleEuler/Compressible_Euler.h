@@ -72,9 +72,14 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
                                         const override {return 0.0;};
 
     template <typename NumericalMethodType>
-    amrex::Real pde_IC(int lev, int q, int i,int j,int k, 
-                        const amrex::Vector<amrex::Real>& xi, 
+    amrex::Real pde_IC(int lev, int q, int i,int j,int k,
+                        const amrex::Vector<amrex::Real>& xi,
                         const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
+
+    template <typename NumericalMethodType>
+    bool pde_tag_cell_refinement(int lev, int i, int j, int k,
+                                 amrex::Real time, amrex::Real amr_c_lev,
+                                 const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
 
     void set_pde_numeric_limits();
     
@@ -583,7 +588,53 @@ amrex::Real Compressible_Euler::Soundspeed(const amrex::Vector<amrex::Array4<T>>
   return c;
 }
 
-#endif 
+template <typename NumericalMethodType>
+bool Compressible_Euler::pde_tag_cell_refinement(int lev, int i, int j, int k,
+                                                  amrex::Real time, amrex::Real amr_c_lev,
+                                                  const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const
+{
+  const auto prob_lo = mesh->get_Geom(lev).ProbLoArray();
+  const auto prob_hi = mesh->get_Geom(lev).ProbHiArray();
+  const auto dx      = mesh->get_Geom(lev).CellSizeArray();
+
+  if(model_case == "isentropic_vortex")
+  {
+    constexpr amrex::Real x0 = 5.0;
+    constexpr amrex::Real y0 = 5.0;
+    constexpr amrex::Real u_infty = 1.0;
+    constexpr amrex::Real v_infty = 0.0;
+
+    const amrex::Real Lx = prob_hi[0] - prob_lo[0];
+    const amrex::Real Ly = prob_hi[1] - prob_lo[1];
+
+    amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
+    amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
+
+    //Dynamic refinement (vortex tracking)
+    amrex::Real xc = x0 + u_infty * time;
+    amrex::Real yc = y0 + v_infty * time;
+
+    //Static refinement
+    //amrex::Real xc = x0;
+    //amrex::Real yc = y0;
+
+    amrex::Real dx_vortex = x - xc;
+    amrex::Real dy_vortex = y - yc;
+
+    if (dx_vortex > Lx/2.0)  dx_vortex -= Lx;
+    if (dx_vortex < -Lx/2.0) dx_vortex += Lx;
+    if (dy_vortex > Ly/2.0)  dy_vortex -= Ly;
+    if (dy_vortex < -Ly/2.0) dy_vortex += Ly;
+
+    amrex::Real r = std::sqrt(dx_vortex*dx_vortex + dy_vortex*dy_vortex);
+
+    return (r <= std::pow(amr_c_lev, 2));
+  }
+
+  return false;
+}
+
+#endif
 
     /*
     virtual amrex::Real pde_CFL(int d,int m,int i, int j, int k,

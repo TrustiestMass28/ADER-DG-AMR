@@ -783,11 +783,6 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
   if ((_mesh->L > 1))
   {
-    //Solution updating only happened on valid cells, therefore inner and BC ghost cells
-    //have garbage values. So apply BC and inner shync to ensure all cells are up-to date
-    for (int l = _mesh->get_finest_lev(); l >= 0; --l){
-      Solver<NumericalMethodType>::FillBoundaryCells(bdcond,&(U_w[l]), l, time);
-    }
     AMR_flux_correction();
   }
 }

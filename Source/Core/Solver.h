@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <memory>
+#include <functional>
 
 #include <AMReX_AmrCore.H>
 #include <AMReX_ParallelDescriptor.H>
@@ -400,6 +401,9 @@ class Solver
 
         std::weak_ptr<Mesh<NumericalMethodType>> mesh;
 
+        //Internal bridge: connects non-template ErrorEst to template model_pde->pde_tag_cell_refinement
+        std::function<bool(int, int, int, int, amrex::Real, amrex::Real)> m_tag_impl;
+
         //number of equations of the system
         int Q; 
 
@@ -582,6 +586,12 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
         );
         std::cout << std::flush;
     }
+
+    //Set up tagging bridge: connects non-template ErrorEst to model_pde->pde_tag_cell_refinement
+    m_tag_impl = [model_pde, _mesh](int lev, int i, int j, int k,
+                                     amrex::Real time, amrex::Real amr_c_lev) -> bool {
+      return model_pde->pde_tag_cell_refinement(lev, i, j, k, time, amr_c_lev, _mesh);
+    };
 
     //AmrCore.h function initialize multilevel mesh, geometry, Box array and DistributionMap
     //calls MakeNewLevelFromScratch

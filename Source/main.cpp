@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
       sim.setValidationMode(validation_mode);
 
       //IO
-      int dtn_outplt = 10;
+      int dtn_outplt = -1;
       amrex::Real dt_outplt = -1;
       
       sim.setIO(dtn_outplt, dt_outplt);
@@ -47,9 +47,9 @@ int main(int argc, char* argv[])
                                     // max_level>0 multi  level simulation
                                     // max_level==idx of maximum fine lvl
 
-      int dtn_regrid  = -1;          // try regrid every n timesteps
+      int dtn_regrid  = 1;          // try regrid every n timesteps
       int nghost = 1;               //number of ghost cells, dont change
-      amrex::Real dt_regrid = 2.0;    //regrid every dt time, negative wont use it
+      amrex::Real dt_regrid = -1;    //regrid every dt time, negative wont use it
                               
       amrex::Vector<amrex::Real> amr_c(max_level);  //AMR refinement criteria based on value
       for(int l=0; l<max_level;++l)
