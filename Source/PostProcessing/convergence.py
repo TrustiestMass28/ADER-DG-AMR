@@ -30,17 +30,14 @@ def get_convergence(p):
     # Multi level - dynamic refinement (dt_regrid = 2.0; approx 5 regrids) amr_c[l] = 1.4
     #p_E = {2:[0.0033186281845524477,0.00042112800767480382,6.4383288440806528e-05 ]}
 
-    # Multi level - dynamic refinement (dt_regrid = 5.0; approx 2 regrids) amr_c[l] = 1.4
-    #p_E = {2:[0.0051843556360638221,0.0012179087771277504,0.00010723098591203257]}
-
     # Multi level - dynamic refinement (dt_regrid = 0.5; approx 20 regrids) amr_c[l] = 1.4
     #p_E = {2:[0.0017060809914467333 ,0.00016645002888053664,3.0195089070121167e-05]}
 
-    # Multi level - dynamic refinement (dt_regrid = 0.05; approx 200 regrids) amr_c[l] = 1.4
-    #p_E = {2:[0.0016924554349809461 ,0.00017048846706209028,2.8232782208749954e-05 ,5.437052406379101e-06 ]}
-
     # Multi level - dynamic refinement (every 1step) amr_c[l] = 1.4
-    #p_E = {2:[0.0016894150496299305,0.00016978906706211757,2.8178108958230168e-05]}
+    #p_E = {2:[0.0018782008100473721,0.00018983031022766459,2.8531662628985067e-05]}
+                           
+    # Multi level - dynamic refinement (every 1step) amr_c[l] = 1.4, NO REFLUX
+    #p_E = {2:[0.0022590299144886073,0.00043389295945724159,9.9539998686174079e-05]}
 
 
     #Conclusion
