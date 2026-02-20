@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
                                     // max_level>0 multi  level simulation
                                     // max_level==idx of maximum fine lvl
 
-      int dtn_regrid  = 10;          // try regrid every n timesteps
+      int dtn_regrid  = 1;          // try regrid every n timesteps
       int nghost = 1;               //number of ghost cells, dont change
       amrex::Real dt_regrid = -1;    //regrid every dt time, negative wont use it
                               
@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
       {
         //code here if you want different coefficients 
         //for each level of refinement
-        if(l==0){amr_c[l] = 1.5;}
+        if(l==0){amr_c[l] = 1.4;}
         else{amr_c[l] = 1.0;}
       }
 
@@ -111,11 +111,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 64;
+            n_cell_x = 16;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 64;
+            n_cell_y = 16;
 
 
             L_z_lo   = 0.0;

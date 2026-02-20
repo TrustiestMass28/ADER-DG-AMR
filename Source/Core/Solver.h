@@ -158,6 +158,8 @@ class Solver
         //projection
         void AMR_interpolate_initial_condition(int lev);
 
+        void AMR_sync_initial_condition();
+
         void AMR_average_fine_coarse();
 
         //clear all data of the MFabs at specified level
@@ -473,9 +475,14 @@ class Solver
         //Numerical flux approximation Fnum(x,t) integrated at coarse lvl
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum_int_c;
 
-        //Store at each coarse level the mask to identify cells
-        //at coarse-fine interface
-        amrex::Vector<amrex::Vector<amrex::iMultiFab>> coarse_fine_interface_mask;
+        //Store at each level the mask to identify cells
+        //at coarse-fine interface (0 = uncovered, 1 = covered by finer level)
+        amrex::Vector<amrex::iMultiFab> coarse_fine_interface_mask;
+
+        //Valid-cell mask for each level: 1 = valid cell on this level, 0 = not.
+        //Ghost cells filled via FillBoundary (handles periodicity correctly).
+        //Used for periodic-aware fine-coarse interface detection in numflux.
+        amrex::Vector<amrex::iMultiFab> fine_level_valid_mask;
 
         //Numerical flux approximation Fnum(x,t) integrated over boundary minus (-) b-
         amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnumm_int; 
@@ -584,6 +591,8 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
 
     //NB: Construct full domain grids up to max_level
     _mesh->InitFromScratch(time);
+    // At this point: all levels 0..max_level exist as full-domain grids (AMReX's InitFromScratch creates uniform grids at every level). All data is
+    // zero. All possible levels have been created
 
     //Populate all grid levels with the IC
     //afterwards apply regridding to tag cells
@@ -646,19 +655,6 @@ void Solver<NumericalMethodType>::set_init_data_component(int lev,const BoxArray
     static_cast<NumericalMethodType*>(this)->set_init_data_component(lev, ba, dm, q);
 }
 
-/*
-    //Initialize al finer levels with full grid solution interpolated form coarsest
-    //This is needed because at start-up of time-stepping, regrid will be performed
-    //and since all fine levels are currently covering all domain, after regrid
-    //the new regridded fine levelswill still overlap with their pre-regrid grid
-    //therefore data will be jsut copied and if these fine levels 
-    //with started un-initialized IC, they will remain un-initialized.
-    //For this reason need to populate them befrehand
-    
-    //Since the current grids at all levels cover the entire domain, 
-    //when regridding at 0th timestep
-    //no projection/interpolation will be made
-*/
 template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<ModelEquation<EquationType>>& model_pde)
@@ -666,6 +662,7 @@ void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<Mo
     auto _mesh = mesh.lock();
 
     //Define IC on single coarse mesh
+    //analytical IC on level 0
     static_cast<NumericalMethodType*>(this)->set_initial_condition(model_pde,0);
 
     if (_mesh->L > 1) {
@@ -678,13 +675,24 @@ void Solver<NumericalMethodType>::set_initial_condition(const std::shared_ptr<Mo
                 AMR_interpolate_initial_condition(l);
             }
         }
+
+        // Sync all levels after IC population:
+        // - Analytical IC: average fine→coarse for conservation, then FillPatch all ghost cells
+        // - Projection IC: FillPatch syncs same-level + fine-coarse ghost cells
+        AMR_sync_initial_condition();
     }
 }
 
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::AMR_interpolate_initial_condition(int lev)
 {
-    static_cast<NumericalMethodType*>(this)->AMR_interpolate_initial_condition(lev);    
+    static_cast<NumericalMethodType*>(this)->AMR_interpolate_initial_condition(lev);
+}
+
+template <typename NumericalMethodType>
+void Solver<NumericalMethodType>::AMR_sync_initial_condition()
+{
+    static_cast<NumericalMethodType*>(this)->AMR_sync_initial_condition();
 }
 
 template <typename NumericalMethodType>

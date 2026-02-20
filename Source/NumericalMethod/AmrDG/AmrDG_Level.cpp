@@ -89,6 +89,36 @@ void AmrDG::AMR_interpolate_initial_condition(int lev)
   AMR_FillFromCoarsePatch(lev, 0.0, U_w[lev], 0, basefunc->Np_s);
 }
 
+void AmrDG::AMR_sync_initial_condition()
+{
+    auto _mesh = mesh.lock();
+
+    // With analytical IC, each level has an independent L2 projection.
+    // Average fine data down to coarse for conservation consistency.
+    // For projection IC this is a no-op in exact arithmetic (projection
+    // from coarse then averaging back = identity), so skip it.
+    if (flag_analytical_ic) {
+        AMR_average_fine_coarse();
+    }
+
+    // Sync all ghost cells via FillPatch (same-level + fine-coarse interface).
+    // Iterating l=0→finest ensures each level uses the already-synced coarser level.
+    for (int l = 0; l <= _mesh->get_finest_lev(); ++l) {
+        amrex::Vector<amrex::MultiFab> _mf;
+        _mf.resize(Q);
+        for (int q = 0; q < Q; ++q) {
+            const amrex::BoxArray& ba = U_w[l][q].boxArray();
+            const amrex::DistributionMapping& dm = U_w[l][q].DistributionMap();
+            _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
+            _mf[q].setVal(0.0);
+        }
+        AMR_FillPatch(l, 0.0, _mf, 0, basefunc->Np_s);
+        for (int q = 0; q < Q; ++q) {
+            std::swap(U_w[l][q], _mf[q]);
+        }
+    }
+}
+
 //Make a new level using provided BoxArray and DistributionMapping and fill with 
 //interpolated coarse level data.
 void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
@@ -227,46 +257,140 @@ void AmrDG::AMR_set_flux_registers()
 {
     auto _mesh = mesh.lock();
 
+    // Allocate storage for AMR synchronization structures across the level hierarchy
     flux_reg.resize(_mesh->get_finest_lev() + 1);
     coarse_fine_interface_mask.resize(_mesh->get_finest_lev() + 1);
+    fine_level_valid_mask.resize(_mesh->get_finest_lev() + 1);
 
-    flux_reg[0].resize(Q); 
-    
+    // Level 0 has no "coarser" level, so flux registers are not used for refluxing here.
+    // We resize the vector to Q (number of equations) but leave pointers as nullptr.
+    flux_reg[0].resize(Q);
+
     for (int lev = 0; lev <= _mesh->get_finest_lev(); ++lev) {
-        coarse_fine_interface_mask[lev].resize(Q);
 
-        // Create a temporary mask for this level hierarchy
-        amrex::iMultiFab level_mask;
+        // --- COARSE-FINE INTERFACE MASK SETUP ---
+        // This mask identifies coarse cells that are covered by finer grids.
+        // It is essential for DG kernels to decide whether to use a standard 
+        // numerical flux or a flux provided by/for a FluxRegister.
+        
         if (lev < _mesh->get_finest_lev()) {
-            // Identifies where cells at 'lev' are covered by 'lev+1'
-            level_mask = amrex::makeFineMask(
-                _mesh->get_BoxArray(lev), 
-                _mesh->get_DistributionMap(lev), 
-                _mesh->get_BoxArray(lev+1), 
-                _mesh->get_refRatio(lev), 
-                1, 0);
+            // Build a temporary mask based on the layout of level lev+1.
+            // 1 = Cell is covered by a fine patch; 0 = Cell is uncovered.
+            amrex::iMultiFab level_mask = amrex::makeFineMask(
+                _mesh->get_BoxArray(lev),
+                _mesh->get_DistributionMap(lev),
+                _mesh->get_BoxArray(lev+1),
+                _mesh->get_refRatio(lev),
+                0, 1);
+
+            coarse_fine_interface_mask[lev].define(
+                _mesh->get_BoxArray(lev),
+                _mesh->get_DistributionMap(lev),
+                1, _mesh->nghost);
+
+            // Safety: Initialize everything (including ghosts) to 0.
+            coarse_fine_interface_mask[lev].setVal(0);
+
+            // Sync coverage data across MPI ranks: Transfer fine-grid coverage metadata
+            // from whichever ranks own the fine boxes to the ranks owning the coarse boxes.
+            coarse_fine_interface_mask[lev].ParallelCopy(level_mask, 0, 0, 1);
+
+            // Sync across periodic/MPI boundaries: Ensure ghost cells reflect the
+            // refined status of neighbors so DG interface checks (i+1, i-1) work.
+            coarse_fine_interface_mask[lev].FillBoundary(_mesh->get_Geom(lev).periodicity());
+
+            // Fill non-periodic physical boundary ghost cells to match the adjacent
+            // valid cell. This prevents false C-F interface detections at domain
+            // boundary faces in numflux (where mask(ghost)=0 vs mask(valid)=1
+            // would otherwise look like a C-F interface).
+            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                if (!_mesh->get_Geom(lev).isPeriodic(d)) {
+                    const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
+                    int dom_lo = domain.smallEnd(d);
+                    int dom_hi = domain.bigEnd(d);
+                    for (amrex::MFIter mfi(coarse_fine_interface_mask[lev]); mfi.isValid(); ++mfi) {
+                        const amrex::Box& vbx = mfi.validbox();
+                        auto arr = coarse_fine_interface_mask[lev][mfi].array();
+                        if (vbx.smallEnd(d) == dom_lo) {
+                            amrex::Box ghost_lo = amrex::adjCellLo(vbx, d, 1);
+                            amrex::ParallelFor(ghost_lo, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                                amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
+                                amrex::IntVect iv_valid = iv; iv_valid[d] = dom_lo;
+                                arr(iv) = arr(iv_valid);
+                            });
+                        }
+                        if (vbx.bigEnd(d) == dom_hi) {
+                            amrex::Box ghost_hi = amrex::adjCellHi(vbx, d, 1);
+                            amrex::ParallelFor(ghost_hi, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                                amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
+                                amrex::IntVect iv_valid = iv; iv_valid[d] = dom_hi;
+                                arr(iv) = arr(iv_valid);
+                            });
+                        }
+                    }
+                }
+            }
         } else {
-            // Finest level: no fine cells above it
-            level_mask.define(_mesh->get_BoxArray(lev), 
-                              _mesh->get_DistributionMap(lev), 1, 0);
-            level_mask.setVal(0);
+            // Finest level: No grids exist above this, so the entire mask is 0.
+            coarse_fine_interface_mask[lev].define(
+                _mesh->get_BoxArray(lev),
+                _mesh->get_DistributionMap(lev), 1, _mesh->nghost);
+            coarse_fine_interface_mask[lev].setVal(0);
+            coarse_fine_interface_mask[lev].FillBoundary(_mesh->get_Geom(lev).periodicity());
         }
 
-        // Distribute the mask to each component with the correct ghost cells
-        for (int q = 0; q < Q; ++q) {
-            coarse_fine_interface_mask[lev][q].define(
-                _mesh->get_BoxArray(lev), 
-                _mesh->get_DistributionMap(lev), 
-                1, _mesh->nghost); // Use _mesh->nghost here
+        // --- VALID-CELL MASK SETUP ---
+        // Identifies where actual computational data exists (Valid=1, Physical Boundary/Empty=0).
+        // This allows DG kernels to branch between Riemann Solvers and Physical BCs.
 
-            // Copy valid data from level_mask to the component mask
-            coarse_fine_interface_mask[lev][q].ParallelCopy(level_mask, 0, 0, 1);
-            
-            // Fill ghost cells so neighbor checks (i-1) work at patch boundaries
-            coarse_fine_interface_mask[lev][q].FillBoundary(_mesh->get_Geom(lev).periodicity());
+        fine_level_valid_mask[lev].define(
+            _mesh->get_BoxArray(lev),
+            _mesh->get_DistributionMap(lev),
+            1, _mesh->nghost);
+
+        //  Default all (Valid + Ghost) to 0.
+        fine_level_valid_mask[lev].setVal(0);
+
+        // Set only local valid cells to 1.
+        for (amrex::MFIter mfi(fine_level_valid_mask[lev]); mfi.isValid(); ++mfi) {
+            fine_level_valid_mask[lev][mfi].setVal<amrex::RunOn::Host>(
+                1, mfi.validbox(), 0, 1);
         }
 
-        // Set up FluxRegisters for synchronization with the level below
+        //  MPI & Periodic Sync.
+        // Ghost cells overlapping other patches (any rank) or periodic images become 1.
+        fine_level_valid_mask[lev].FillBoundary(_mesh->get_Geom(lev).periodicity());
+
+        // Fill non-periodic physical boundary ghost cells to 1 (treat as "valid")
+        // to prevent false F-C interface detections at domain boundary faces.
+        // At domain edges there is no coarse neighbor, so no F-C interface exists.
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            if (!_mesh->get_Geom(lev).isPeriodic(d)) {
+                const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
+                int dom_lo = domain.smallEnd(d);
+                int dom_hi = domain.bigEnd(d);
+                for (amrex::MFIter mfi(fine_level_valid_mask[lev]); mfi.isValid(); ++mfi) {
+                    const amrex::Box& vbx = mfi.validbox();
+                    auto arr = fine_level_valid_mask[lev][mfi].array();
+                    if (vbx.smallEnd(d) == dom_lo) {
+                        amrex::Box ghost_lo = amrex::adjCellLo(vbx, d, 1);
+                        amrex::ParallelFor(ghost_lo, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                            arr(i,j,k) = 1;
+                        });
+                    }
+                    if (vbx.bigEnd(d) == dom_hi) {
+                        amrex::Box ghost_hi = amrex::adjCellHi(vbx, d, 1);
+                        amrex::ParallelFor(ghost_hi, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                            arr(i,j,k) = 1;
+                        });
+                    }
+                }
+            }
+        }
+
+        // --- FLUX REGISTER INITIALIZATION ---
+        // Created for lev > 0 to handle flux conservation at the interface with lev-1.
+        
         if (lev > 0) {
             flux_reg[lev].resize(Q);
             for(int q=0; q<Q; ++q){  
@@ -275,7 +399,7 @@ void AmrDG::AMR_set_flux_registers()
                     _mesh->get_DistributionMap(lev),
                     _mesh->get_refRatio(lev-1),
                     lev,
-                    basefunc->Np_s
+                    basefunc->Np_s // Pass DG-specific number of points/degrees of freedom
                 );
             }
         }
@@ -288,31 +412,26 @@ void AmrDG::AMR_flux_correction()
 
     // Loop from the finest level `l` down to level 1
     for (int l = _mesh->get_finest_lev(); l > 0; --l) {
-
         for(int q=0; q<Q; ++q){ 
             if (flux_reg[l][q]) {
-                // Get the flux mismatch DeltaF for each coarse cell at level l-1.
-                amrex::MultiFab correction_mf(U_w[l-1][q].boxArray(), 
-                                              U_w[l-1][q].DistributionMap(), 
+                // Define a dummy correction MultiFab to hold the reflux mismatch
+                amrex::MultiFab correction_mf(U_w[l-1][q].boxArray(),
+                                              U_w[l-1][q].DistributionMap(),
                                               basefunc->Np_s, _mesh->nghost);
                 correction_mf.setVal(0.0);
 
                 // Define a dummy "Volume" MultiFab set to 1.0 (to prevent division by volume)
-                amrex::MultiFab dummy_vol(U_w[l-1][q].boxArray(), 
-                                          U_w[l-1][q].DistributionMap(), 
-                                          1, _mesh->nghost);
+                amrex::MultiFab dummy_vol(U_w[l-1][q].boxArray(),
+                                          U_w[l-1][q].DistributionMap(),
+                                          1,  _mesh->nghost);
                 dummy_vol.setVal(1.0);
                 
-                // Reflux identifies cells in l-1 that touch level l
-                //Computes $$\Delta F = \frac{1}{V} \int (F_{face, coarse} - F_{face, fine}) dt dA.
-                //                    = \frac{1}{V_{coarse}} \sum (F_{fine} \cdot dt_f \cdot A_f) 
-                //                      - (F_{coarse} \cdot dt_c \cdot A_c)$$
-                flux_reg[l][q]->Reflux(correction_mf, dummy_vol, 
-                                       1.0, 0, 0, basefunc->Np_s, 
+                // Store the reflux mismathc computed by Reflux() in correction_mf
+                flux_reg[l][q]->Reflux(correction_mf, dummy_vol,
+                                       1.0, 0, 0, basefunc->Np_s,
                                        _mesh->get_Geom(l-1));
 
-                
-                // reflux() updates U_w[l-1] (the coarse level)
+                // Now i can apply the projection and correction to coarse
                 amr_interpolator->reflux(&(U_w[l-1][q]),      // Coarse level solution to be corrected
                                          &(correction_mf),     // The total accumulated mismatch ΔF
                                          l-1,                  // The coarse level index

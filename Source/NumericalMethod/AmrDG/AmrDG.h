@@ -91,6 +91,8 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     void AMR_interpolate_initial_condition(int lev);
 
+    void AMR_sync_initial_condition();
+
     void AMR_average_fine_coarse();
 
     void AMR_clear_level_data(int lev);
@@ -531,16 +533,18 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
   }
 
-  //Synch ghost cells between patches at same level across MPI processes.
-  //Ghost cells at fine-coarse interface were already filled during init
-  //(via growntilebox for analytical IC, or InterpFromCoarseLevel for interpolated IC).
-  //FillBoundary only handles same-level patch boundaries, not fine-coarse interface.
-  for(int l=0; l<=_mesh->get_finest_lev(); ++l){
-    for(int q=0; q<Q; ++q){
-      Solver<NumericalMethodType>::FillBoundary(&(U_w[l][q]),l);
-    }
+  //Set up flux registers for AMR synchronization.
+  //The AMR grid hierarchy was already created by InitFromScratch
+  //(geometric tagging works on zero data).
+  //Ghost cells were synced during IC initialization:
+  //  - Projection IC: InterpFromCoarseLevel + FillBoundary in AMR_interpolate_initial_condition
+  //  - Analytical IC: AMR_sync_initial_condition (average_fine_coarse + FillBoundary)
+  if(_mesh->L > 1){
+    AMR_set_flux_registers();
   }
   
+
+  ///*
   while(t<T)
   {  
     if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -569,7 +573,8 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
 
     //Remake existing levels and create new fine levels from coarse
-    if ((_mesh->L > 1))
+    //Skip in validation mode: tagging is static, so regrid produces the same grid.
+    if ((_mesh->L > 1)) //&& !flag_analytical_ic)
     {
       if((_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0)){
         //TODO: adapt boolena condition to handle physical time
@@ -629,10 +634,6 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
     if(T-t<Dt){Dt = T-t;}    
-    
-    //if(n==10){ //safety break
-    //  t=T+1;
-    //}
   }
 
   if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -648,7 +649,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     std::cout << "\n";
     Print() << "Total number of time steps: " << n << "\n";
   }
-
+  //*/
   amrex::ParallelDescriptor::Barrier();
 
   //Output t=T norm
@@ -721,7 +722,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
       iter+=1;
     }
-
+    
     //use found predictor to compute corrector
     if(model_pde->flag_source_term){
       get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st,&(H[l]),&(H_w[l]),quadrule->xi_ref_quad_st);
@@ -755,7 +756,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
           if (l < _mesh->get_finest_lev() && flux_reg[l+1].size()) {
             flux_reg[l+1][q]->CrseAdd(Fnum_int_c[l][d][q], d,
                         0, 0, static_cast<int>(basefunc->Np_s),
-                        1.0, _mesh->get_Geom(l)); 
+                        -1.0, _mesh->get_Geom(l)); 
           }
 
           //for each fine level add their surface integrated numerical flux
@@ -775,7 +776,12 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
   if ((_mesh->L > 1))
   {
-    //AMR_flux_correction();
+    //Solution updating only happened on valid cells, therefore inner and BC ghost cells
+    //have garbage values. So apply BC and inner shync to ensure all cells are up-to date
+    for (int l = _mesh->get_finest_lev(); l >= 0; --l){
+      Solver<NumericalMethodType>::FillBoundaryCells(bdcond,&(U_w[l]), l, time);
+    }
+    AMR_flux_correction();
   }
 }
 

@@ -61,15 +61,15 @@ void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Re
       // When validation_mode=true (flag_analytical_ic), use static refinement for convergence tests
       // When validation_mode=false, use dynamic refinement that tracks the vortex
       Real xc, yc;
-      if (flag_analytical_ic) {
+
         // VALIDATION MODE: Fixed refinement region for convergence testing
-        xc = x0;
-        yc = y0;
-      } else {
+        //xc = x0;
+        //yc = y0;
+        //} else {
         // PRODUCTION MODE: Refinement follows vortex motion
         xc = x0 + u_infty * time;
         yc = y0 + v_infty * time;
-      }
+      
 
       amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
       {

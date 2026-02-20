@@ -21,9 +21,9 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
 
     // Access the interface mask for the coarse level 'lev'
     // This mask was created in AmrDG::AMR_set_flux_registers()
-    auto const& msk = numme->coarse_fine_interface_mask[lev][0];
-
-    int N = numme->quadrule->qMp_1d; 
+    // Ghost cells at non-periodic boundaries are set to match adjacent valid cells,
+    // so neighbor checks are safe without explicit boundary guards.
+    auto const& msk = numme->coarse_fine_interface_mask[lev];
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
@@ -32,21 +32,21 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
         for (MFIter mfi(*correction_mf, TilingIfNotGPU()); mfi.isValid(); ++mfi)
         {
             const Box& bx = mfi.tilebox();
-            
+
             const amrex::FArrayBox * fab_corr = correction_mf->fabPtr(mfi);
             amrex::Array4<const amrex::Real> corr = fab_corr->const_array();
 
             amrex::FArrayBox* fab_u_crse = &(U_crse->get(mfi));
             amrex::Array4<amrex::Real> u_crse = fab_u_crse->array();
 
-            // Get the Array4 for the mask
             auto const& msk_arr = msk.const_array(mfi);
 
             amrex::ParallelFor(bx, [=] (int i, int j, int k) noexcept
             {
-
+              // Skip cells covered by fine level
               if (msk_arr(i,j,k) != 0) return;
 
+              // Check if any neighbor is covered by fine (= at C-F interface)
               bool is_at_interface = false;
               amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
 
@@ -58,7 +58,7 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
                   }
               }
 
-              if (is_at_interface) 
+              if (is_at_interface)
               {
                   Eigen::VectorXd f_delta(numme->basefunc->Np_s);
                   for(int n=0; n<numme->basefunc->Np_s; ++n){
@@ -67,8 +67,8 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
 
                   Eigen::VectorXd delta_u_w = inv_jac * (Minv * f_delta);
 
-                  for (int n = 0; n < numme->basefunc->Np_s; ++n) { 
-                      u_crse(i, j, k, n) += delta_u_w(n); 
+                  for (int n = 0; n < numme->basefunc->Np_s; ++n) {
+                      u_crse(i, j, k, n) += delta_u_w(n);
                   }
               }
             });
@@ -90,7 +90,7 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
 {
     // 1. Setup dimensions
     int num_face_children = (int)std::pow(2, AMREX_SPACEDIM - 1);
-    int num_q_pts = numme->quadrule->qMp_s_bd; // Fine quadrature points on face
+    int num_q_pts = numme->quadrule->qMp_st_bd;
 
     // 2. Resize Outer Vectors [Direction]
     P_flux_fc_low.resize(AMREX_SPACEDIM);
@@ -130,8 +130,8 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
                     
                     // --- A. Geometry/Mapping Logic ---
                     
-                    // Get Fine Quad Point (on reference face)
-                    amrex::Vector<amrex::Real> xi_f = numme->quadrule->xi_ref_quad_s_bdm[d][m];
+                    // Get Fine Quad Point (space-time boundary point)
+                    amrex::Vector<amrex::Real> xi_f = numme->quadrule->xi_ref_quad_st_bdm[d][m];
                     
                     // Map to Coarse Parent Coordinate System for both sides
                     amrex::Vector<amrex::Real> xi_c_low(AMREX_SPACEDIM);
@@ -156,7 +156,7 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
                     amrex::Real phi_c_low  = numme->basefunc->phi_s(r, numme->basefunc->basis_idx_s, xi_c_low);
                     amrex::Real phi_c_high = numme->basefunc->phi_s(r, numme->basefunc->basis_idx_s, xi_c_high);
                     
-                    // Get Fine Weight
+                    // Get Fine Weight (space-time boundary weights)
                     amrex::Real w_m = numme->quad_weights_st_bdm[d][m];
                     amrex::Real w_p = numme->quad_weights_st_bdp[d][m];
                     
