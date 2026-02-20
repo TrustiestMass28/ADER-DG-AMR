@@ -37,6 +37,50 @@ class ModelEquation;
 
 using namespace amrex;
 
+namespace solver {
+
+// Flat 2D-indexed storage: replaces Vector<Vector<T>> with (i,j) access
+template <typename T>
+class Array2D {
+    amrex::Vector<T> vec_;
+    int n0_ = 0, n1_ = 0;
+public:
+    Array2D() = default;
+
+    void resize(int n0, int n1) {
+        n0_ = n0; n1_ = n1;
+        vec_.resize(n0 * n1);
+    }
+
+    T& operator()(int i, int j) { return vec_[i * n1_ + j]; }
+    const T& operator()(int i, int j) const { return vec_[i * n1_ + j]; }
+
+    void clear() { vec_.clear(); n0_ = 0; n1_ = 0; }
+    int size() const { return static_cast<int>(vec_.size()); }
+};
+
+// Flat 3D-indexed storage: replaces Vector<Vector<Vector<T>>> with (i,j,k) access
+template <typename T>
+class Array3D {
+    amrex::Vector<T> vec_;
+    int n0_ = 0, n1_ = 0, n2_ = 0;
+public:
+    Array3D() = default;
+
+    void resize(int n0, int n1, int n2) {
+        n0_ = n0; n1_ = n1; n2_ = n2;
+        vec_.resize(n0 * n1 * n2);
+    }
+
+    T& operator()(int i, int j, int k) { return vec_[i * n1_ * n2_ + j * n2_ + k]; }
+    const T& operator()(int i, int j, int k) const { return vec_[i * n1_ * n2_ + j * n2_ + k]; }
+
+    void clear() { vec_.clear(); n0_ = 0; n1_ = 0; n2_ = 0; }
+    int size() const { return static_cast<int>(vec_.size()); }
+};
+
+} // namespace solver
+
 template <typename NumericalMethodType>
 class Solver
 {
@@ -88,48 +132,48 @@ class Solver
         //reconstruct solution vector evaluation based on its decomposition
         //and quadrature. M,N to be specified s.t we cna choose
         //to evaluate at boundary or in cell
-        void get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>& _U,
-                            amrex::Vector<amrex::MultiFab>& _U_w,
+        void get_U_from_U_w(int M, int N, amrex::MultiFab* _U,
+                            amrex::MultiFab* _U_w,
                             const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
         template <typename EquationType>
         void source(int lev,int M,
                     const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                    amrex::Vector<amrex::MultiFab>& _U,
-                    amrex::Vector<amrex::MultiFab>& _S,
+                    amrex::MultiFab* _U,
+                    amrex::MultiFab* _S,
                     const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
         template <typename EquationType>
         void flux(int lev,int d, int M,
                     const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                    amrex::Vector<amrex::MultiFab>& _U,
-                    amrex::Vector<amrex::MultiFab>& _F,
+                    amrex::MultiFab* _U,
+                    amrex::MultiFab* _F,
                     const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
         template <typename EquationType>
         void flux_bd(int lev,int d, int M,
                     const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                    amrex::Vector<amrex::MultiFab>& _U,
-                    amrex::Vector<amrex::MultiFab>& _F,
-                    amrex::Vector<amrex::MultiFab>& _DF,
+                    amrex::MultiFab* _U,
+                    amrex::MultiFab* _F,
+                    amrex::MultiFab* _DF,
                     const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
 
         void numflux(int lev,int d,int M, int N,
-                    amrex::Vector<amrex::MultiFab>& _U_m,
-                    amrex::Vector<amrex::MultiFab>& _U_p,
-                    amrex::Vector<amrex::MultiFab>& _F_m,
-                    amrex::Vector<amrex::MultiFab>& _F_p,
-                    amrex::Vector<amrex::MultiFab>& _DF_m,
-                    amrex::Vector<amrex::MultiFab>& _DF_p);
+                    amrex::MultiFab* _U_m,
+                    amrex::MultiFab* _U_p,
+                    amrex::MultiFab* _F_m,
+                    amrex::MultiFab* _F_p,
+                    amrex::MultiFab* _DF_m,
+                    amrex::MultiFab* _DF_p);
 
         //computes the integral of the numerical flux across interface
         void numflux_integral(int lev,int d,int M, int N,
-                            amrex::Vector<amrex::MultiFab>& _U_m,
-                            amrex::Vector<amrex::MultiFab>& _U_p,
-                            amrex::Vector<amrex::MultiFab>& _F_m,
-                            amrex::Vector<amrex::MultiFab>& _F_p,
-                            amrex::Vector<amrex::MultiFab>& _DF_m,
-                            amrex::Vector<amrex::MultiFab>& _DF_p);
+                            amrex::MultiFab* _U_m,
+                            amrex::MultiFab* _U_p,
+                            amrex::MultiFab* _F_m,
+                            amrex::MultiFab* _F_p,
+                            amrex::MultiFab* _DF_m,
+                            amrex::MultiFab* _DF_p);
 
         //get solution vector derivative
         template <typename EquationType>
@@ -184,13 +228,13 @@ class Solver
 
         template <typename EquationType>
         void PlotFile(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                                                    amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
+                                                    solver::Array2D<amrex::MultiFab>& X,
                                                     int tstep, amrex::Real time, int level = -1) const;
-                                                
+
         //Apply boundary conditions by calling BC methods
         template <typename EquationType>
         void FillBoundaryCells(const std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>>& bdcond,
-                                amrex::Vector<amrex::MultiFab>& _U,
+                                amrex::MultiFab* _U,
                                 int lev, amrex::Real time);
 
 
@@ -441,41 +485,38 @@ class Solver
 
         std::string out_name_prefix;
 
-        //Multifabs vectors (LxDxQ or LxQ)
-        //L:  max number of levels
-        //D:  dimensions
-        //Q:  number of solution components
+        //Multifabs — solver::Array2D(lev,q), solver::Array3D(lev,d,q), solver::Array2D(lev,d)
 
-        //solution vector U(x,t) 
-        amrex::Vector<amrex::Vector<amrex::MultiFab>> U; 
+        //solution vector U(x,t) — (lev,q)
+        solver::Array2D<amrex::MultiFab> U;
 
-        //Modal/Nodal solution vector U_w
-        amrex::Vector<amrex::Vector<amrex::MultiFab>> U_w;
+        //Modal/Nodal solution vector U_w — (lev,q)
+        solver::Array2D<amrex::MultiFab> U_w;
 
-        //solution vector U(x,t) evalauted at cells center
-        amrex::Vector<amrex::Vector<amrex::MultiFab>> U_center;
+        //solution vector U(x,t) evalauted at cells center — (lev,q)
+        solver::Array2D<amrex::MultiFab> U_center;
 
-        //Physical flux F(x,t)
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> F;
+        //Physical flux F(x,t) — (lev,d,q)
+        solver::Array3D<amrex::MultiFab> F;
 
-        //Physical flux F(x,t) evaluated at boundary minus (-) b-
-        amrex::Vector<amrex::Vector<amrex::MultiFab>> Fm;
-        //  derivative
-        amrex::Vector<amrex::Vector<amrex::MultiFab>> DFm;
+        //Physical flux F(x,t) evaluated at boundary minus (-) b- — (lev,q)
+        solver::Array2D<amrex::MultiFab> Fm;
+        //  derivative — (lev,q)
+        solver::Array2D<amrex::MultiFab> DFm;
 
-        //Physical flux F(x,t) evaluated at boundary plus (+) b+
-        amrex::Vector<amrex::Vector<amrex::MultiFab>> Fp;
-        //  derivative
-        amrex::Vector<amrex::Vector<amrex::MultiFab>> DFp;
+        //Physical flux F(x,t) evaluated at boundary plus (+) b+ — (lev,q)
+        solver::Array2D<amrex::MultiFab> Fp;
+        //  derivative — (lev,q)
+        solver::Array2D<amrex::MultiFab> DFp;
 
-        //Numerical flux approximation Fnum(x,t)
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum;
+        //Numerical flux approximation Fnum(x,t) — (lev,d,q)
+        solver::Array3D<amrex::MultiFab> Fnum;
 
-        //Numerical flux approximation Fnum(x,t) integrated at fine lvl
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum_int_f;
+        //Numerical flux approximation Fnum(x,t) integrated at fine lvl — (lev,d,q)
+        solver::Array3D<amrex::MultiFab> Fnum_int_f;
 
-        //Numerical flux approximation Fnum(x,t) integrated at coarse lvl
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnum_int_c;
+        //Numerical flux approximation Fnum(x,t) integrated at coarse lvl — (lev,d,q)
+        solver::Array3D<amrex::MultiFab> Fnum_int_c;
 
         //Store at each level the mask to identify cells
         //at coarse-fine interface (0 = uncovered, 1 = covered by finer level)
@@ -486,23 +527,23 @@ class Solver
         //Used for periodic-aware fine-coarse interface detection in numflux.
         amrex::Vector<amrex::iMultiFab> fine_level_valid_mask;
 
-        //Precomputed C-F interface face data per level per dimension [lev][d]
+        //Precomputed C-F interface face data per level per dimension — (lev,d)
         //Face-centered iMultiFabs, 1 component, 0 ghost cells
         //b_coarse: +1/-1 = interface direction (with ownership rule), 0 = not C-F
-        amrex::Vector<amrex::Vector<amrex::iMultiFab>> cf_face_b_coarse;
+        solver::Array2D<amrex::iMultiFab> cf_face_b_coarse;
         //b_fine: +1/-1 = interface direction, 0 = not F-C
-        amrex::Vector<amrex::Vector<amrex::iMultiFab>> cf_face_b_fine;
+        solver::Array2D<amrex::iMultiFab> cf_face_b_fine;
         //child sub-face index (0 to 2^(D-1)-1), valid only where cf_face_b_fine != 0
-        amrex::Vector<amrex::Vector<amrex::iMultiFab>> cf_face_child_idx;
+        solver::Array2D<amrex::iMultiFab> cf_face_child_idx;
 
-        //Numerical flux approximation Fnum(x,t) integrated over boundary minus (-) b-
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnumm_int; 
+        //Numerical flux approximation Fnum(x,t) integrated over boundary minus (-) b- — (lev,d,q)
+        solver::Array3D<amrex::MultiFab> Fnumm_int;
 
-        //Numerical flux approximation Fnum(x,t) integrated over boundary plus (+) b+
-        amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> Fnump_int;
+        //Numerical flux approximation Fnum(x,t) integrated over boundary plus (+) b+ — (lev,d,q)
+        solver::Array3D<amrex::MultiFab> Fnump_int;
 
-        //Source/Sink term S(x,t)
-        amrex::Vector<amrex::Vector<amrex::MultiFab>> S;
+        //Source/Sink term S(x,t) — (lev,q)
+        solver::Array2D<amrex::MultiFab> S;
 
         std::optional<indicators::ProgressBar> m_bar;
 
@@ -803,12 +844,10 @@ void Solver<NumericalMethodType>::evolve(const std::shared_ptr<ModelEquation<Equ
 template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::FillBoundaryCells(const std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>>& bdcond,
-                                                    amrex::Vector<amrex::MultiFab>& _U,
+                                                    amrex::MultiFab* _U,
                                                     int lev, amrex::Real time)
 
 {
-    //static_cast<NumericalMethodType*>(this)->FillBoundaryCells(mesh,bdcond,_U,lev,time);
-    //TODO: in case AmrDG should prvide some specialized functionalities to BC maybe then static_cast is needed
     bdcond->FillBoundaryCells(_U, lev, time);
 }
 
@@ -845,8 +884,8 @@ void Solver<NumericalMethodType>::set_Dt(const std::shared_ptr<ModelEquation<Equ
 }
 
 template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>& _U,
-                                                amrex::Vector<amrex::MultiFab>& _U_w,
+void Solver<NumericalMethodType>::get_U_from_U_w(int M, int N, amrex::MultiFab* _U,
+                                                amrex::MultiFab* _U_w,
                                                 const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
     static_cast<NumericalMethodType*>(this)->get_U_from_U_w(M,N,_U,_U_w,xi);
@@ -856,8 +895,8 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::source(int lev,int M,
                                         const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                                        amrex::Vector<amrex::MultiFab>& _U,
-                                        amrex::Vector<amrex::MultiFab>& _S,
+                                        amrex::MultiFab* _U,
+                                        amrex::MultiFab* _S,
                                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
     static_cast<NumericalMethodType*>(this)->source(lev,M,model_pde,_U,_S,xi);
@@ -867,8 +906,8 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::flux(int lev,int d, int M,
                                         const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                                        amrex::Vector<amrex::MultiFab>& _U,
-                                        amrex::Vector<amrex::MultiFab>& _F,
+                                        amrex::MultiFab* _U,
+                                        amrex::MultiFab* _F,
                                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
     static_cast<NumericalMethodType*>(this)->flux(lev,d,M,model_pde,_U,_F,xi);
@@ -878,34 +917,34 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::flux_bd(int lev,int d, int M,
                                         const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                                        amrex::Vector<amrex::MultiFab>& _U,
-                                        amrex::Vector<amrex::MultiFab>& _F,
-                                        amrex::Vector<amrex::MultiFab>& _DF,
+                                        amrex::MultiFab* _U,
+                                        amrex::MultiFab* _F,
+                                        amrex::MultiFab* _DF,
                                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
     static_cast<NumericalMethodType*>(this)->flux_bd(lev,d,M,model_pde,_U,_F,_DF,xi);
-}    
+}
 
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::numflux(int lev,int d,int M, int N,
-                                        amrex::Vector<amrex::MultiFab>& _U_m,
-                                        amrex::Vector<amrex::MultiFab>& _U_p,
-                                        amrex::Vector<amrex::MultiFab>& _F_m,
-                                        amrex::Vector<amrex::MultiFab>& _F_p,
-                                        amrex::Vector<amrex::MultiFab>& _DF_m,
-                                        amrex::Vector<amrex::MultiFab>& _DF_p)
+                                        amrex::MultiFab* _U_m,
+                                        amrex::MultiFab* _U_p,
+                                        amrex::MultiFab* _F_m,
+                                        amrex::MultiFab* _F_p,
+                                        amrex::MultiFab* _DF_m,
+                                        amrex::MultiFab* _DF_p)
 {
     static_cast<NumericalMethodType*>(this)->numflux(lev,d,M,N,_U_m,_U_p,_F_m,_F_p,_DF_m,_DF_p);
 }
 
 template <typename NumericalMethodType>
 void Solver<NumericalMethodType>::numflux_integral(int lev,int d, int M, int N,
-                                                    amrex::Vector<amrex::MultiFab>& _U_m,
-                                                    amrex::Vector<amrex::MultiFab>& _U_p,
-                                                    amrex::Vector<amrex::MultiFab>& _F_m,
-                                                    amrex::Vector<amrex::MultiFab>& _F_p,
-                                                    amrex::Vector<amrex::MultiFab>& _DF_m,
-                                                    amrex::Vector<amrex::MultiFab>& _DF_p)
+                                                    amrex::MultiFab* _U_m,
+                                                    amrex::MultiFab* _U_p,
+                                                    amrex::MultiFab* _F_m,
+                                                    amrex::MultiFab* _F_p,
+                                                    amrex::MultiFab* _DF_m,
+                                                    amrex::MultiFab* _DF_p)
 {
     static_cast<NumericalMethodType*>(this)->numflux_integral(lev,d,M,N,_U_m,_U_p,_F_m,
                                                             _F_p,_DF_m,_DF_p);
@@ -914,13 +953,13 @@ void Solver<NumericalMethodType>::numflux_integral(int lev,int d, int M, int N,
 template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
-                                            amrex::Vector<amrex::Vector<amrex::MultiFab>>& X,
-                                            int tstep, amrex::Real time, 
-                                            int level) const 
-{   
+                                            solver::Array2D<amrex::MultiFab>& X,
+                                            int tstep, amrex::Real time,
+                                            int level) const
+{
     auto varNames = model_pde->getModelVarNames();
     auto _mesh = mesh.lock();
-    
+
     // Determine bounds based on the 'level' argument
     int start_lev = (level < 0) ? 0 : level;
     int end_lev   = (level < 0) ? _mesh->get_finest_lev() : level;
@@ -928,13 +967,13 @@ void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<E
 
     for(int q = 0; q < Q; ++q) {
         amrex::Vector<std::string> plot_var_name;
-        int nComp = X[0][q].nComp();
+        int nComp = X(0,q).nComp();
         for(int m = 0; m < nComp; ++m) {
             plot_var_name.push_back(varNames.names[q] + "_" + std::to_string(m));
         }
 
         // Keep your original naming convention
-        std::string pltfile_name = "../Results/Simulation Data/" + out_name_prefix + "_" + 
+        std::string pltfile_name = "../Results/Simulation Data/" + out_name_prefix + "_" +
                                    std::to_string(tstep) + "_q_" + std::to_string(q) + "_plt";
 
         // Containers for the writer
@@ -945,7 +984,7 @@ void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<E
 
         // Build vectors only for the levels we want
         for (int l = start_lev; l <= end_lev; ++l) {
-            mf_out.push_back(&X[l][q]);
+            mf_out.push_back(&X(l,q));
             geom_out.push_back(_mesh->get_Geom(l));
             lvl_tstep.push_back(tstep);
             if (l < end_lev) {

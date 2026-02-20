@@ -76,7 +76,7 @@ class BoundaryCondition
 
     void set_system_curr_component(int _q, int _lev);
 
-    void FillBoundaryCells(amrex::Vector<amrex::MultiFab>& _U,
+    void FillBoundaryCells(amrex::MultiFab* _U,
                           int lev, amrex::Real time);
 
   protected:
@@ -283,7 +283,7 @@ void BoundaryCondition<EquationType,NumericalMethodType>::setBCAMREXtype(amrex::
 }
 
 template <typename EquationType, typename NumericalMethodType>
-void BoundaryCondition<EquationType,NumericalMethodType>::FillBoundaryCells(amrex::Vector<amrex::MultiFab>& _U,
+void BoundaryCondition<EquationType,NumericalMethodType>::FillBoundaryCells(amrex::MultiFab* _U,
                                                                             int lev, amrex::Real time)
 {
   auto _mesh = mesh.lock();
@@ -291,24 +291,16 @@ void BoundaryCondition<EquationType,NumericalMethodType>::FillBoundaryCells(amre
   amrex::Geometry geom_l = _mesh->get_Geom(lev);
 
   //applies boundary conditions
-  for(int q=0; q<_U.size(); ++q){
-    //sync MFab internl MFab ghost cells
-    //and for external ghost apply Periodic BC if needed/if periodic BC present
+  for(int q=0; q<Q_model; ++q){
     _U[q].FillBoundary(geom_l.periodicity());
 
-    //if we had all periodic then we pretty much already applied BC and can thus exit
-    //if domain isnt all periodic, now apply non-periodic BCs
     if (!(geom_l.isAllPeriodic())){
 
-      //update in BC object the value of q,lev s.t it knows over which component of datastructures
-      //we are applying BCs to
       set_system_curr_component(q,lev);
 
-      //TODO:could be improved, maybe pre-cosntuct obejct inside init(). Care about geom object if it gets updated tho
       amrex::PhysBCFunct<amrex::GpuBndryFuncFab<BoundaryCondition<EquationType,NumericalMethodType>>> physbcf_bd(geom_l,bc[q],*bcf);
 
       physbcf_bd(_U[q], 0, _U[q].nComp(), _U[q].nGrowVect(), time,0);
-      //(MultiFab& mf, int icomp, int ncomp, IntVect const& nghost,real time, int bccomp)
     }
   }
 }

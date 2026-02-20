@@ -4,60 +4,49 @@ using namespace amrex;
 
 void AmrDG::AMR_clear_level_data(int lev)
 {
-  //Delete level data
-
-    auto clear_mfab_vec = [](auto& vec) {
-        for (auto& mf : vec) {
-            mf.clear();
-        }
-        vec.clear();
-    };
-
-    auto clear_mfab_vec2D = [&](auto& vec2D) {
-        for (auto& vec : vec2D) {
-            clear_mfab_vec(vec);
-        }
-        vec2D.clear();
-    };
-
-    // Per-component fields
-    clear_mfab_vec(U[lev]);
-    clear_mfab_vec(U_w[lev]);
-    clear_mfab_vec(U_center[lev]);
+  //Delete level data — flat vector layout
+  for (int q = 0; q < Q; ++q) {
+    U(lev,q).clear();
+    U_w(lev,q).clear();
+    U_center(lev,q).clear();
     if (flag_source_term) {
-        clear_mfab_vec(S[lev]);
+      S(lev,q).clear();
     }
 
-    // Per-dimension per-component fields
-    clear_mfab_vec2D(F[lev]);
-    clear_mfab_vec(Fm[lev]);
-    clear_mfab_vec(DFm[lev]);
-    clear_mfab_vec(Fp[lev]);
-    clear_mfab_vec(DFp[lev]);
-    clear_mfab_vec2D(Fnum[lev]);
-    clear_mfab_vec2D(Fnum_int_f[lev]);
-    clear_mfab_vec2D(Fnum_int_c[lev]);
+    Fm(lev,q).clear();
+    DFm(lev,q).clear();
+    Fp(lev,q).clear();
+    DFp(lev,q).clear();
 
-    // H-related fields
-    clear_mfab_vec(H[lev]);
-    clear_mfab_vec(H_w[lev]);
-    clear_mfab_vec(H_p[lev]);
-    clear_mfab_vec(H_m[lev]);
+    H(lev,q).clear();
+    H_w(lev,q).clear();
+    H_p(lev,q).clear();
+    H_m(lev,q).clear();
 
-    // RHS temporaries
-    rhs_corr[lev].clear();
-    rhs_pred[lev].clear();
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+      F(lev,d,q).clear();
+      Fnum(lev,d,q).clear();
+      Fnum_int_f(lev,d,q).clear();
+      Fnum_int_c(lev,d,q).clear();
+    }
+  }
 
-    // Precomputed C-F interface face data
-    if (lev < static_cast<int>(cf_face_b_coarse.size())) {
-        clear_mfab_vec(cf_face_b_coarse[lev]);
+  // RHS temporaries
+  rhs_corr[lev].clear();
+  rhs_pred[lev].clear();
+
+  // Precomputed C-F interface face data
+  for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+    if (cf_face_b_coarse.size() > 0) {
+      cf_face_b_coarse(lev,d).clear();
     }
-    if (lev < static_cast<int>(cf_face_b_fine.size())) {
-        clear_mfab_vec(cf_face_b_fine[lev]);
+    if (cf_face_b_fine.size() > 0) {
+      cf_face_b_fine(lev,d).clear();
     }
-    if (lev < static_cast<int>(cf_face_child_idx.size())) {
-        clear_mfab_vec(cf_face_child_idx[lev]);
+    if (cf_face_child_idx.size() > 0) {
+      cf_face_child_idx(lev,d).clear();
     }
+  }
 }
 
 void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
@@ -72,30 +61,28 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
 
   auto _mesh = mesh.lock();
 
-  amrex::Vector<amrex::MultiFab> _mf;
-  _mf.resize(Q);
+  amrex::Vector<amrex::MultiFab> _mf(Q);
   for(int q=0 ; q<Q; ++q){
     _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
-    _mf[q].setVal(0.0);    
-  } 
-  
-  AMR_FillPatch(lev, time, _mf, 0, basefunc->Np_s);
+    _mf[q].setVal(0.0);
+  }
+
+  AMR_FillPatch(lev, time, _mf.data(), 0, basefunc->Np_s);
   //clear existing level MFabs defined on old ba,dm
   _mesh->ClearLevel(lev);
-  //Solver<NumericalMethodType>::AMR_clear_level_data(lev);
 
   //create new level MFabs defined on new ba,dm
   Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm);
-  
+
   //swap old solution MFab with newly created one
   for(int q=0 ; q<Q; ++q){
-    std::swap(U_w[lev][q],_mf[q]);  
+    std::swap(U_w(lev,q),_mf[q]);
   }
 }
 
 void AmrDG::AMR_interpolate_initial_condition(int lev)
 {
-  AMR_FillFromCoarsePatch(lev, 0.0, U_w[lev], 0, basefunc->Np_s);
+  AMR_FillFromCoarsePatch(lev, 0.0, &U_w(lev,0), 0, basefunc->Np_s);
 }
 
 void AmrDG::AMR_sync_initial_condition()
@@ -113,17 +100,16 @@ void AmrDG::AMR_sync_initial_condition()
     // Sync all ghost cells via FillPatch (same-level + fine-coarse interface).
     // Iterating l=0→finest ensures each level uses the already-synced coarser level.
     for (int l = 0; l <= _mesh->get_finest_lev(); ++l) {
-        amrex::Vector<amrex::MultiFab> _mf;
-        _mf.resize(Q);
+        amrex::Vector<amrex::MultiFab> _mf(Q);
         for (int q = 0; q < Q; ++q) {
-            const amrex::BoxArray& ba = U_w[l][q].boxArray();
-            const amrex::DistributionMapping& dm = U_w[l][q].DistributionMap();
+            const amrex::BoxArray& ba = U_w(l,q).boxArray();
+            const amrex::DistributionMapping& dm = U_w(l,q).DistributionMap();
             _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
             _mf[q].setVal(0.0);
         }
-        AMR_FillPatch(l, 0.0, _mf, 0, basefunc->Np_s);
+        AMR_FillPatch(l, 0.0, _mf.data(), 0, basefunc->Np_s);
         for (int q = 0; q < Q; ++q) {
-            std::swap(U_w[l][q], _mf[q]);
+            std::swap(U_w(l,q), _mf[q]);
         }
     }
 }
@@ -136,47 +122,41 @@ void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
 { 
   //create new level MFabs defined on new ba,dm
 
-  Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm); 
+  Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm);
 
-  AMR_FillFromCoarsePatch(lev, time, U_w[lev], 0, basefunc->Np_s);
+  AMR_FillFromCoarsePatch(lev, time, &U_w(lev,0), 0, basefunc->Np_s);
 }
 
 // fill an entire multifab by interpolating from the coarser level
 // this comes into play when a new level of refinement appears
 //also fills ghost cells
-void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::MultiFab>& fmf, 
+void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::MultiFab* fmf,
                                 int icomp,int ncomp)
-{   
+{
   auto _mesh = mesh.lock();
 
-  //NB: in theory we would need access to boundary conditions if we wanted to apply them here
-  //because of code structure, we dont have access to BC object, therefore we need to create a tmp
-  //BC dummy amrex::Vector<amrex::BCRec> dummy_bc. After projection and levlec reation, the BCs will be applied
-  //to all levels at the beginning of the time-step
   amrex::CpuBndryFuncFab bcf(nullptr);
   auto dummy_bc = get_null_BC(ncomp);
 
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
   amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
 
-  amrex::Interpolater* mapper= amr_interpolator.get();//&pc_interp;//
+  amrex::Interpolater* mapper= amr_interpolator.get();
 
   amrex::Vector<MultiFab*> cmf;
   amrex::Vector<Real> ctime;
-  
-  for(int q=0 ; q<Q; ++q){   
-    // Clear vectors at the start of each iteration
+
+  for(int q=0 ; q<Q; ++q){
     cmf.clear();
     ctime.clear();
 
-    //Store tmp data of the coarse MFab
-    cmf.push_back(&(U_w[lev-1][q]));
+    cmf.push_back(&(U_w(lev-1,q)));
     ctime.push_back(time);
 
-    amrex::InterpFromCoarseLevel(fmf[q], time, *cmf[0], 0, icomp, ncomp,_mesh->get_Geom(lev-1), 
-                                _mesh->get_Geom(lev), coarse_physbcf, 0, fine_physbcf, 0, 
-                                _mesh->get_refRatio(lev-1),mapper, dummy_bc, 0);       
-  }                         
+    amrex::InterpFromCoarseLevel(fmf[q], time, *cmf[0], 0, icomp, ncomp,_mesh->get_Geom(lev-1),
+                                _mesh->get_Geom(lev), coarse_physbcf, 0, fine_physbcf, 0,
+                                _mesh->get_refRatio(lev-1),mapper, dummy_bc, 0);
+  }
 }
 
 //Fillpatch operations fill all cells, valid and ghost, from actual valid data at 
@@ -184,14 +164,14 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::Vector<amrex::Mu
 //neighboring grids at the same level, and domain boundary conditions 
 //(for examples that have non-periodic boundary conditions).
 //NB: this function is used for regrid and not for timestepping
-void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf,int icomp, int ncomp)
-{  
+void AmrDG::AMR_FillPatch(int lev, Real time, amrex::MultiFab* mf, int icomp, int ncomp)
+{
 
   auto _mesh = mesh.lock();
 
-  amrex::CpuBndryFuncFab bcf(nullptr); 
+  amrex::CpuBndryFuncFab bcf(nullptr);
   auto dummy_bc = get_null_BC(ncomp);
-  
+
   if (lev == 0)
   {
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
@@ -199,26 +179,19 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
     amrex::Vector<MultiFab*> smf;
     amrex::Vector<Real> stime;
 
-    for(int q=0 ; q<Q; ++q){  
+    for(int q=0 ; q<Q; ++q){
       smf.clear();
       stime.clear();
 
-      smf.push_back(&(U_w[lev][q]));
-      stime.push_back(time);  
+      smf.push_back(&(U_w(lev,q)));
+      stime.push_back(time);
 
-      amrex::FillPatchSingleLevel(mf[q], time, smf, stime, 0, icomp, ncomp,_mesh->get_Geom(lev), physbcf, 0);  
-      //FillPatchSingleLevel()  :   fills a MultiFab and its ghost region at a single 
-      //                            level of refinement. The routine is flexible enough 
-      //                            to interpolate in time between two MultiFabs 
-      //                            associated with different times
-      //                            
-      //                            calls also MultiFab::FillBoundary,
-      //                            MultiFab::FillDomainBoundary()     
-    }                
+      amrex::FillPatchSingleLevel(mf[q], time, smf, stime, 0, icomp, ncomp,_mesh->get_Geom(lev), physbcf, 0);
+    }
   }
   else
-  { 
-    amrex::Interpolater* mapper = amr_interpolator.get();//&pc_interp;//
+  {
+    amrex::Interpolater* mapper = amr_interpolator.get();
 
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> coarse_physbcf(_mesh->get_Geom(lev-1),dummy_bc,bcf);
     amrex::PhysBCFunct<amrex::CpuBndryFuncFab> fine_physbcf(_mesh->get_Geom(lev),dummy_bc,bcf);
@@ -226,25 +199,20 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::Vector<amrex::MultiFab>& mf
     amrex::Vector<MultiFab*> cmf, fmf;
     amrex::Vector<Real> ctime, ftime;
 
-    for(int q=0 ; q<Q; ++q){  
+    for(int q=0 ; q<Q; ++q){
       cmf.clear(); ctime.clear();
       fmf.clear(); ftime.clear();
 
-      cmf.push_back(&(U_w[lev-1][q]));
+      cmf.push_back(&(U_w(lev-1,q)));
       ctime.push_back(time);
 
-      fmf.push_back(&(U_w[lev][q]));
+      fmf.push_back(&(U_w(lev,q)));
       ftime.push_back(time);
 
-      amrex::FillPatchTwoLevels(mf[q], time, cmf, ctime, fmf, ftime,0, icomp, ncomp, 
+      amrex::FillPatchTwoLevels(mf[q], time, cmf, ctime, fmf, ftime,0, icomp, ncomp,
                                 _mesh->get_Geom(lev-1), _mesh->get_Geom(lev),
-                                coarse_physbcf, 0, fine_physbcf, 
+                                coarse_physbcf, 0, fine_physbcf,
                                 0, _mesh->get_refRatio(lev-1),mapper, dummy_bc, 0);
-      //FillPatchTwoLevels()    :   fills a MultiFab and its ghost region at a single 
-      //                            level of refinement, assuming there is an underlying 
-      //                           coarse level. This routine is flexible enough to 
-      //                            interpolate the coarser level in time first using 
-      //                            FillPatchSingleLevel()
     }
   }
 }
@@ -254,12 +222,12 @@ void AmrDG::AMR_average_fine_coarse()
 {  
   auto _mesh = mesh.lock();
 
-  for (int l = _mesh->get_finest_lev(); l > 0; --l){  
-    for(int q=0; q<Q; ++q){   
-      amr_interpolator->average_down(U_w[l][q], 0,U_w[l-1][q],0,U_w[l-1][q].nComp(), 
-                                    _mesh->get_refRatio(l-1), l,l-1); 
+  for (int l = _mesh->get_finest_lev(); l > 0; --l){
+    for(int q=0; q<Q; ++q){
+      amr_interpolator->average_down(U_w(l,q), 0, U_w(l-1,q), 0, U_w(l-1,q).nComp(),
+                                    _mesh->get_refRatio(l-1), l,l-1);
     }
-  } 
+  }
 }
 
 void AmrDG::AMR_set_flux_registers()
@@ -267,13 +235,10 @@ void AmrDG::AMR_set_flux_registers()
     auto _mesh = mesh.lock();
 
     // Allocate storage for AMR synchronization structures across the level hierarchy
-    flux_reg.resize(_mesh->get_finest_lev() + 1);
+    flux_reg.resize(_mesh->get_finest_lev() + 1, Q);
     coarse_fine_interface_mask.resize(_mesh->get_finest_lev() + 1);
     fine_level_valid_mask.resize(_mesh->get_finest_lev() + 1);
-
-    // Level 0 has no "coarser" level, so flux registers are not used for refluxing here.
-    // We resize the vector to Q (number of equations) but leave pointers as nullptr.
-    flux_reg[0].resize(Q);
+    // Level 0 flux_reg entries are already nullptr (default for unique_ptr)
 
     for (int lev = 0; lev <= _mesh->get_finest_lev(); ++lev) {
 
@@ -401,51 +366,44 @@ void AmrDG::AMR_set_flux_registers()
         // Created for lev > 0 to handle flux conservation at the interface with lev-1.
 
         if (lev > 0) {
-            flux_reg[lev].resize(Q);
             for(int q=0; q<Q; ++q){
-                flux_reg[lev][q] = std::make_unique<amrex::FluxRegister>(
+                flux_reg(lev,q) = std::make_unique<amrex::FluxRegister>(
                     _mesh->get_BoxArray(lev),
                     _mesh->get_DistributionMap(lev),
                     _mesh->get_refRatio(lev-1),
                     lev,
-                    basefunc->Np_s // Pass DG-specific number of points/degrees of freedom
+                    basefunc->Np_s
                 );
             }
         }
     }
 
     // --- PRECOMPUTE C-F INTERFACE FACE DATA ---
-    // Build face-centered iMultiFabs that encode interface direction and child index.
-    // These are read by numflux() instead of recomputing from masks every timestep.
-    cf_face_b_coarse.resize(_mesh->get_finest_lev() + 1);
-    cf_face_b_fine.resize(_mesh->get_finest_lev() + 1);
-    cf_face_child_idx.resize(_mesh->get_finest_lev() + 1);
+    cf_face_b_coarse.resize(_mesh->get_finest_lev() + 1, AMREX_SPACEDIM);
+    cf_face_b_fine.resize(_mesh->get_finest_lev() + 1, AMREX_SPACEDIM);
+    cf_face_child_idx.resize(_mesh->get_finest_lev() + 1, AMREX_SPACEDIM);
 
     for (int lev = 0; lev <= _mesh->get_finest_lev(); ++lev) {
         const amrex::BoxArray& ba = _mesh->get_BoxArray(lev);
         const amrex::DistributionMapping& dm = _mesh->get_DistributionMap(lev);
 
-        cf_face_b_coarse[lev].resize(AMREX_SPACEDIM);
-        cf_face_b_fine[lev].resize(AMREX_SPACEDIM);
-        cf_face_child_idx[lev].resize(AMREX_SPACEDIM);
-
         for (int d = 0; d < AMREX_SPACEDIM; ++d) {
             amrex::BoxArray face_ba = convert(ba, amrex::IntVect::TheDimensionVector(d));
 
-            cf_face_b_coarse[lev][d].define(face_ba, dm, 1, 0);
-            cf_face_b_coarse[lev][d].setVal(0);
+            cf_face_b_coarse(lev,d).define(face_ba, dm, 1, 0);
+            cf_face_b_coarse(lev,d).setVal(0);
 
-            cf_face_b_fine[lev][d].define(face_ba, dm, 1, 0);
-            cf_face_b_fine[lev][d].setVal(0);
+            cf_face_b_fine(lev,d).define(face_ba, dm, 1, 0);
+            cf_face_b_fine(lev,d).setVal(0);
 
-            cf_face_child_idx[lev][d].define(face_ba, dm, 1, 0);
-            cf_face_child_idx[lev][d].setVal(0);
+            cf_face_child_idx(lev,d).define(face_ba, dm, 1, 0);
+            cf_face_child_idx(lev,d).setVal(0);
 
             // Coarse side: detect C-F interface faces with ownership rule
             if (lev < _mesh->get_finest_lev()) {
-                for (amrex::MFIter mfi(cf_face_b_coarse[lev][d]); mfi.isValid(); ++mfi) {
+                for (amrex::MFIter mfi(cf_face_b_coarse(lev,d)); mfi.isValid(); ++mfi) {
                     const amrex::Box& fbx = mfi.tilebox();
-                    auto const& bc_arr = cf_face_b_coarse[lev][d][mfi].array();
+                    auto const& bc_arr = cf_face_b_coarse(lev,d)[mfi].array();
                     auto const& msk = coarse_fine_interface_mask[lev].const_array(mfi);
                     int face_lo_d = fbx.smallEnd(d);
 
@@ -468,10 +426,10 @@ void AmrDG::AMR_set_flux_registers()
 
             // Fine side: detect F-C interface faces and compute child sub-face index
             if (lev > 0) {
-                for (amrex::MFIter mfi(cf_face_b_fine[lev][d]); mfi.isValid(); ++mfi) {
+                for (amrex::MFIter mfi(cf_face_b_fine(lev,d)); mfi.isValid(); ++mfi) {
                     const amrex::Box& fbx = mfi.tilebox();
-                    auto const& bf_arr = cf_face_b_fine[lev][d][mfi].array();
-                    auto const& ci_arr = cf_face_child_idx[lev][d][mfi].array();
+                    auto const& bf_arr = cf_face_b_fine(lev,d)[mfi].array();
+                    auto const& ci_arr = cf_face_child_idx(lev,d)[mfi].array();
                     auto const& vmsk = fine_level_valid_mask[lev].const_array(mfi);
 
                     amrex::ParallelFor(fbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
@@ -508,31 +466,26 @@ void AmrDG::AMR_flux_correction()
 
     // Loop from the finest level `l` down to level 1
     for (int l = _mesh->get_finest_lev(); l > 0; --l) {
-        for(int q=0; q<Q; ++q){ 
-            if (flux_reg[l][q]) {
-                // Define a dummy correction MultiFab to hold the reflux mismatch
-                amrex::MultiFab correction_mf(U_w[l-1][q].boxArray(),
-                                              U_w[l-1][q].DistributionMap(),
+        for(int q=0; q<Q; ++q){
+            if (flux_reg(l,q)) {
+                amrex::MultiFab correction_mf(U_w(l-1,q).boxArray(),
+                                              U_w(l-1,q).DistributionMap(),
                                               basefunc->Np_s, _mesh->nghost);
                 correction_mf.setVal(0.0);
 
-                // Define a dummy "Volume" MultiFab set to 1.0 (to prevent division by volume)
-                amrex::MultiFab dummy_vol(U_w[l-1][q].boxArray(),
-                                          U_w[l-1][q].DistributionMap(),
+                amrex::MultiFab dummy_vol(U_w(l-1,q).boxArray(),
+                                          U_w(l-1,q).DistributionMap(),
                                           1,  _mesh->nghost);
                 dummy_vol.setVal(1.0);
-                
-                // Store the reflux mismathc computed by Reflux() in correction_mf
-                flux_reg[l][q]->Reflux(correction_mf, dummy_vol,
+
+                flux_reg(l,q)->Reflux(correction_mf, dummy_vol,
                                        1.0, 0, 0, basefunc->Np_s,
                                        _mesh->get_Geom(l-1));
 
-                // Now i can apply the projection and correction to coarse
-                amr_interpolator->reflux(&(U_w[l-1][q]),      // Coarse level solution to be corrected
-                                         &(correction_mf),     // The total accumulated mismatch ΔF
-                                         l-1,                  // The coarse level index
+                amr_interpolator->reflux(&(U_w(l-1,q)),
+                                         &(correction_mf),
+                                         l-1,
                                          _mesh->get_Geom(l-1));
-                
             }
         }
     }

@@ -17,12 +17,12 @@ void AmrDG::DEBUG_print_MFab()
   int nproc = amrex::ParallelDescriptor::MyProc();
   int nprocs = amrex::ParallelDescriptor::NProcs();
   AllPrint() << nproc<<"\n";
-  //amrex::MultiFab& state_c = F[lev][dim][q];
-  //amrex::MultiFab& state_c = U_w[lev][q];
-  //amrex::MultiFab& state_c = H_w[lev][q];
-  //amrex::MultiFab& state_c = Fnum[lev][dim][q];
-  amrex::MultiFab& state_c = DFp[lev][q];
-  //amrex::MultiFab& state_c = H_p[lev][q];
+  //amrex::MultiFab& state_c = F[idx_ldq(lev,dim,q)];
+  //amrex::MultiFab& state_c = U_w(lev,q);
+  //amrex::MultiFab& state_c = H_w(lev,q);
+  //amrex::MultiFab& state_c = Fnum[idx_ldq(lev,dim,q)];
+  amrex::MultiFab& state_c = DFp(lev,q);
+  //amrex::MultiFab& state_c = H_p(lev,q);
 
   for (MFIter mfi(state_c); mfi.isValid(); ++mfi){
 
@@ -115,46 +115,46 @@ void AmrDG::init()
 
   auto _mesh = mesh.lock();
   
-  //Set vectors size
-  U_w.resize(_mesh->L); 
+  //Set flat vectors size (L*Q, L*D*Q, L*D, or L)
+  U_w.resize(_mesh->L, Q);
 
-  U.resize(_mesh->L); 
+  U.resize(_mesh->L, Q);
 
-  if(flag_source_term){S.resize(_mesh->L);}
+  if(flag_source_term){S.resize(_mesh->L, Q);}
 
-  U_center.resize(_mesh->L); 
+  U_center.resize(_mesh->L, Q);
 
-  F.resize(_mesh->L);
+  F.resize(_mesh->L, AMREX_SPACEDIM, Q);
 
-  Fm.resize(_mesh->L);
+  Fm.resize(_mesh->L, Q);
 
-  Fp.resize(_mesh->L);
+  Fp.resize(_mesh->L, Q);
 
-  DFm.resize(_mesh->L);
+  DFm.resize(_mesh->L, Q);
 
-  DFp.resize(_mesh->L);
+  DFp.resize(_mesh->L, Q);
 
-  Fnum.resize(_mesh->L);
+  Fnum.resize(_mesh->L, AMREX_SPACEDIM, Q);
 
-  Fnum_int_f.resize(_mesh->L);
+  Fnum_int_f.resize(_mesh->L, AMREX_SPACEDIM, Q);
 
-  Fnum_int_c.resize(_mesh->L);
+  Fnum_int_c.resize(_mesh->L, AMREX_SPACEDIM, Q);
 
-  cf_face_b_coarse.resize(_mesh->L);
-  cf_face_b_fine.resize(_mesh->L);
-  cf_face_child_idx.resize(_mesh->L);
+  cf_face_b_coarse.resize(_mesh->L, AMREX_SPACEDIM);
+  cf_face_b_fine.resize(_mesh->L, AMREX_SPACEDIM);
+  cf_face_child_idx.resize(_mesh->L, AMREX_SPACEDIM);
 
-  H_w.resize(_mesh->L);
+  H_w.resize(_mesh->L, Q);
 
-  H.resize(_mesh->L);
+  H.resize(_mesh->L, Q);
 
   rhs_corr.resize(_mesh->L);
 
   rhs_pred.resize(_mesh->L);
 
-  H_p.resize(_mesh->L);
+  H_p.resize(_mesh->L, Q);
 
-  H_m.resize(_mesh->L);
+  H_m.resize(_mesh->L, Q);
 
   //Basis function
   basefunc = std::make_shared<BasisLegendre>();
@@ -308,50 +308,8 @@ AmrDG::~AmrDG(){
 
 void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
                                   const DistributionMapping& dm)
-{ 
-  //Init data structures for level for all solution components of the system
-  U_w[lev].resize(Q); 
-
-  U[lev].resize(Q);
-  
-  if(flag_source_term){S[lev].resize(Q);}
-  
-  U_center[lev].resize(Q); 
-  
-  H_w[lev].resize(Q); 
-
-  H[lev].resize(Q);  
-
-  H_p[lev].resize(Q);
-
-  H_m[lev].resize(Q);
-
-  Fm[lev].resize(Q);
-
-  Fp[lev].resize(Q);
-
-  DFm[lev].resize(Q);
-
-  DFp[lev].resize(Q);
-
-  F[lev].resize(AMREX_SPACEDIM);
-
-  Fnum[lev].resize(AMREX_SPACEDIM);
-
-  Fnum_int_f[lev].resize(AMREX_SPACEDIM);
-
-  Fnum_int_c[lev].resize(AMREX_SPACEDIM);
-
-  for(int d=0; d<AMREX_SPACEDIM; ++d){
-    F[lev][d].resize(Q);
-
-    Fnum[lev][d].resize(Q);
-
-    Fnum_int_f[lev][d].resize(Q);
-
-    Fnum_int_c[lev][d].resize(Q);
-  }
-  
+{
+  //Flat vectors already pre-sized in init(); just define rhs temporaries here
   auto _mesh = mesh.lock();
 
   rhs_corr[lev].define(ba, dm, basefunc->Np_s, _mesh->nghost);
@@ -364,48 +322,47 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 //Init data for given level for specific solution component
 void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
                                     const DistributionMapping& dm, int q)
-{ 
+{
   auto _mesh = mesh.lock();
 
-  H_w[lev][q].define(ba, dm, basefunc->Np_st, _mesh->nghost);
-  H_w[lev][q].setVal(0.0);
+  H_w(lev,q).define(ba, dm, basefunc->Np_st, _mesh->nghost);
+  H_w(lev,q).setVal(0.0);
 
-  H[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
-  H[lev][q].setVal(0.0);
-  
-  U_w[lev][q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
-  U_w[lev][q].setVal(0.0);
+  H(lev,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
+  H(lev,q).setVal(0.0);
 
-  U[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
-  U[lev][q].setVal(0.0);
+  U_w(lev,q).define(ba, dm, basefunc->Np_s, _mesh->nghost);
+  U_w(lev,q).setVal(0.0);
 
+  U(lev,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
+  U(lev,q).setVal(0.0);
 
-  U_center[lev][q].define(ba, dm, 1, _mesh->nghost);
-  U_center[lev][q].setVal(0.0);
+  U_center(lev,q).define(ba, dm, 1, _mesh->nghost);
+  U_center(lev,q).setVal(0.0);
 
-  if(flag_source_term){S[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
-  S[lev][q].setVal(0.0);}
+  if(flag_source_term){S(lev,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
+  S(lev,q).setVal(0.0);}
 
-  H_p[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  H_m[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  Fm[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  Fp[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  DFm[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  DFp[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  H_p(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  H_m(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  Fm(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  Fp(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  DFm(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  DFp(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
 
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    F[lev][d][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
+    F(lev,d,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
 
-    Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm, quadrule->qMp_st_bd, 0);
+    Fnum(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, quadrule->qMp_st_bd, 0);
 
-    Fnum_int_f[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm, basefunc->Np_s, 0);
+    Fnum_int_f(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, basefunc->Np_s, 0);
 
-    Fnum_int_c[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm, basefunc->Np_s, 0);
+    Fnum_int_c(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, basefunc->Np_s, 0);
   }
 }
 
-void AmrDG::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>& _U,
-                          amrex::Vector<amrex::MultiFab>& _U_w,
+void AmrDG::get_U_from_U_w(int M, int N, amrex::MultiFab* _U,
+                          amrex::MultiFab* _U_w,
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
   //Can evalaute U_w (Np_s) at boundary using bd quadrature pts qM_s_bd or
@@ -454,8 +411,8 @@ void AmrDG::get_U_from_U_w(int M, int N,amrex::Vector<amrex::MultiFab>& _U,
     }
 }
 
-void AmrDG::get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>& _H,
-                          amrex::Vector<amrex::MultiFab>& _H_w,
+void AmrDG::get_H_from_H_w(int M, int N, amrex::MultiFab* _H,
+                          amrex::MultiFab* _H_w,
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
   //Can evalaute H_w (Np_st) at boundary using bd quadrature pts qM_st_bd or
@@ -501,8 +458,8 @@ void AmrDG::get_H_from_H_w(int M, int N,amrex::Vector<amrex::MultiFab>& _H,
     }
 }
 
-void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>& _U_w,
-                          amrex::Vector<amrex::MultiFab>& _H_w)
+void AmrDG::set_predictor(const amrex::MultiFab* _U_w,
+                          amrex::MultiFab* _H_w)
 {
 
   #ifdef AMREX_USE_OMP
@@ -545,29 +502,26 @@ void AmrDG::set_predictor(const amrex::Vector<amrex::MultiFab>& _U_w,
 }
 
 void AmrDG::numflux(int lev,int d,int M, int N,
-                    amrex::Vector<amrex::MultiFab>& _U_m,
-                    amrex::Vector<amrex::MultiFab>& _U_p,
-                    amrex::Vector<amrex::MultiFab>& _F_m,
-                    amrex::Vector<amrex::MultiFab>& _F_p,
-                    amrex::Vector<amrex::MultiFab>& _DF_m,
-                    amrex::Vector<amrex::MultiFab>& _DF_p)
+                    amrex::MultiFab* _U_m,
+                    amrex::MultiFab* _U_p,
+                    amrex::MultiFab* _F_m,
+                    amrex::MultiFab* _F_p,
+                    amrex::MultiFab* _DF_m,
+                    amrex::MultiFab* _DF_p)
 {
 
   auto _mesh = mesh.lock();
 
   amrex::Real dvol = _mesh->get_dvol(lev,d);
-  // Time: [-1, 1] -> [0, Dt]   => Factor: Dt / 2.0
-  // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
-
   amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
 
   for (int q = 0; q < Q; ++q) {
-    Fnum_int_f[lev][d][q].setVal(0.0);
-    Fnum_int_c[lev][d][q].setVal(0.0);
+    Fnum_int_f(lev,d,q).setVal(0.0);
+    Fnum_int_c(lev,d,q).setVal(0.0);
   }
 
 #ifdef AMREX_USE_OMP
-#pragma omp parallel 
+#pragma omp parallel
 #endif
   {
     amrex::Vector<amrex::Array4<amrex::Real>> fnum(Q);
@@ -580,20 +534,20 @@ void AmrDG::numflux(int lev,int d,int M, int N,
     amrex::Vector<amrex::Array4<const amrex::Real>> dfp(Q);
     amrex::Vector<amrex::Array4<const amrex::Real>> um(Q);
     amrex::Vector<amrex::Array4<const amrex::Real>> up(Q);
-    
+
   #ifdef AMREX_USE_OMP
-    for (MFIter mfi(Fnum[lev][d][0], MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+    for (MFIter mfi(Fnum(lev,d,0), MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
   #else
-      for (MFIter mfi(Fnum[lev][d][0], true); mfi.isValid(); ++mfi)
+      for (MFIter mfi(Fnum(lev,d,0), true); mfi.isValid(); ++mfi)
   #endif
     {
 
-      const amrex::Box& bx = mfi.tilebox();    //[0,N]
+      const amrex::Box& bx = mfi.tilebox();
 
       for(int q=0 ; q<Q; ++q){
-        fnum[q] = Fnum[lev][d][q].array(mfi);
-        fnum_int_f[q] = Fnum_int_f[lev][d][q].array(mfi);
-        fnum_int_c[q] = Fnum_int_c[lev][d][q].array(mfi);
+        fnum[q] = Fnum(lev,d,q).array(mfi);
+        fnum_int_f[q] = Fnum_int_f(lev,d,q).array(mfi);
+        fnum_int_c[q] = Fnum_int_c(lev,d,q).array(mfi);
 
         fm[q] = _F_m[q].const_array(mfi);
         fp[q] = _F_p[q].const_array(mfi);
@@ -602,32 +556,23 @@ void AmrDG::numflux(int lev,int d,int M, int N,
         um[q] = _U_m[q].const_array(mfi);
         up[q] = _U_p[q].const_array(mfi);
       }
-            
-      //compute the pointwise evaluations of the numerical flux
+
       amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
       {
-        //skip first index since no flux to compute there
-        //amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
-        //if(idx[d] == lo_idx[d]){ return;}
-
-        //check which indices it iterate across, i.e if last one is reachd
         for(int q=0 ; q<Q; ++q){
-          fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);  
+          fnum[q](i,j,k,m) = LLF_numflux(d,m,i,j,k,up[q],um[q],fp[q],fm[q],dfp[q],dfm[q]);
         }
-      }); 
+      });
 
 
       if ((_mesh->L > 1))
       {
-        auto const& bc_arr = cf_face_b_coarse[lev][d].const_array(mfi);
-        auto const& bf_arr = cf_face_b_fine[lev][d].const_array(mfi);
-        auto const& ci_arr = cf_face_child_idx[lev][d].const_array(mfi);
+        auto const& bc_arr = cf_face_b_coarse(lev,d).const_array(mfi);
+        auto const& bf_arr = cf_face_b_fine(lev,d).const_array(mfi);
+        auto const& ci_arr = cf_face_child_idx(lev,d).const_array(mfi);
 
-        //compute the faces integral evaluations of the numerical flux
         amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
         {
-          // --- From Coarse Level: integrate flux with boundary mass matrix ---
-          // Ownership rule is baked into cf_face_b_coarse (0 at skipped faces).
           if (lev < _mesh->get_finest_lev())
           {
               int b = bc_arr(i,j,k);
@@ -645,7 +590,6 @@ void AmrDG::numflux(int lev,int d,int M, int N,
               }
           }
 
-          // --- From Fine Level: project flux onto coarse basis ---
           if (lev > 0)
           {
               int b = bf_arr(i,j,k);
@@ -677,16 +621,16 @@ void AmrDG::update_U_w(int lev)
   amrex::Real vol = _mesh->get_dvol(lev);
 
   for(int q=0; q<Q; ++q){
-    amrex::MultiFab& state_u_w = U_w[lev][q];
+    amrex::MultiFab& state_u_w = U_w(lev,q);
 
     rhs_corr[lev].setVal(0.0);
-    
-    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
-    amrex::Vector<const amrex::MultiFab *> state_fnum(AMREX_SPACEDIM); 
+
+    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM);
+    amrex::Vector<const amrex::MultiFab *> state_fnum(AMREX_SPACEDIM);
 
     for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      state_f[d]=&(F[lev][d][q]); 
-      state_fnum[d]=&(Fnum[lev][d][q]); 
+      state_f[d]=&(F(lev,d,q));
+      state_fnum[d]=&(Fnum(lev,d,q));
     }
     
 #ifdef AMREX_USE_OMP
@@ -741,7 +685,7 @@ void AmrDG::update_U_w(int lev)
 
         if(flag_source_term)
         {
-          amrex::Array4<amrex::Real> const& source = S[lev][q].array(mfi);
+          amrex::Array4<amrex::Real> const& source = S(lev,q).array(mfi);
           amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
           {
             for  (int m = 0; m < quadrule->qMp_st; ++m){
@@ -761,20 +705,20 @@ void AmrDG::update_U_w(int lev)
 }
 
 void AmrDG::update_H_w(int lev)
-{ 
+{
   auto _mesh = mesh.lock();
 
   const auto dx = _mesh->get_dx(lev);
 
   for(int q=0; q<Q; ++q)
   {
-    amrex::MultiFab& state_h_w = H_w[lev][q];
-    amrex::MultiFab& state_u_w = U_w[lev][q];
+    amrex::MultiFab& state_h_w = H_w(lev,q);
+    amrex::MultiFab& state_u_w = U_w(lev,q);
 
     amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM);
 
     for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      state_f[d]=&(F[lev][d][q]);
+      state_f[d]=&(F(lev,d,q));
     }
 
     rhs_pred[lev].setVal(0.0); 
@@ -822,7 +766,7 @@ void AmrDG::update_H_w(int lev)
         }
 
         if(flag_source_term){
-          amrex::Array4<amrex::Real> const& source = S[lev][q].array(mfi);
+          amrex::Array4<amrex::Real> const& source = S(lev,q).array(mfi);
 
           amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
           {
