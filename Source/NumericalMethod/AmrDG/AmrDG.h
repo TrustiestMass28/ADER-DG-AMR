@@ -322,9 +322,9 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
                               int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i) const ;
 
     //L2 projection quadrature matrix
-    amrex::Vector<amrex::Vector<amrex::Real>> quadmat;
+    Eigen::MatrixXd quadmat;
 
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> quadmat_bd;
+    amrex::Vector<Eigen::MatrixXd> quadmat_bd;
 
   private:
 
@@ -372,48 +372,53 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     amrex::Vector<amrex::Vector<amrex::Real>> quad_weights_st_bdp;
 
     //Vandermonde matrix
-    amrex::Vector<amrex::Vector<amrex::Real>> V;
+    Eigen::MatrixXd V;
     //  inverse
-    amrex::Vector<amrex::Vector<amrex::Real>> Vinv;   
+    Eigen::MatrixXd Vinv;
 
     //Mass element matrix for ADER-DG corrector
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr;
-    
+    Eigen::MatrixXd Mk_corr;
+
     //Stiffness element matrix for ADER-DG corrector
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_corr;
+    amrex::Vector<Eigen::MatrixXd> Sk_corr;
 
     //Mass boundary element matrix for ADER-DG corrector and predictor
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbdm;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Mkbdp;
-
+    amrex::Vector<Eigen::MatrixXd> Mkbdm;
+    amrex::Vector<Eigen::MatrixXd> Mkbdp;
 
     //Mass element matrix for source term (corrector step)
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_corr_src;
+    Eigen::MatrixXd Mk_corr_src;
 
     //Mass element matrix for ADER predictor
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w;
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_h_w_inv;
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred;
+    Eigen::MatrixXd Mk_h_w;
+    Eigen::MatrixXd Mk_h_w_inv;
+    Eigen::MatrixXd Mk_pred;
 
     //Stiffness element matrix for ADER predictor
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_pred;
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> Sk_predVinv; 
+    amrex::Vector<Eigen::MatrixXd> Sk_pred;
+    amrex::Vector<Eigen::MatrixXd> Sk_predVinv;
 
     //Mass element matrix for source term (predictor step)
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred_src;   
-    amrex::Vector<amrex::Vector<amrex::Real>> Mk_pred_srcVinv; 
+    Eigen::MatrixXd Mk_pred_src;
+    Eigen::MatrixXd Mk_pred_srcVinv; 
 
-    //ADER predictor vector U(x,t) 
+    //RHS temporary for ADER-DG corrector (Np_s components, one per level)
+    amrex::Vector<amrex::MultiFab> rhs_corr;
+
+    //RHS temporary for ADER predictor (Np_st components, one per level)
+    amrex::Vector<amrex::MultiFab> rhs_pred;
+
+    //ADER predictor vector U(x,t)
     amrex::Vector<amrex::Vector<amrex::MultiFab>> H;
 
     //ADER Modal/Nodal predictor vector H_w
     amrex::Vector<amrex::Vector<amrex::MultiFab>> H_w;
 
     //ADER predictor vector U(x,t) evaluated at boundary plus (+) b+
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_p;
+    amrex::Vector<amrex::Vector<amrex::MultiFab>> H_p;
 
     //ADER predictor vector U(x,t) evaluated at boundary minus (-) b-
-    amrex::Vector<amrex::Vector<amrex::Vector<amrex::MultiFab>>> H_m;
+    amrex::Vector<amrex::Vector<amrex::MultiFab>> H_m;
 
     //TODO: mybe nested functions ptr dont need to be shared
     //      also mabye can use again CRTP and define them genrally inside Solver
@@ -477,7 +482,7 @@ amrex::Real AmrDG::set_initial_condition_U_w(const std::shared_ptr<ModelEquation
   amrex::Real sum = 0.0;
   for(int m=0; m<quadrule->qMp_s; ++m) 
   {
-    sum+= set_initial_condition_U(model_pde,lev,q,i,j,k,quadrule->xi_ref_quad_s[m])*quadmat[n][m];   
+    sum+= set_initial_condition_U(model_pde,lev,q,i,j,k,quadrule->xi_ref_quad_s[m])*quadmat(n,m);   
   }
   
   return (sum/(refMat_phiphi(n,basefunc->basis_idx_s,n,basefunc->basis_idx_s)));  
@@ -542,7 +547,16 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   if(_mesh->L > 1){
     AMR_set_flux_registers();
   }
-  
+
+  //Pre-allocate FillPatch temporaries (reused every time step)
+  amrex::Vector<amrex::Vector<amrex::MultiFab>> fillpatch_mf(_mesh->get_finest_lev()+1);
+  for(int l=0; l<=_mesh->get_finest_lev(); ++l){
+    fillpatch_mf[l].resize(Q);
+    for(int q=0; q<Q; ++q){
+      fillpatch_mf[l][q].define(U_w[l][q].boxArray(), U_w[l][q].DistributionMap(),
+                                basefunc->Np_s, _mesh->nghost);
+    }
+  }
 
   ///*
   while(t<T)
@@ -589,6 +603,16 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         //construct new flux register on new grid
         AMR_set_flux_registers();
 
+        //re-allocate FillPatch temporaries on new grid
+        fillpatch_mf.resize(_mesh->get_finest_lev()+1);
+        for(int l=0; l<=_mesh->get_finest_lev(); ++l){
+          fillpatch_mf[l].resize(Q);
+          for(int q=0; q<Q; ++q){
+            fillpatch_mf[l][q].define(U_w[l][q].boxArray(), U_w[l][q].DistributionMap(),
+                                      basefunc->Np_s, _mesh->nghost);
+          }
+        }
+
         t_last_regrid = t;
         n_regrids++;
       }
@@ -607,20 +631,14 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     //for grids at same level and fine-coarse interface
     //fine grids ghost cells inteprolated from coarse
     for(int l=0; l<=_mesh->get_finest_lev(); ++l){
-      amrex::Vector<amrex::MultiFab> _mf;
-      _mf.resize(Q);
+      for(int q=0 ; q<Q; ++q){
+        fillpatch_mf[l][q].setVal(0.0);
+      }
+
+      AMR_FillPatch(l, t, fillpatch_mf[l], 0, basefunc->Np_s);
 
       for(int q=0 ; q<Q; ++q){
-        const amrex::BoxArray& ba = U_w[l][q].boxArray();
-        const amrex::DistributionMapping& dm = U_w[l][q].DistributionMap();
-        _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
-        _mf[q].setVal(0.0);    
-      } 
-      
-      AMR_FillPatch(l, t, _mf, 0, basefunc->Np_s);
-      
-      for(int q=0 ; q<Q; ++q){
-        std::swap(U_w[l][q],_mf[q]);  
+        std::swap(U_w[l][q],fillpatch_mf[l][q]);
       }
     }
       
@@ -729,23 +747,21 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     }
     
     //use found predictor to compute corrector
+    get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st, H[l], H_w[l],quadrule->xi_ref_quad_st);
     if(model_pde->flag_source_term){
-      get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st, H[l], H_w[l],quadrule->xi_ref_quad_st);
       Solver<NumericalMethodType>::source(l,quadrule->qMp_st,model_pde, H[l], S[l],quadrule->xi_ref_quad_st);
     }
-
-    get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st, H[l], H_w[l],quadrule->xi_ref_quad_st);
     for(int d = 0; d<AMREX_SPACEDIM; ++d){
 
       Solver<NumericalMethodType>::flux(l,d,quadrule->qMp_st,model_pde, H[l], F[l][d],quadrule->xi_ref_quad_st);
 
-      get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st, H_m[l][d], H_w[l],quadrule->xi_ref_quad_st_bdm[d]);
-      Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde, H_m[l][d], Fm[l][d], DFm[l][d],quadrule->xi_ref_quad_st_bdm[d]);
+      get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st, H_m[l], H_w[l],quadrule->xi_ref_quad_st_bdm[d]);
+      Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde, H_m[l], Fm[l], DFm[l],quadrule->xi_ref_quad_st_bdm[d]);
 
-      get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st, H_p[l][d], H_w[l],quadrule->xi_ref_quad_st_bdp[d]);
-      Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde, H_p[l][d], Fp[l][d], DFp[l][d],quadrule->xi_ref_quad_st_bdp[d]);
+      get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st, H_p[l], H_w[l],quadrule->xi_ref_quad_st_bdp[d]);
+      Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde, H_p[l], Fp[l], DFp[l],quadrule->xi_ref_quad_st_bdp[d]);
 
-      Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s, H_m[l][d], H_p[l][d], Fm[l][d], Fp[l][d], DFm[l][d], DFp[l][d]);
+      Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s, H_m[l], H_p[l], Fm[l], Fp[l], DFm[l], DFp[l]);
       
       if ((_mesh->L > 1))
       {

@@ -21,8 +21,8 @@ void AmrDG::DEBUG_print_MFab()
   //amrex::MultiFab& state_c = U_w[lev][q];
   //amrex::MultiFab& state_c = H_w[lev][q];
   //amrex::MultiFab& state_c = Fnum[lev][dim][q];
-  amrex::MultiFab& state_c = DFp[lev][dim][q];
-  //amrex::MultiFab& state_c = H_p[lev][dim][q];
+  amrex::MultiFab& state_c = DFp[lev][q];
+  //amrex::MultiFab& state_c = H_p[lev][q];
 
   for (MFIter mfi(state_c); mfi.isValid(); ++mfi){
 
@@ -130,8 +130,6 @@ void AmrDG::init()
 
   Fp.resize(_mesh->L);
 
-  DF.resize(_mesh->L);
-
   DFm.resize(_mesh->L);
 
   DFp.resize(_mesh->L);
@@ -142,10 +140,17 @@ void AmrDG::init()
 
   Fnum_int_c.resize(_mesh->L);
 
+  cf_face_b_coarse.resize(_mesh->L);
+  cf_face_b_fine.resize(_mesh->L);
+  cf_face_child_idx.resize(_mesh->L);
 
-  H_w.resize(_mesh->L); 
+  H_w.resize(_mesh->L);
 
-  H.resize(_mesh->L); 
+  H.resize(_mesh->L);
+
+  rhs_corr.resize(_mesh->L);
+
+  rhs_pred.resize(_mesh->L);
 
   H_p.resize(_mesh->L);
 
@@ -213,55 +218,48 @@ void AmrDG::init()
   //Generation of quadrature pts
   quadrule->set_quadpoints();
                               
-  //Initialize generalized Vandermonde matrix (only volume, no boudnary version)
-  //and their inverse
-  V.resize(quadrule->qMp_st,amrex::Vector<amrex::Real> (basefunc->Np_st)); 
+  //Initialize generalized Vandermonde matrix and inverse
+  V = Eigen::MatrixXd::Zero(quadrule->qMp_st, basefunc->Np_st);
+  Vinv = Eigen::MatrixXd::Zero(basefunc->Np_st, quadrule->qMp_st);
 
-  Vinv.resize(basefunc->Np_st,amrex::Vector<amrex::Real> (quadrule->qMp_st));
+  //Initialize L2 projection quadrature matrix
+  quadmat = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_s);
 
-  //Initialize L2 projeciton quadrature matrix
-  quadmat.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(quadrule->qMp_s));  
+  quadmat_bd.resize(AMREX_SPACEDIM);
+  for(int d=0; d<AMREX_SPACEDIM; ++d){
+    quadmat_bd[d] = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_s_bd);
+  }
 
-  quadmat_bd.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
-                amrex::Vector<amrex::Real>(quadrule->qMp_s_bd)));  
-
-  //Initialize quadrature weights for cell faces st quadratures 
-  quad_weights_st_bdm.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));  
-
-  quad_weights_st_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));  
+  //Initialize quadrature weights for cell faces st quadratures
+  quad_weights_st_bdm.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));
+  quad_weights_st_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));
 
   //Initialize generalized Element matrices for ADER-DG corrector
-  Mk_corr.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(basefunc->Np_s));
+  Mk_corr = Eigen::MatrixXd::Zero(basefunc->Np_s, basefunc->Np_s);
+  Mk_corr_src = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_st);
 
-  Sk_corr.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
-
-                amrex::Vector<amrex::Real>(quadrule->qMp_st)));
-
-  Mkbdm.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
-
-                amrex::Vector<amrex::Real>(quadrule->qMp_st_bd)));
-
-  Mkbdp.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_s,
-    amrex::Vector<amrex::Real>(quadrule->qMp_st_bd)));
-
-  Mk_corr_src.resize(basefunc->Np_s,amrex::Vector<amrex::Real>(quadrule->qMp_st));  
+  Sk_corr.resize(AMREX_SPACEDIM);
+  Mkbdm.resize(AMREX_SPACEDIM);
+  Mkbdp.resize(AMREX_SPACEDIM);
+  for(int d=0; d<AMREX_SPACEDIM; ++d){
+    Sk_corr[d] = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_st);
+    Mkbdm[d] = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_st_bd);
+    Mkbdp[d] = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_st_bd);
+  }
 
   //Initialize generalized Element matrices for ADER predictor
-  Mk_h_w.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
+  Mk_h_w = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_st);
+  Mk_h_w_inv = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_st);
+  Mk_pred = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_s);
+  Mk_pred_src = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_st);
+  Mk_pred_srcVinv = Eigen::MatrixXd::Zero(basefunc->Np_st, quadrule->qMp_st);
 
-  Mk_h_w_inv.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
-
-  Mk_pred.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_s));  
-
-  Sk_pred.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_st,
-                                  amrex::Vector<amrex::Real>(basefunc->Np_st)));
-
-  Mk_pred_src.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(basefunc->Np_st));
-
-  Sk_predVinv.resize(AMREX_SPACEDIM, amrex::Vector<amrex::Vector<amrex::Real>>(basefunc->Np_st,
-                      amrex::Vector<amrex::Real>(quadrule->qMp_st)));
-                      
-  Mk_pred_srcVinv.resize(basefunc->Np_st,amrex::Vector<amrex::Real>(quadrule->qMp_st));
+  Sk_pred.resize(AMREX_SPACEDIM);
+  Sk_predVinv.resize(AMREX_SPACEDIM);
+  for(int d=0; d<AMREX_SPACEDIM; ++d){
+    Sk_pred[d] = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_st);
+    Sk_predVinv[d] = Eigen::MatrixXd::Zero(basefunc->Np_st, quadrule->qMp_st);
+  }
     
   //Construct system matrices
   set_vandermat();
@@ -295,7 +293,7 @@ amrex::Real AmrDG::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcom
   amrex::Real sum = 0.0;
   for(int m=0; m<quadrule->qMp_s; ++m)
   {
-    sum+= quadmat[dcomp +comp][m]*bc[m];
+    sum+= quadmat(dcomp +comp,m)*bc[m];
   }
 
   sum /=refMat_phiphi(dcomp + comp,basefunc->basis_idx_s,dcomp + comp,basefunc->basis_idx_s);
@@ -324,21 +322,19 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 
   H[lev].resize(Q);  
 
-  H_p[lev].resize(AMREX_SPACEDIM);
+  H_p[lev].resize(Q);
 
-  H_m[lev].resize(AMREX_SPACEDIM);
+  H_m[lev].resize(Q);
+
+  Fm[lev].resize(Q);
+
+  Fp[lev].resize(Q);
+
+  DFm[lev].resize(Q);
+
+  DFp[lev].resize(Q);
 
   F[lev].resize(AMREX_SPACEDIM);
-
-  Fm[lev].resize(AMREX_SPACEDIM);
-
-  Fp[lev].resize(AMREX_SPACEDIM);
-
-  DF[lev].resize(AMREX_SPACEDIM);
-
-  DFm[lev].resize(AMREX_SPACEDIM);
-
-  DFp[lev].resize(AMREX_SPACEDIM);
 
   Fnum[lev].resize(AMREX_SPACEDIM);
 
@@ -346,31 +342,21 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 
   Fnum_int_c[lev].resize(AMREX_SPACEDIM);
 
-
   for(int d=0; d<AMREX_SPACEDIM; ++d){
     F[lev][d].resize(Q);
-
-    Fm[lev][d].resize(Q);
-
-    Fp[lev][d].resize(Q);
-
-    DF[lev][d].resize(Q);
-
-    DFm[lev][d].resize(Q);
-
-    DFp[lev][d].resize(Q);
 
     Fnum[lev][d].resize(Q);
 
     Fnum_int_f[lev][d].resize(Q);
 
     Fnum_int_c[lev][d].resize(Q);
-
-    H_p[lev][d].resize(Q);
-
-    H_m[lev][d].resize(Q);
   }
   
+  auto _mesh = mesh.lock();
+
+  rhs_corr[lev].define(ba, dm, basefunc->Np_s, _mesh->nghost);
+  rhs_pred[lev].define(ba, dm, basefunc->Np_st, _mesh->nghost);
+
   // Add MPI synchronization after data structure initialization
   amrex::ParallelDescriptor::Barrier();
 }
@@ -400,40 +386,21 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
   if(flag_source_term){S[lev][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
   S[lev][q].setVal(0.0);}
 
-  for(int d=0; d<AMREX_SPACEDIM; ++d){ 
-    H_p[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
-    H_p[lev][d][q].setVal(0.0);
+  H_p[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  H_m[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  Fm[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  Fp[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  DFm[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  DFp[lev][q].define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
 
-    H_m[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
-    H_m[lev][d][q].setVal(0.0);
+  for(int d=0; d<AMREX_SPACEDIM; ++d){
+    F[lev][d][q].define(ba, dm, quadrule->qMp_st, _mesh->nghost);
 
+    Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm, quadrule->qMp_st_bd, 0);
 
-    F[lev][d][q].define(ba, dm,quadrule->qMp_st,_mesh->nghost);
-    F[lev][d][q].setVal(0.0);
+    Fnum_int_f[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm, basefunc->Np_s, 0);
 
-    DF[lev][d][q].define(ba, dm,quadrule->qMp_st,_mesh->nghost);
-    DF[lev][d][q].setVal(0.0);
-
-    Fm[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
-    Fm[lev][d][q].setVal(0.0);
-
-    Fp[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
-    Fp[lev][d][q].setVal(0.0);
-
-    DFm[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
-    DFm[lev][d][q].setVal(0.0);
-
-    DFp[lev][d][q].define(ba, dm,quadrule->qMp_st_bd,_mesh->nghost);
-    DFp[lev][d][q].setVal(0.0);
-
-    Fnum[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,quadrule->qMp_st_bd,0);    
-    Fnum[lev][d][q].setVal(0.0);    
-
-    Fnum_int_f[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
-    Fnum_int_f[lev][d][q].setVal(0.0);    
-
-    Fnum_int_c[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm,basefunc->Np_s,0);    
-    Fnum_int_c[lev][d][q].setVal(0.0);    
+    Fnum_int_c[lev][d][q].define(convert(ba, IntVect::TheDimensionVector(d)), dm, basefunc->Np_s, 0);
   }
 }
 
@@ -652,50 +619,26 @@ void AmrDG::numflux(int lev,int d,int M, int N,
 
       if ((_mesh->L > 1))
       {
-        auto const& msk = coarse_fine_interface_mask[lev].const_array(mfi);
-        auto const& vmsk_fine = fine_level_valid_mask[lev].const_array(mfi);
-
-        // Face-centered boxes overlap at inter-box boundaries: adjacent boxes
-        // [0,m] and [m+1,N] both include face m+1. If both compute fnum_int_c
-        // there, CrseAdd (which uses plusFrom/ADD) double counts the coarse flux.
-        // Same issue at periodic boundaries (face 0 = face N).
-        // Fix: only compute fnum_int_c at faces where iv_left is inside this
-        // tile (skip the lo face, which is the previous tile's hi face).
-        // fnum_int_c is pre-initialized to 0 by setVal above, so skipped
-        // faces remain zero.
-        int face_lo_d = bx.smallEnd(d);
+        auto const& bc_arr = cf_face_b_coarse[lev][d].const_array(mfi);
+        auto const& bf_arr = cf_face_b_fine[lev][d].const_array(mfi);
+        auto const& ci_arr = cf_face_child_idx[lev][d].const_array(mfi);
 
         //compute the faces integral evaluations of the numerical flux
-        amrex::ParallelFor(bx, N,[&, face_lo_d] (int i, int j, int k, int n) noexcept
+        amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
         {
-
-          amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
-          iv_left[d] -= 1;
-          amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)};
-
-          // Both masks use the same convention:
-          //   1 = fine level present, 0 = coarse level present
-          // A mismatch between left/right cells means a C-F interface.
-          // b = +1: coarse on left, fine on right (plus face of coarse cell)
-          // b = -1: coarse on right, fine on left (minus face of coarse cell)
-
           // --- From Coarse Level: integrate flux with boundary mass matrix ---
-          // Only at faces owned by this tile (iv_left inside tile) to prevent
-          // double counting at shared inter-box/periodic faces.
-          if (lev < _mesh->get_finest_lev() && iv_left[d] >= face_lo_d)
+          // Ownership rule is baked into cf_face_b_coarse (0 at skipped faces).
+          if (lev < _mesh->get_finest_lev())
           {
-              int ml = msk(iv_left);
-              int mr = msk(iv_right);
-
-              if (ml != mr)
+              int b = bc_arr(i,j,k);
+              if (b != 0)
               {
-                  int b = (ml == 0) ? 1 : -1;
                   auto& mat = (b == 1) ? Mkbdp[d] : Mkbdm[d];
 
                   for (int q = 0; q < Q; ++q) {
                     amrex::Real sum = 0.0;
                     for (int m = 0; m < M; ++m) {
-                        sum += fnum[q](i,j,k,m) * mat[n][m];
+                        sum += fnum[q](i,j,k,m) * mat(n,m);
                     }
                     fnum_int_c[q](i,j,k,n) = sum * jacobian;
                   }
@@ -703,25 +646,12 @@ void AmrDG::numflux(int lev,int d,int M, int N,
           }
 
           // --- From Fine Level: project flux onto coarse basis ---
-          // FineAdd uses per-box indexing (not plusFrom/ADD), so no
-          // double counting at shared faces. No ownership check needed.
           if (lev > 0)
           {
-              int vl = vmsk_fine(iv_left);
-              int vr = vmsk_fine(iv_right);
-
-              if (vl != vr)
+              int b = bf_arr(i,j,k);
+              if (b != 0)
               {
-                  int b = (vl == 0) ? 1 : -1;
-
-                  int child_idx = 0;
-                  int bit_pos = 0;
-                  for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-                      if (dir == d) continue;
-                      if (iv_right[dir] % 2 != 0) child_idx |= (1 << bit_pos);
-                      bit_pos++;
-                  }
-
+                  int child_idx = ci_arr(i,j,k);
                   const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, b);
 
                   for (int q = 0; q < Q; ++q) {
@@ -749,9 +679,7 @@ void AmrDG::update_U_w(int lev)
   for(int q=0; q<Q; ++q){
     amrex::MultiFab& state_u_w = U_w[lev][q];
 
-    amrex::MultiFab state_rhs;
-    state_rhs.define(U_w[lev][q].boxArray(), U_w[lev][q].DistributionMap(), basefunc->Np_s, _mesh->nghost); 
-    state_rhs.setVal(0.0);
+    rhs_corr[lev].setVal(0.0);
     
     amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM); 
     amrex::Vector<const amrex::MultiFab *> state_fnum(AMREX_SPACEDIM); 
@@ -777,16 +705,16 @@ void AmrDG::update_U_w(int lev)
         const amrex::Box& bx = mfi.tilebox();
 
         amrex::Array4<amrex::Real> const& uw = state_u_w.array(mfi);
-        amrex::Array4<amrex::Real> const& rhs = state_rhs.array(mfi);
+        amrex::Array4<amrex::Real> const& rhs = rhs_corr[lev].array(mfi);
 
         for(int d = 0; d < AMREX_SPACEDIM; ++d){
           f[d] = state_f[d]->const_array(mfi);
           fnum[d] = state_fnum[d]->const_array(mfi);
-        } 
+        }
 
         amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
         {
-          rhs(i,j,k,n)+=(Mk_corr[n][n]*uw(i,j,k,n));      
+          rhs(i,j,k,n)+=(Mk_corr(n,n)*uw(i,j,k,n));
         });
 
         int shift[] = {0,0,0};
@@ -795,7 +723,7 @@ void AmrDG::update_U_w(int lev)
           amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
           {
             for  (int m = 0; m < quadrule->qMp_st; ++m){
-              rhs(i,j,k,n)+=S_norm*(Sk_corr[d][n][m]*((f)[d])(i,j,k,m));
+              rhs(i,j,k,n)+=S_norm*(Sk_corr[d](n,m)*((f)[d])(i,j,k,m));
             }
           });
 
@@ -804,8 +732,8 @@ void AmrDG::update_U_w(int lev)
           amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
           {
             for  (int m = 0; m < quadrule->qMp_st_bd; ++m){
-              rhs(i,j,k,n)-=(Mbd_norm*(Mkbdp[d][n][m]*((fnum)[d])(i+shift[0],j+shift[1], k+shift[2],m)
-                                      -Mkbdm[d][n][m]*((fnum)[d])(i,j,k,m)));
+              rhs(i,j,k,n)-=(Mbd_norm*(Mkbdp[d](n,m)*((fnum)[d])(i+shift[0],j+shift[1], k+shift[2],m)
+                                      -Mkbdm[d](n,m)*((fnum)[d])(i,j,k,m)));
             }
           });
           shift[d] = 0;
@@ -817,44 +745,39 @@ void AmrDG::update_U_w(int lev)
           amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
           {
             for  (int m = 0; m < quadrule->qMp_st; ++m){
-              rhs(i,j,k,n)+=((Dt/2.0)*Mk_corr_src[n][m]*source(i,j,k,m));
+              rhs(i,j,k,n)+=((Dt/2.0)*Mk_corr_src(n,m)*source(i,j,k,m));
             }
           });
         }
 
         amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
         {
-          rhs(i,j,k,n)/=Mk_corr[n][n];
+          rhs(i,j,k,n)/=Mk_corr(n,n);
           uw(i,j,k,n) = rhs(i,j,k,n);
         });
       }
-    }    
+    }
   }
-  
-  // Add MPI synchronization after updating U_w for all components
-  amrex::ParallelDescriptor::Barrier();
 }
 
 void AmrDG::update_H_w(int lev)
 { 
   auto _mesh = mesh.lock();
 
+  const auto dx = _mesh->get_dx(lev);
+
   for(int q=0; q<Q; ++q)
   {
-    const auto dx = _mesh->get_dx(lev);
-    
     amrex::MultiFab& state_h_w = H_w[lev][q];
     amrex::MultiFab& state_u_w = U_w[lev][q];
-    
-    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM);  
+
+    amrex::Vector<const amrex::MultiFab *> state_f(AMREX_SPACEDIM);
 
     for(int d = 0; d < AMREX_SPACEDIM; ++d){
-      state_f[d]=&(F[lev][d][q]); 
+      state_f[d]=&(F[lev][d][q]);
     }
-    
-    amrex::MultiFab state_rhs;
-    state_rhs.define(H_w[lev][q].boxArray(), H_w[lev][q].DistributionMap(), basefunc->Np_st, _mesh->nghost); 
-    state_rhs.setVal(0.0); 
+
+    rhs_pred[lev].setVal(0.0); 
     
 #ifdef AMREX_USE_OMP
 #pragma omp parallel 
@@ -872,7 +795,7 @@ void AmrDG::update_H_w(int lev)
 
         amrex::Array4<amrex::Real> const& hw = state_h_w.array(mfi);
         amrex::Array4<amrex::Real> const& uw = state_u_w.array(mfi);
-        amrex::Array4<amrex::Real> const& rhs = state_rhs.array(mfi);
+        amrex::Array4<amrex::Real> const& rhs = rhs_pred[lev].array(mfi);
 
         for(int d = 0; d < AMREX_SPACEDIM; ++d){
           f[d] = state_f[d]->const_array(mfi);
@@ -883,21 +806,21 @@ void AmrDG::update_H_w(int lev)
           hw(i,j,k,n) = 0.0;
           for(int m =0; m<basefunc->Np_s; ++m)
           {
-            rhs(i,j,k,n) += Mk_pred[n][m]*uw(i,j,k,m);
+            rhs(i,j,k,n) += Mk_pred(n,m)*uw(i,j,k,m);
           }
         });
-        
+
         for(int d=0; d<AMREX_SPACEDIM; ++d)
         {
           amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
           {
             for(int m =0; m<quadrule->qMp_st; ++m)
             {
-              rhs(i,j,k,n) -= ((Dt/(amrex::Real)dx[d])*Sk_predVinv[d][n][m]*f[d](i,j,k,m));
+              rhs(i,j,k,n) -= ((Dt/(amrex::Real)dx[d])*Sk_predVinv[d](n,m)*f[d](i,j,k,m));
             }
           });
         }
-      
+
         if(flag_source_term){
           amrex::Array4<amrex::Real> const& source = S[lev][q].array(mfi);
 
@@ -905,21 +828,18 @@ void AmrDG::update_H_w(int lev)
           {
             for(int m =0; m<quadrule->qMp_st; ++m)
             {
-              rhs(i,j,k,n)+=(Dt/2.0)*Mk_pred_srcVinv[n][m]*source(i,j,k,m);
+              rhs(i,j,k,n)+=(Dt/2.0)*Mk_pred_srcVinv(n,m)*source(i,j,k,m);
             }
           });
         }
-        
+
         amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
         {
           for(int m =0; m<basefunc->Np_st; ++m){
-            hw(i,j,k,n) += Mk_h_w_inv[n][m]*rhs(i,j,k,m);
+            hw(i,j,k,n) += Mk_h_w_inv(n,m)*rhs(i,j,k,m);
           }
         });
       }
-    }     
+    }
   }
-  
-  // Add MPI synchronization after updating H_w for all components
-  amrex::ParallelDescriptor::Barrier();
 }
