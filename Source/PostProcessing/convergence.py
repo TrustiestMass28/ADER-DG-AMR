@@ -9,13 +9,54 @@ def get_convergence(p):
     #       2:[0.0087790966099986489, 0.0017085238936960308,0.00012726442764960074,1.5981709704366251e-05],
     #       3:[0.0027877884461944696,0.0001746922677643825,7.8290770603552511e-06,3.9752247868729303e-07]}
 
+    #t=0 Analytical IC vs Coarse->Fine projection IC and correctness of L2 norm computation
+    #   IC Analytical
+    p_E = {2:[0.00042583108055586113,5.5360950076592396e-05,7.0072370781971762e-06]}
+    #   IC projection
+    p_E = {2:[0.0030529774696598099 ,0.00042516378132576201,5.5019955705014079e-05]}
+
+    #Note: Lose approximately 1 refinement level of accuracy (error-wise) by interpolating
+    #but both mantain same order of convergence (slope-wise).
+    # The fine cells inherit the coarse polynomial's
+    #accuracy, which is O(h_coarse^{p+1}) = O((2h_fine)^{p+1}) = 2^{p+1} * O(h_fine^{p+1}).
+
     # Multi level - static refinement
+    #   Analytical IC
     #p_E = {2:[0.0065278464577034796,0.0011023970814282044, 6.959679923363609e-05, 7.6752757712181714e-06]}
 
-    # Multi level - dynamic refinement (1step)
-    p_E = {2:[0.0016894150496299305,0.00016978906706211757,2.8178108958230168e-05 ]}
-    
+    #   Projected IC 
+    #p_E = {2:[0.0065161678304828134,0.0011138811390704361,6.9862275494816416e-05]}
 
+    # Multi level - dynamic refinement (dt_regrid = 2.0; approx 5 regrids) amr_c[l] = 1.4
+    #p_E = {2:[0.0033186281845524477,0.00042112800767480382,6.4383288440806528e-05 ]}
+
+    # Multi level - dynamic refinement (dt_regrid = 5.0; approx 2 regrids) amr_c[l] = 1.4
+    #p_E = {2:[0.0051843556360638221,0.0012179087771277504,0.00010723098591203257]}
+
+    # Multi level - dynamic refinement (dt_regrid = 0.5; approx 20 regrids) amr_c[l] = 1.4
+    #p_E = {2:[0.0017060809914467333 ,0.00016645002888053664,3.0195089070121167e-05]}
+
+    # Multi level - dynamic refinement (dt_regrid = 0.05; approx 200 regrids) amr_c[l] = 1.4
+    #p_E = {2:[0.0016924554349809461 ,0.00017048846706209028,2.8232782208749954e-05 ,5.437052406379101e-06 ]}
+
+    # Multi level - dynamic refinement (every 1step) amr_c[l] = 1.4
+    #p_E = {2:[0.0016894150496299305,0.00016978906706211757,2.8178108958230168e-05]}
+
+
+    #Conclusion
+    #  - Single level: clean p+1 convergence for p=1,2,3                                           
+    #    - t=0 diagnostics: L2 norm correct, interpolation correct at order p+1                    
+    #    - Multi-level static (analytical IC): clean 3rd order with 4 data points                    
+    #    - Multi-level static (projected IC): same as analytical — confirms IC projection doesn't    
+    #    affect final error
+    #    - Dynamic regridding: accumulation tradeoff between error reduction 
+    #    from more frequent regrids and error increase from interpolation.
+
+
+
+
+    
+    
     errors = np.array(p_E[p])
     base_N = 8  
     N = np.array([base_N * 2**i for i in range(len(errors))])
