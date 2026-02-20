@@ -33,11 +33,8 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
         {
             const Box& bx = mfi.tilebox();
 
-            const amrex::FArrayBox * fab_corr = correction_mf->fabPtr(mfi);
-            amrex::Array4<const amrex::Real> corr = fab_corr->const_array();
-
-            amrex::FArrayBox* fab_u_crse = &(U_crse->get(mfi));
-            amrex::Array4<amrex::Real> u_crse = fab_u_crse->array();
+            amrex::Array4<const amrex::Real> corr = correction_mf->const_array(mfi);
+            amrex::Array4<amrex::Real> u_crse = U_crse->array(mfi);
 
             auto const& msk_arr = msk.const_array(mfi);
 
