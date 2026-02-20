@@ -631,11 +631,8 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
 
   amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
-  // Get domain to calculate relative indices
-  const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
-  const amrex::IntVect& dom_lo = domain.smallEnd();
-  
-  //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2 
+
+  //computes the numerical flux at the plus interface of a cell, i.e at idx i+1/2
   amrex::Vector<amrex::MultiFab *> state_fnum(Q); 
   amrex::Vector<amrex::MultiFab *> state_fnum_int_f(Q); 
   amrex::Vector<amrex::MultiFab *> state_fnum_int_c(Q); 
@@ -749,69 +746,73 @@ void AmrDG::numflux(int lev,int d,int M, int N,
 
       if ((_mesh->L > 1))
       {
-        auto const& msk = coarse_fine_interface_mask[lev][0].const_array(mfi);
+        auto const& msk = coarse_fine_interface_mask[lev].const_array(mfi);
+        auto const& vmsk_fine = fine_level_valid_mask[lev].const_array(mfi);
+
+        // Face-centered boxes overlap at inter-box boundaries: adjacent boxes
+        // [0,m] and [m+1,N] both include face m+1. If both compute fnum_int_c
+        // there, CrseAdd (which uses plusFrom/ADD) double counts the coarse flux.
+        // Same issue at periodic boundaries (face 0 = face N).
+        // Fix: only compute fnum_int_c at faces where iv_left is inside this
+        // tile (skip the lo face, which is the previous tile's hi face).
+        // fnum_int_c is pre-initialized to 0 by setVal above, so skipped
+        // faces remain zero.
+        int face_lo_d = bx.smallEnd(d);
 
         //compute the faces integral evaluations of the numerical flux
-        amrex::ParallelFor(bx, N,[&] (int i, int j, int k, int n) noexcept
-        {    
-          //amrex::Array<int, AMREX_SPACEDIM> idx{AMREX_D_DECL(i, j, k)};
-          //if(idx[d] == lo_idx[d]){ return;}
-
-          //Set to zero before accumulation
-          for (int q = 0; q < Q; ++q) {
-            fnum_int_c[q](i,j,k,n) = 0.0;
-            fnum_int_f[q](i,j,k,n) = 0.0;
-          }
+        amrex::ParallelFor(bx, N,[&, face_lo_d] (int i, int j, int k, int n) noexcept
+        {
 
           amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
-          iv_left[d] -= 1; //cell i-1
+          iv_left[d] -= 1;
           amrex::IntVect iv_right{AMREX_D_DECL(i,j,k)};
 
-          // Access mask: 0 = Coarse, 1 = Covered by Fine
-          int m_left  = msk(iv_left);
-          int m_right = msk(iv_right);
+          // Both masks use the same convention:
+          //   1 = fine level present, 0 = coarse level present
+          // A mismatch between left/right cells means a C-F interface.
+          // b = +1: coarse on left, fine on right (plus face of coarse cell)
+          // b = -1: coarse on right, fine on left (minus face of coarse cell)
 
-          // --- CASE A: COARSE-FINE INTERFACE (Detected from Coarse Level) ---
-          // This fills fnum_int_c for use in CrseAdd
-          if (lev < _mesh->get_finest_lev() && m_left != m_right) 
+          // --- From Coarse Level: integrate flux with boundary mass matrix ---
+          // Only at faces owned by this tile (iv_left inside tile) to prevent
+          // double counting at shared inter-box/periodic faces.
+          if (lev < _mesh->get_finest_lev() && iv_left[d] >= face_lo_d)
           {
-              // b=1: Coarse cell on left (iv_left), Fine on right. (Plus face of coarse)
-              // b=-1: Coarse cell on right (iv_right), Fine on left. (Minus face of coarse)
-              int b = (m_left == 0) ? 1 : -1;
-              auto& mat = (b == 1) ? Mkbdp[d] : Mkbdm[d];
+              int ml = msk(iv_left);
+              int mr = msk(iv_right);
 
-              for (int q = 0; q < Q; ++q) {
-                amrex::Real sum = 0.0;
-                for (int m = 0; m < M; ++m) {
-                    sum += fnum[q](i,j,k,m) * mat[n][m];
-                }
-                fnum_int_c[q](i,j,k,n) = sum * jacobian;
-            
+              if (ml != mr)
+              {
+                  int b = (ml == 0) ? 1 : -1;
+                  auto& mat = (b == 1) ? Mkbdp[d] : Mkbdm[d];
+
+                  for (int q = 0; q < Q; ++q) {
+                    amrex::Real sum = 0.0;
+                    for (int m = 0; m < M; ++m) {
+                        sum += fnum[q](i,j,k,m) * mat[n][m];
+                    }
+                    fnum_int_c[q](i,j,k,n) = sum * jacobian;
+                  }
               }
           }
 
-          // --- FINE-COARSE INTERFACE (Detected from Fine Level) ---
-          // This fills fnum_int_f for use in FineAdd.
-          // Note: On the fine level, mask is all 0. We check if neighbor is "outside" this level.
-          if (lev > 0) 
+          // --- From Fine Level: project flux onto coarse basis ---
+          // FineAdd uses per-box indexing (not plusFrom/ADD), so no
+          // double counting at shared faces. No ownership check needed.
+          if (lev > 0)
           {
-              // AMReX Utility: checks if a cell is physically inside the BoxArray of this level
-              bool left_valid  = _mesh->get_BoxArray(lev).contains(iv_left);
-              bool right_valid = _mesh->get_BoxArray(lev).contains(iv_right);
+              int vl = vmsk_fine(iv_left);
+              int vr = vmsk_fine(iv_right);
 
-              if (left_valid != right_valid)
+              if (vl != vr)
               {
-                  // Orientation for fine-side projection
-                  // If left is invalid, coarse is on LEFT -> interface is coarse's PLUS face (ξ=+1)
-                  // If right is invalid, coarse is on RIGHT -> interface is coarse's MINUS face (ξ=-1)
-                  int b = (!left_valid) ? 1 : -1; 
+                  int b = (vl == 0) ? 1 : -1;
 
-                  // Calculate child index for the projection matrix P
                   int child_idx = 0;
                   int bit_pos = 0;
                   for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
                       if (dir == d) continue;
-                      if ((iv_right[dir] - dom_lo[dir]) % 2 != 0) child_idx |= (1 << bit_pos);
+                      if (iv_right[dir] % 2 != 0) child_idx |= (1 << bit_pos);
                       bit_pos++;
                   }
 
@@ -822,11 +823,11 @@ void AmrDG::numflux(int lev,int d,int M, int N,
                       for (int m = 0; m < M; ++m) {
                           sum += P(n, m) * fnum[q](i,j,k,m);
                       }
-                      fnum_int_f[q](i,j,k,n) = sum * jacobian; 
+                      fnum_int_f[q](i,j,k,n) = sum * jacobian;
                   }
               }
           }
-        }); 
+        });
       }
     }
   }
