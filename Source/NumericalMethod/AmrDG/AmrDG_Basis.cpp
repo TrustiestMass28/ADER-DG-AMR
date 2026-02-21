@@ -1,269 +1,190 @@
 #include "AmrDG.h"
 
+// --- Legendre<P> constructor ---
 
-using namespace amrex;
-
-void AmrDG::BasisLegendre::set_number_basis()
-{
-  // Np_s: number of spatial basis functions (degree p, d dimensions)
-  // Np_st: number of space-time basis functions (degree p, d+1 dimensions)
-  // Np_t: number of purely temporal basis functions (optional for ADER)
-
-  Np_s = (int)((amrex::Real)factorial(numme->p+AMREX_SPACEDIM)
-        /((amrex::Real)factorial(numme->p)*(amrex::Real)factorial(AMREX_SPACEDIM)));
-
-  Np_st = (int)((amrex::Real)factorial(numme->p+AMREX_SPACEDIM+1)
-        /((amrex::Real)factorial(numme->p)*(amrex::Real)factorial(AMREX_SPACEDIM+1)));
-
-  Np_t = Np_st-Np_s; //not needed for DG
+template<int P>
+AmrDG::Legendre<P>::Legendre(amrex::Real x) {
+    val[0] = 1.0; dval[0] = 0.0; ddval[0] = 0.0;
+    if constexpr (P >= 1) {
+        val[1] = x; dval[1] = 1.0; ddval[1] = 0.0;
+    }
+    for (int n = 2; n <= P; ++n) {
+        val[n]  = ((2*n-1)*x*val[n-1] - (n-1)*val[n-2]) / n;
+        dval[n] = n*val[n-1] + x*dval[n-1];
+        ddval[n] = (n+1)*dval[n-1] + x*ddval[n-1];
+    }
 }
 
-//Generate index mapping between basis fuction idx and its componetns individual idxs
-void AmrDG::BasisLegendre::set_idx_mapping_s()
-{
-  #if (AMREX_SPACEDIM == 1)
-  int ctr = 0;
-  for(int ii=0; ii<=numme->p;++ii){
-    basis_idx_s[ctr][0] = ii;
-    if(ii==1){basis_idx_linear.push_back(ctr);} 
-    ctr+=1;
-  }
-  #elif (AMREX_SPACEDIM == 2)
-  int ctr = 0;
-  for(int ii=0; ii<=numme->p;++ii){
-    for(int jj=0; jj<=numme->p-ii;++jj){
-      basis_idx_s[ctr][0] = ii;
-      basis_idx_s[ctr][1] = jj;
-      
-      if((ii==1 && jj==0) || (ii==0 && jj==1)){basis_idx_linear.push_back(ctr);} 
-      ctr+=1;      
-    }
-  }
-  #elif (AMREX_SPACEDIM == 3)
-  int ctr = 0;
-  for(int ii=0; ii<=numme->p;++ii){
-    for(int jj=0; jj<=numme->p-ii;++jj){
-      for(int kk=0; kk<=numme->p-ii-jj;++kk){
-        basis_idx_s[ctr][0] = ii;
-        basis_idx_s[ctr][1] = jj;
-        basis_idx_s[ctr][2] = kk;
-        if((ii==1 && jj==0 && kk==0) || (ii==0 && jj==1 && kk==0) 
-        || (ii==0 && jj==0 && kk==1)){basis_idx_linear.push_back(ctr);}      
-        ctr+=1;
-      }
-    }
-  }
-  #endif
+// --- BasisLegendre<P> method definitions ---
 
-  //AMREX_ASSERT(ctr == Np_s);
+template<int P>
+amrex::Real AmrDG::BasisLegendre<P>::phi_s(int idx, const amrex::Vector<amrex::Real>& x) {
+    const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[idx];
+    amrex::Real result = 1.0;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        Legendre<P> leg(x[d]);
+        result *= leg.val[mi.idx[d]];
+    }
+    return result;
 }
 
-//Generate index mapping between modified basis fuction idx and its componetns 
-//individual idxs
-//          basis_idx_st[ctr][NDIM] == basis_idx_t[ctr][0];    
-// Last entry of basis_idx_st is the time index, copied into basis_idx_t for quick access
-void AmrDG::BasisLegendre::set_idx_mapping_st()
-{
-  #if (AMREX_SPACEDIM == 1)
-  int ctr = 0;
-  for(int ii=0; ii<=numme->p;++ii){
-    for(int tt=0; tt<=numme->p-ii;++tt){
-      basis_idx_st[ctr][0] = ii;
-      basis_idx_st[ctr][1] = tt;
-
-      basis_idx_t[ctr][0] = tt;
-      ctr+=1;      
-    }
-  }
-  #elif (AMREX_SPACEDIM == 2)
-  int ctr = 0;
-  for(int ii=0; ii<=numme->p;++ii){
-    for(int jj=0; jj<=numme->p-ii;++jj){ 
-      for(int tt=0; tt<=numme->p-ii-jj;++tt){      
-        basis_idx_st[ctr][0] = ii;
-        basis_idx_st[ctr][1] = jj;
-        basis_idx_st[ctr][2] = tt;
-
-        basis_idx_t[ctr][0] = tt;
-
-        ctr+=1;
-      }
-    }
-  }
-  #elif (AMREX_SPACEDIM == 3)
-  int ctr = 0;
-  for(int ii=0; ii<=numme->p;++ii){
-    for(int jj=0; jj<=numme->p-ii;++jj){
-      for(int kk=0; kk<=numme->p-ii-jj;++kk){
-        for(int tt=0; tt<=numme->p-ii-jj-kk;++tt){
-          basis_idx_st[ctr][0] = ii;
-          basis_idx_st[ctr][1] = jj;
-          basis_idx_st[ctr][2] = kk;
-          basis_idx_st[ctr][3] = tt;    
-
-          basis_idx_t[ctr][0] = tt;
-          ctr+=1;
+template<int P>
+amrex::Real AmrDG::BasisLegendre<P>::dphi_s(int idx, const amrex::Vector<amrex::Real>& x, int d) {
+    const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[idx];
+    amrex::Real result = 1.0;
+    for (int a = 0; a < AMREX_SPACEDIM; ++a) {
+        Legendre<P> leg(x[a]);
+        if (a != d) {
+            result *= leg.val[mi.idx[a]];
+        } else {
+            result *= leg.dval[mi.idx[a]];
         }
-      }
     }
-  }
-  #endif 
-
-  //AMREX_ASSERT(ctr == Np_st);
+    return result;
 }
 
-//spatial basis function, evaluated at x\in [-1,1]^{D}
-amrex::Real AmrDG::BasisLegendre::phi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map, 
-                                        const amrex::Vector<amrex::Real>& x) const 
-{
-  //AMREX_ASSERT(x.size() == AMREX_SPACEDIM);
-  //for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-  //  AMREX_ASSERT(x[d] >= -1.0 && x[d] <= 1.0);
-  //}
-  //AMREX_ASSERT(idx < idx_map.size());
-
-  amrex::Real phi = 1.0;
-  for  (int d = 0; d < AMREX_SPACEDIM; ++d){
-    phi*=std::legendre(idx_map[idx][d], x[d]);
-  }
-  return phi;
-}
-
-//spatial basis function first derivative in direction d, evaluated at x\in [-1,1]^{D}
-amrex::Real AmrDG::BasisLegendre::dphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
-                          const amrex::Vector<amrex::Real>& x, int d) const 
-{
-  //AMREX_ASSERT(x.size() == AMREX_SPACEDIM);
-  //for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-  //  AMREX_ASSERT(x[d] >= -1.0 && x[d] <= 1.0);
-  //}
-  //AMREX_ASSERT(d >= 0 && d < AMREX_SPACEDIM);
-  //AMREX_ASSERT(idx < idx_map.size());
-
-  amrex::Real phi = 1.0;
-  for  (int a = 0; a < AMREX_SPACEDIM; ++a){
-    if(a!=d)
-    {
-      phi*=std::legendre(idx_map[idx][a], x[a]);
+template<int P>
+amrex::Real AmrDG::BasisLegendre<P>::ddphi_s(int idx, const amrex::Vector<amrex::Real>& x, int d1, int d2) {
+    const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[idx];
+    amrex::Real result = 1.0;
+    for (int a = 0; a < AMREX_SPACEDIM; ++a) {
+        Legendre<P> leg(x[a]);
+        if (d1 == d2) {
+            result *= (a != d1) ? leg.val[mi.idx[a]] : leg.ddval[mi.idx[a]];
+        } else {
+            if (a == d1 || a == d2) {
+                result *= leg.dval[mi.idx[a]];
+            } else {
+                result *= leg.val[mi.idx[a]];
+            }
+        }
     }
-    else
-    {
-      phi*=(std::assoc_legendre(idx_map[idx][d],1,x[d]))/(std::sqrt(1.0-std::pow(x[d],2.0)));
-      //NB: analytically should have a "-" sign in front, becaue of c++ implementation of assoc_legendre
-      //is absed on formula without the ((-1)^m) then I need to omit it from my derivative implementation
-    }   
-  }
-  return phi;
+    return result;
 }
 
-//spatial basis function second derivative in direction d1 and d2, evaluated at 
-//x\in [-1,1]^{D}
-amrex::Real AmrDG::BasisLegendre::ddphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
-                            const amrex::Vector<amrex::Real>& x, int d1, int d2) const 
-{
-  //evaluates basis function second derivatives in d1 and d2 direction at desired 
-  //reference location x\in [-1,1]
-  //NB: in C++ std library, when using std::assoc_legendre, the (-1)^{-m} term 
-  //is not considered, therefore should not be included 
-  //in reverse computations
+template<int P>
+amrex::Real AmrDG::BasisLegendre<P>::phi_t(int idx, amrex::Real tau) {
+    const auto& mi = MultiIndex<P, AMREX_SPACEDIM + 1>::table[idx];
+    Legendre<P> leg(tau);
+    return leg.val[mi.idx[AMREX_SPACEDIM]];
+}
 
-  //AMREX_ASSERT(x.size() == AMREX_SPACEDIM);
-  //AMREX_ASSERT(d1 >= 0 && d1 < AMREX_SPACEDIM);
-  //AMREX_ASSERT(d2 >= 0 && d2 < AMREX_SPACEDIM);
-  //AMREX_ASSERT(idx < idx_map.size());
+template<int P>
+amrex::Real AmrDG::BasisLegendre<P>::dtphi_t(int idx, amrex::Real tau) {
+    const auto& mi = MultiIndex<P, AMREX_SPACEDIM + 1>::table[idx];
+    Legendre<P> leg(tau);
+    return leg.dval[mi.idx[AMREX_SPACEDIM]];
+}
 
-  amrex::Real phi = 1.0;
-  for  (int a = 0; a < AMREX_SPACEDIM; ++a){
-  
-    if(d1!=d2)
-    {
-      if(a!=d1 && a!=d2)
-      {
-        phi*=std::legendre(idx_map[idx][a], x[a]);
-      }
-      else if(a==d1)
-      {
-        phi*=(std::assoc_legendre(idx_map[idx][d1],1,x[d1]))
-            /(std::sqrt(1.0-std::pow(x[d1],2.0)));
-      }
-      else if(a==d2)
-      {
-        phi*=(std::assoc_legendre(idx_map[idx][d2],1,x[d2]))
-            /(std::sqrt(1.0-std::pow(x[d2],2.0)));
-      }
+template<int P>
+amrex::Real AmrDG::BasisLegendre<P>::phi_st(int idx, const amrex::Vector<amrex::Real>& x) {
+    const auto& mi = MultiIndex<P, AMREX_SPACEDIM + 1>::table[idx];
+    amrex::Real result = 1.0;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        Legendre<P> leg(x[d]);
+        result *= leg.val[mi.idx[d]];
     }
-    else
-    {
-      if(a!=d1 && a!=d2)
-      {
-        phi*=std::legendre(idx_map[idx][a], x[a]);
-      }
-      else
-      { 
-        phi*=(std::assoc_legendre(idx_map[idx][d2],2,x[d2]))
-            /(1.0-std::pow(x[d2],2.0));      
-      }
+    Legendre<P> leg_t(x[AMREX_SPACEDIM]);
+    result *= leg_t.val[mi.idx[AMREX_SPACEDIM]];
+    return result;
+}
+
+template<int P>
+auto AmrDG::BasisLegendre<P>::phi_s_all(const amrex::Vector<amrex::Real>& x)
+    -> std::array<amrex::Real, Np_s>
+{
+    std::array<std::array<amrex::Real, P+1>, AMREX_SPACEDIM> leg_val;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        Legendre<P> leg(x[d]);
+        leg_val[d] = leg.val;
     }
-  }
-  return phi;
+    std::array<amrex::Real, Np_s> result;
+    for (int n = 0; n < Np_s; ++n) {
+        const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[n];
+        amrex::Real prod = 1.0;
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            prod *= leg_val[d][mi.idx[d]];
+        }
+        result[n] = prod;
+    }
+    return result;
 }
 
-//temporal basis function
-amrex::Real AmrDG::BasisLegendre::phi_t(int tidx, amrex::Real tau) const 
+template<int P>
+auto AmrDG::BasisLegendre<P>::phi_st_all(const amrex::Vector<amrex::Real>& x)
+    -> std::array<amrex::Real, Np_st>
 {
-  //AMREX_ASSERT(tau >= -1.0 && tau <= 1.0);
-  //AMREX_ASSERT(tidx >= 0 && tidx < basis_idx_t.size());
-
-  return std::legendre(basis_idx_t[tidx][0], tau); 
+    std::array<std::array<amrex::Real, P+1>, AMREX_SPACEDIM + 1> leg_val;
+    for (int d = 0; d < AMREX_SPACEDIM + 1; ++d) {
+        Legendre<P> leg(x[d]);
+        leg_val[d] = leg.val;
+    }
+    std::array<amrex::Real, Np_st> result;
+    for (int n = 0; n < Np_st; ++n) {
+        const auto& mi = MultiIndex<P, AMREX_SPACEDIM + 1>::table[n];
+        amrex::Real prod = 1.0;
+        for (int d = 0; d < AMREX_SPACEDIM + 1; ++d) {
+            prod *= leg_val[d][mi.idx[d]];
+        }
+        result[n] = prod;
+    }
+    return result;
 }
 
-//derivative of temporal basis function
-amrex::Real AmrDG::BasisLegendre::dtphi_t(int tidx, amrex::Real tau) const
-{
-  //AMREX_ASSERT(tau >= -1.0 && tau <= 1.0);
-  //AMREX_ASSERT(tidx >= 0 && tidx < basis_idx_t.size());
-
-  return (std::assoc_legendre(basis_idx_t[tidx][0],1,tau))
-          /(std::sqrt(1.0-std::pow(tau,2))); 
+template<int P>
+amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_s() {
+    constexpr auto& tab = MultiIndex<P, AMREX_SPACEDIM>::table;
+    amrex::Vector<amrex::Vector<int>> result(Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
+    for (int n = 0; n < Np_s; ++n) {
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            result[n][d] = tab[n].idx[d];
+        }
+    }
+    return result;
 }
 
-
-//spatio temporal basis function, evaluated at x\in [-1,1]^{D+1}
-amrex::Real AmrDG::BasisLegendre::phi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
-                                          const amrex::Vector<amrex::Real>& x) const 
-{
-  amrex::Real mphi = phi_s(idx,idx_map,x);
-  mphi*=phi_t(idx,x[AMREX_SPACEDIM]);
-  //NB: expectes temproal coordinate to always be the last one (i,j,k,t)
-  
-  return mphi;
+template<int P>
+amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_st() {
+    constexpr auto& tab = MultiIndex<P, AMREX_SPACEDIM + 1>::table;
+    amrex::Vector<amrex::Vector<int>> result(Np_st, amrex::Vector<int>(AMREX_SPACEDIM + 1));
+    for (int n = 0; n < Np_st; ++n) {
+        for (int d = 0; d < AMREX_SPACEDIM + 1; ++d) {
+            result[n][d] = tab[n].idx[d];
+        }
+    }
+    return result;
 }
 
-int AmrDG::BasisLegendre::factorial(int n)  const
-{
-  if (n == 0 || n == 1){
-    return 1;
-  } 
-  else{
-    return n * factorial(n - 1);
-  }
+template<int P>
+amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_t() {
+    constexpr auto& tab = MultiIndex<P, AMREX_SPACEDIM + 1>::table;
+    amrex::Vector<amrex::Vector<int>> result(Np_st, amrex::Vector<int>(1));
+    for (int n = 0; n < Np_st; ++n) {
+        result[n][0] = tab[n].idx[AMREX_SPACEDIM];
+    }
+    return result;
 }
 
+// --- Explicit instantiations ---
 
+template struct AmrDG::Legendre<1>;
+template struct AmrDG::Legendre<2>;
+template struct AmrDG::Legendre<3>;
+template struct AmrDG::Legendre<4>;
+template struct AmrDG::Legendre<5>;
+template struct AmrDG::Legendre<6>;
+template struct AmrDG::Legendre<7>;
+template struct AmrDG::Legendre<8>;
+template struct AmrDG::Legendre<9>;
+template struct AmrDG::Legendre<10>;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+template struct AmrDG::BasisLegendre<1>;
+template struct AmrDG::BasisLegendre<2>;
+template struct AmrDG::BasisLegendre<3>;
+template struct AmrDG::BasisLegendre<4>;
+template struct AmrDG::BasisLegendre<5>;
+template struct AmrDG::BasisLegendre<6>;
+template struct AmrDG::BasisLegendre<7>;
+template struct AmrDG::BasisLegendre<8>;
+template struct AmrDG::BasisLegendre<9>;
+template struct AmrDG::BasisLegendre<10>;

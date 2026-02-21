@@ -7,9 +7,26 @@
 
 void AmrDG::set_vandermat()
 {
+    #define VANDERMAT_CASE(PP) case PP: _set_vandermat<PP>(); break;
+    switch(p) {
+        VANDERMAT_CASE(1) VANDERMAT_CASE(2) VANDERMAT_CASE(3) VANDERMAT_CASE(4) VANDERMAT_CASE(5)
+        VANDERMAT_CASE(6) VANDERMAT_CASE(7) VANDERMAT_CASE(8) VANDERMAT_CASE(9) VANDERMAT_CASE(10)
+        default: amrex::Abort("Unsupported polynomial order p");
+    }
+    #undef VANDERMAT_CASE
+}
+
+template<int P>
+void AmrDG::_set_vandermat()
+{
   for(int i=0; i<quadrule->qMp_st; ++i){
-    for(int j=0; j<basefunc->Np_st; ++j){
-      V(i,j) = basefunc->phi_st(j,basefunc->basis_idx_st,quadrule->xi_ref_quad_st[i]);//modPhi_j(x_i)==V_{ij}
+    for(int j=0; j<BasisLegendre<P>::Np_st; ++j){
+      const auto& mi = MultiIndex<P, AMREX_SPACEDIM+1>::table[j];
+      double phi = 1.0;
+      for (int d = 0; d < AMREX_SPACEDIM+1; ++d) {
+        phi *= QuadratureGaussLegendre<P>::val[mi.idx[d]][QuadratureGaussLegendre<P>::node_idx(i, d, AMREX_SPACEDIM+1)];
+      }
+      V(i,j) = phi;
     }
   }
 
@@ -22,21 +39,33 @@ void AmrDG::set_vandermat()
 
 void AmrDG::set_ref_element_matrix()
 {
-  //Generate matrices used for predictor step
-  for(int j=0; j<basefunc->Np_st;++j){
+    #define REFMAT_CASE(PP) case PP: _set_ref_element_matrix<PP>(); break;
+    switch(p) {
+        REFMAT_CASE(1) REFMAT_CASE(2) REFMAT_CASE(3) REFMAT_CASE(4) REFMAT_CASE(5)
+        REFMAT_CASE(6) REFMAT_CASE(7) REFMAT_CASE(8) REFMAT_CASE(9) REFMAT_CASE(10)
+        default: amrex::Abort("Unsupported polynomial order p");
+    }
+    #undef REFMAT_CASE
+}
 
-    for(int i=0; i<basefunc->Np_st;++i){
-      Mk_h_w(j,i)= refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st)*((basefunc->phi_t(j,1.0)*basefunc->phi_t(i,1.0))
+template<int P>
+void AmrDG::_set_ref_element_matrix()
+{
+  //Generate matrices used for predictor step
+  for(int j=0; j<BasisLegendre<P>::Np_st;++j){
+
+    for(int i=0; i<BasisLegendre<P>::Np_st;++i){
+      Mk_h_w(j,i)= refMat_phiphi(j,basis_idx_st,i,basis_idx_st)*((BasisLegendre<P>::phi_t(j,1.0)*BasisLegendre<P>::phi_t(i,1.0))
                     -refMat_tphiDtphi(j,i));
 
       for(int d=0; d<AMREX_SPACEDIM; ++d){
-        Sk_pred[d](j,i)   = refMat_tphitphi(j,i)*refMat_phiDphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st,d);
+        Sk_pred[d](j,i)   = refMat_tphitphi(j,i)*refMat_phiDphi(j,basis_idx_st,i,basis_idx_st,d);
       }
-      Mk_pred_src(j,i) =refMat_tphitphi(j,i)*refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_st);
+      Mk_pred_src(j,i) =refMat_tphitphi(j,i)*refMat_phiphi(j,basis_idx_st,i,basis_idx_st);
     }
 
-    for(int i=0; i<basefunc->Np_s;++i){
-      Mk_pred(j,i) = basefunc->phi_t(j,-1.0)*refMat_phiphi(j,basefunc->basis_idx_st,i,basefunc->basis_idx_s);
+    for(int i=0; i<BasisLegendre<P>::Np_s;++i){
+      Mk_pred(j,i) = BasisLegendre<P>::phi_t(j,-1.0)*refMat_phiphi(j,basis_idx_st,i,basis_idx_s);
     }
   }
 
@@ -50,62 +79,95 @@ void AmrDG::set_ref_element_matrix()
 
   //Compute inverse of Mk_h_w
   Mk_h_w_inv = Mk_h_w.inverse();
-  
-  //Generate matrices used for Gaussian quadrature, they contain in ADER-DG step  
+
+  //Generate matrices used for Gaussian quadrature, they contain in ADER-DG step
   //using same i,j idx convention as in documentation for readability
 
-  int N = quadrule->qMp_1d;  
+  int N = quadrule->qMp_1d;
 
   amrex::Real w;
   amrex::Real wm;
   amrex::Real wp;
 
-  for(int j=0; j<basefunc->Np_s;++j){
-    for(int i=0; i<basefunc->Np_s;++i){
-      Mk_corr(j,i) = refMat_phiphi(j,basefunc->basis_idx_s,i,basefunc->basis_idx_s);
+  for(int j=0; j<BasisLegendre<P>::Np_s;++j){
+    for(int i=0; i<BasisLegendre<P>::Np_s;++i){
+      Mk_corr(j,i) = refMat_phiphi(j,basis_idx_s,i,basis_idx_s);
     }
   }
 
-  //Here, use qMp_st because ists quadrature of a double int_t int_dx integral
+  //Here, use qMp_st because its quadrature of a double int_t int_dx integral
   //therefore has D+1 pts
   for(int d=0; d<AMREX_SPACEDIM; ++d){
     for(int i=0; i<quadrule->qMp_st;++i){
+      // Space-time weight: product of 1D weights over D+1 dims
       w = 1.0;
       for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
-        w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st[i][d_]),2.0);
+        w *= QuadratureGaussLegendre<P>::weights[QuadratureGaussLegendre<P>::node_idx(i, d_, AMREX_SPACEDIM+1)];
       }
-      for(int j=0; j<basefunc->Np_s;++j){
-        Sk_corr[d](j,i) = basefunc->dphi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st[i],d)*w;
+      for(int j=0; j<BasisLegendre<P>::Np_s;++j){
+        // dphi_s(j, xi_st[i], d): product of P_{mi[a]}(xi[a]) for a!=d, P'_{mi[d]}(xi[d]) for a==d
+        const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[j];
+        double dphi = 1.0;
+        for (int a = 0; a < AMREX_SPACEDIM; ++a) {
+          int q_a = QuadratureGaussLegendre<P>::node_idx(i, a, AMREX_SPACEDIM+1);
+          if (a != d) {
+            dphi *= QuadratureGaussLegendre<P>::val[mi.idx[a]][q_a];
+          } else {
+            dphi *= QuadratureGaussLegendre<P>::dval[mi.idx[a]][q_a];
+          }
+        }
+        Sk_corr[d](j,i) = dphi*w;
       }
     }
     for(int i=0; i<quadrule->qMp_st_bd;++i){
+      // Boundary weight: product of 1D weights over free dims (SPACEDIM total)
       wm = 1.0;
       wp = 1.0;
-      for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
-        if(d_!=d)
-        {
-          wm*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st_bdm[d][i][d_]),2.0);
-          wp*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st_bdp[d][i][d_]),2.0);
-        }
+      for(int pos=0; pos<AMREX_SPACEDIM; ++pos){
+        int q_idx = QuadratureGaussLegendre<P>::node_idx(i, pos, AMREX_SPACEDIM);
+        wm *= QuadratureGaussLegendre<P>::weights[q_idx];
+        wp *= QuadratureGaussLegendre<P>::weights[q_idx];
       }
 
       quad_weights_st_bdm[d][i] = wm;
       quad_weights_st_bdp[d][i] = wp;
 
-      for(int j=0; j<basefunc->Np_s;++j){
-        Mkbdm[d](j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdm[d][i])*wm;
-        Mkbdp[d](j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st_bdp[d][i])*wp;
+      for(int j=0; j<BasisLegendre<P>::Np_s;++j){
+        // phi_s at boundary: fixed dim d has xi=±1, free dims use GL nodes
+        const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[j];
+        double phi_m = 1.0;
+        double phi_p = 1.0;
+        for (int a = 0; a < AMREX_SPACEDIM; ++a) {
+          if (a == d) {
+            phi_m *= QuadratureGaussLegendre<P>::bd_val[mi.idx[a]][0]; // xi=-1
+            phi_p *= QuadratureGaussLegendre<P>::bd_val[mi.idx[a]][1]; // xi=+1
+          } else {
+            int pos = QuadratureGaussLegendre<P>::bd_free_pos(a, d);
+            int q_a = QuadratureGaussLegendre<P>::node_idx(i, pos, AMREX_SPACEDIM);
+            phi_m *= QuadratureGaussLegendre<P>::val[mi.idx[a]][q_a];
+            phi_p *= QuadratureGaussLegendre<P>::val[mi.idx[a]][q_a];
+          }
+        }
+        Mkbdm[d](j,i) = phi_m*wm;
+        Mkbdp[d](j,i) = phi_p*wp;
       }
     }
   }
 
   for(int i=0; i<quadrule->qMp_st;++i){
+    // Space-time weight
     w = 1.0;
     for(int d=0; d<AMREX_SPACEDIM+1; ++d){
-      w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_st[i][d]),2.0);
+      w *= QuadratureGaussLegendre<P>::weights[QuadratureGaussLegendre<P>::node_idx(i, d, AMREX_SPACEDIM+1)];
     }
-    for(int j=0; j<basefunc->Np_s;++j){
-      Mk_corr_src(j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_st[i])*w;
+    for(int j=0; j<BasisLegendre<P>::Np_s;++j){
+      // phi_s evaluated at spatial coordinates of ST quad point
+      const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[j];
+      double phi = 1.0;
+      for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        phi *= QuadratureGaussLegendre<P>::val[mi.idx[d]][QuadratureGaussLegendre<P>::node_idx(i, d, AMREX_SPACEDIM+1)];
+      }
+      Mk_corr_src(j,i) = phi*w;
     }
   }
 
@@ -113,12 +175,18 @@ void AmrDG::set_ref_element_matrix()
   //(i.e for only spatial integrals)
   //used for the BC,IC
   for(int i=0; i<quadrule->qMp_s;++i){
+    // Spatial weight: product of 1D weights over D dims
     w = 1.0;
     for(int d=0; d<AMREX_SPACEDIM; ++d){
-      w*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_s[i][d]),2.0);
+      w *= QuadratureGaussLegendre<P>::weights[QuadratureGaussLegendre<P>::node_idx(i, d, AMREX_SPACEDIM)];
     }
-    for(int j=0; j<basefunc->Np_s;++j){
-      quadmat(j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s[i])*w;
+    for(int j=0; j<BasisLegendre<P>::Np_s;++j){
+      const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[j];
+      double phi = 1.0;
+      for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        phi *= QuadratureGaussLegendre<P>::val[mi.idx[d]][QuadratureGaussLegendre<P>::node_idx(i, d, AMREX_SPACEDIM)];
+      }
+      quadmat(j,i) = phi*w;
     }
   }
 
@@ -126,16 +194,27 @@ void AmrDG::set_ref_element_matrix()
   //used for flux registers
   for(int i=0; i<quadrule->qMp_s_bd;++i){
     for(int d=0; d<AMREX_SPACEDIM; ++d){
+      // Spatial boundary weight: product over D-1 free spatial dims
       wm = 1.0;
-      for(int d_=0; d_<AMREX_SPACEDIM+1; ++d_){
-        if(d_!=d)
-        {
-          wm*=2.0/std::pow(std::assoc_legendre(N,1,quadrule->xi_ref_quad_s_bdm[d][i][d_]),2.0);
+      for(int d_=0; d_<AMREX_SPACEDIM; ++d_){
+        if(d_!=d){
+          int pos = QuadratureGaussLegendre<P>::bd_free_pos(d_, d);
+          wm *= QuadratureGaussLegendre<P>::weights[QuadratureGaussLegendre<P>::node_idx(i, pos, AMREX_SPACEDIM-1)];
         }
+      }
 
-        for(int j=0; j<basefunc->Np_s;++j){
-          quadmat_bd[d](j,i) = basefunc->phi_s(j,basefunc->basis_idx_s,quadrule->xi_ref_quad_s_bdm[d][i])*wm;
+      for(int j=0; j<BasisLegendre<P>::Np_s;++j){
+        const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[j];
+        double phi = 1.0;
+        for (int a = 0; a < AMREX_SPACEDIM; ++a) {
+          if (a == d) {
+            phi *= QuadratureGaussLegendre<P>::bd_val[mi.idx[a]][0]; // bdm → xi=-1
+          } else {
+            int pos = QuadratureGaussLegendre<P>::bd_free_pos(a, d);
+            phi *= QuadratureGaussLegendre<P>::val[mi.idx[a]][QuadratureGaussLegendre<P>::node_idx(i, pos, AMREX_SPACEDIM-1)];
+          }
         }
+        quadmat_bd[d](j,i) = phi*wm;
       }
     }
   }
@@ -231,9 +310,9 @@ amrex::Real AmrDG::refMat_tphitphi(int j,int i) const
   
   //NB:basis_idx_st[ctr][AMREX_SPACEDIM] == basis_idx_t[ctr][0];  
 
-  return (amrex::Real)kroneckerDelta(basefunc->basis_idx_t[i][0],
-          basefunc->basis_idx_t[j][0])
-          *(2.0/(2.0*(amrex::Real)basefunc->basis_idx_t[j][0]+1.0));
+  return (amrex::Real)kroneckerDelta(basis_idx_t[i][0],
+          basis_idx_t[j][0])
+          *(2.0/(2.0*(amrex::Real)basis_idx_t[j][0]+1.0));
 }
 
 amrex::Real AmrDG::refMat_tphiDtphi(int j,int i) const 
@@ -265,7 +344,22 @@ amrex::Real AmrDG::refMat_tphiDtphi(int j,int i) const
   for(int q=0; q<N;++q){  
     w = 1.0;
     w*=2.0/(amrex::Real)std::pow((amrex::Real)std::assoc_legendre(N,1,quadrule->xi_ref_quad_t[q][0]),2.0);
-    tphiDtphi+=(basefunc->phi_t(i, quadrule->xi_ref_quad_t[q][0])*basefunc->dtphi_t(j, quadrule->xi_ref_quad_t[q][0])*w);  
+    // phi_t: P_{n_i}(x) where n_i = temporal order of i-th space-time basis
+    amrex::Real phi_val = std::legendre(basis_idx_t[i][0], quadrule->xi_ref_quad_t[q][0]);
+    // dtphi_t: P'_{n_j}(x) via Bonnet recurrence
+    int n_t = basis_idx_t[j][0];
+    amrex::Real x_t = quadrule->xi_ref_quad_t[q][0];
+    amrex::Real dphi_val = 0.0;
+    if (n_t >= 1) {
+        amrex::Real p_prev = 1.0, p_curr = x_t;
+        dphi_val = 1.0;
+        for (int nn = 2; nn <= n_t; ++nn) {
+            amrex::Real p_next = ((2*nn-1)*x_t*p_curr - (nn-1)*p_prev) / nn;
+            dphi_val = nn*p_curr + x_t*dphi_val;
+            p_prev = p_curr; p_curr = p_next;
+        }
+    }
+    tphiDtphi+=(phi_val*dphi_val*w);  
   }
   return tphiDtphi;
   

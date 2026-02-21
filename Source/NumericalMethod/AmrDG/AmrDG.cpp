@@ -156,78 +156,54 @@ void AmrDG::init()
 
   H_m.resize(_mesh->L, Q);
 
-  //Basis function
-  basefunc = std::make_shared<BasisLegendre>();
+  //Basis function setup via compile-time dispatch
+  #define INIT_BASIS_CASE(PP) \
+      case PP: \
+          Np_s = BasisLegendre<PP>::Np_s; \
+          Np_st = BasisLegendre<PP>::Np_st; \
+          basis_idx_s = BasisLegendre<PP>::get_basis_idx_s(); \
+          basis_idx_st = BasisLegendre<PP>::get_basis_idx_st(); \
+          basis_idx_t = BasisLegendre<PP>::get_basis_idx_t(); \
+          break;
 
-  //basefunc->setNumericalMethod(this);
-  basefunc->setNumericalMethod(shared_from_this());
-  
-  //Number of modes/components of solution decomposition
-  basefunc->set_number_basis();
+  switch(p) {
+      INIT_BASIS_CASE(1) INIT_BASIS_CASE(2) INIT_BASIS_CASE(3)
+      INIT_BASIS_CASE(4) INIT_BASIS_CASE(5) INIT_BASIS_CASE(6)
+      INIT_BASIS_CASE(7) INIT_BASIS_CASE(8) INIT_BASIS_CASE(9)
+      INIT_BASIS_CASE(10)
+      default: amrex::Abort("Unsupported polynomial order p");
+  }
+  #undef INIT_BASIS_CASE
 
-  //basis functions d.o.f idx mapper
-  basefunc->basis_idx_s.resize(basefunc->Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
+  //Set-up quadrature rule via compile-time dispatch
+  #define INIT_QUAD_CASE(PP) \
+      case PP: quadrule = std::make_shared<QuadratureGaussLegendre<PP>>(); break;
 
-  basefunc->basis_idx_t.resize(basefunc->Np_st, amrex::Vector<int>(1));
-
-  basefunc->basis_idx_st.resize(basefunc->Np_st, amrex::Vector<int>(AMREX_SPACEDIM+1));  
-  //basis_idx_t for each of the Np_st basis func, stores the idx of the time polynomial,
-  //thats why it has basefunc->Np_st. This because when we ened to evalaute temporal basis
-  //it is always in same loop as other spatial component, i.e when looping over Np_st
-
-  basefunc->set_idx_mapping_s();
-
-  basefunc->set_idx_mapping_st();
-
-  //Set-up quadrature rule
-  quadrule = std::make_shared<QuadratureGaussLegendre>();
-
-  quadrule->setNumericalMethod(shared_from_this());
+  switch(p) {
+      INIT_QUAD_CASE(1) INIT_QUAD_CASE(2) INIT_QUAD_CASE(3)
+      INIT_QUAD_CASE(4) INIT_QUAD_CASE(5) INIT_QUAD_CASE(6)
+      INIT_QUAD_CASE(7) INIT_QUAD_CASE(8) INIT_QUAD_CASE(9)
+      INIT_QUAD_CASE(10)
+      default: amrex::Abort("Unsupported polynomial order p");
+  }
+  #undef INIT_QUAD_CASE
 
   //Number of quadrature pts
   quadrule->set_number_quadpoints();
 
-  //Init data structure holdin quadrature data 
-  quadrule->xi_ref_quad_s.resize(quadrule->qMp_s,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
-
-  quadrule->xi_ref_quad_s_bdm.resize(AMREX_SPACEDIM,
-                            amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_s_bd,
-                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM)));    
-
-  quadrule->xi_ref_quad_s_bdp.resize(AMREX_SPACEDIM,
-                            amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_s_bd,
-                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM)));    
-
-  quadrule->xi_ref_quad_t.resize(quadrule->qMp_t,amrex::Vector<amrex::Real> (1)); 
-
-  quadrule->xi_ref_quad_st.resize(quadrule->qMp_st,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));  
-
-  quadrule->xi_ref_quad_st_bdm.resize(AMREX_SPACEDIM,
-                            amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_st_bd,
-                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));         
-
-  quadrule->xi_ref_quad_st_bdp.resize(AMREX_SPACEDIM,
-                            amrex::Vector<amrex::Vector<amrex::Real>> (quadrule->qMp_st_bd,
-                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
-
-  //construt a center point of a [1,1]^D cell
-  quadrule->xi_ref_quad_s_center.resize(1,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
-
-  //xi_ref_equidistant.resize(qMp,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)); 
-
-  //Generation of quadrature pts
+  //Generation of quadrature pts (also resizes data structures)
   quadrule->set_quadpoints();
                               
   //Initialize generalized Vandermonde matrix and inverse
-  V = Eigen::MatrixXd::Zero(quadrule->qMp_st, basefunc->Np_st);
-  Vinv = Eigen::MatrixXd::Zero(basefunc->Np_st, quadrule->qMp_st);
+  V = Eigen::MatrixXd::Zero(quadrule->qMp_st, Np_st);
+  Vinv = Eigen::MatrixXd::Zero(Np_st, quadrule->qMp_st);
 
   //Initialize L2 projection quadrature matrix
-  quadmat = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_s);
+  quadmat = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_s);
 
   quadmat_bd.resize(AMREX_SPACEDIM);
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    quadmat_bd[d] = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_s_bd);
+    quadmat_bd[d] = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_s_bd);
   }
 
   //Initialize quadrature weights for cell faces st quadratures
@@ -235,30 +211,30 @@ void AmrDG::init()
   quad_weights_st_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));
 
   //Initialize generalized Element matrices for ADER-DG corrector
-  Mk_corr = Eigen::MatrixXd::Zero(basefunc->Np_s, basefunc->Np_s);
-  Mk_corr_src = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_st);
+  Mk_corr = Eigen::MatrixXd::Zero(Np_s, Np_s);
+  Mk_corr_src = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_st);
 
   Sk_corr.resize(AMREX_SPACEDIM);
   Mkbdm.resize(AMREX_SPACEDIM);
   Mkbdp.resize(AMREX_SPACEDIM);
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    Sk_corr[d] = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_st);
-    Mkbdm[d] = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_st_bd);
-    Mkbdp[d] = Eigen::MatrixXd::Zero(basefunc->Np_s, quadrule->qMp_st_bd);
+    Sk_corr[d] = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_st);
+    Mkbdm[d] = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_st_bd);
+    Mkbdp[d] = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_st_bd);
   }
 
   //Initialize generalized Element matrices for ADER predictor
-  Mk_h_w = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_st);
-  Mk_h_w_inv = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_st);
-  Mk_pred = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_s);
-  Mk_pred_src = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_st);
-  Mk_pred_srcVinv = Eigen::MatrixXd::Zero(basefunc->Np_st, quadrule->qMp_st);
+  Mk_h_w = Eigen::MatrixXd::Zero(Np_st, Np_st);
+  Mk_h_w_inv = Eigen::MatrixXd::Zero(Np_st, Np_st);
+  Mk_pred = Eigen::MatrixXd::Zero(Np_st, Np_s);
+  Mk_pred_src = Eigen::MatrixXd::Zero(Np_st, Np_st);
+  Mk_pred_srcVinv = Eigen::MatrixXd::Zero(Np_st, quadrule->qMp_st);
 
   Sk_pred.resize(AMREX_SPACEDIM);
   Sk_predVinv.resize(AMREX_SPACEDIM);
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    Sk_pred[d] = Eigen::MatrixXd::Zero(basefunc->Np_st, basefunc->Np_st);
-    Sk_predVinv[d] = Eigen::MatrixXd::Zero(basefunc->Np_st, quadrule->qMp_st);
+    Sk_pred[d] = Eigen::MatrixXd::Zero(Np_st, Np_st);
+    Sk_predVinv[d] = Eigen::MatrixXd::Zero(Np_st, quadrule->qMp_st);
   }
     
   //Construct system matrices
@@ -279,7 +255,7 @@ void AmrDG::init()
 void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
 {
   //since use modal DG we will apply BCs to individual spatial modes
-  n_comp = basefunc->Np_s;
+  n_comp = Np_s;
   bc.resize(Q,amrex::Vector<amrex::BCRec>(n_comp));
 
   //bc evaluated at all spatial quadrature point in ghost cells
@@ -296,14 +272,12 @@ amrex::Real AmrDG::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcom
     sum+= quadmat(dcomp +comp,m)*bc[m];
   }
 
-  sum /=refMat_phiphi(dcomp + comp,basefunc->basis_idx_s,dcomp + comp,basefunc->basis_idx_s);
+  sum /=refMat_phiphi(dcomp + comp,basis_idx_s,dcomp + comp,basis_idx_s);
 
   return sum;
 }
 
 AmrDG::~AmrDG(){
-  //delete basefunc;
-  //delete quadrule;
 }
 
 void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
@@ -312,8 +286,8 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
   //Flat vectors already pre-sized in init(); just define rhs temporaries here
   auto _mesh = mesh.lock();
 
-  rhs_corr[lev].define(ba, dm, basefunc->Np_s, _mesh->nghost);
-  rhs_pred[lev].define(ba, dm, basefunc->Np_st, _mesh->nghost);
+  rhs_corr[lev].define(ba, dm, Np_s, _mesh->nghost);
+  rhs_pred[lev].define(ba, dm, Np_st, _mesh->nghost);
 
   // Add MPI synchronization after data structure initialization
   amrex::ParallelDescriptor::Barrier();
@@ -325,13 +299,13 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
 {
   auto _mesh = mesh.lock();
 
-  H_w(lev,q).define(ba, dm, basefunc->Np_st, _mesh->nghost);
+  H_w(lev,q).define(ba, dm, Np_st, _mesh->nghost);
   H_w(lev,q).setVal(0.0);
 
   H(lev,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
   H(lev,q).setVal(0.0);
 
-  U_w(lev,q).define(ba, dm, basefunc->Np_s, _mesh->nghost);
+  U_w(lev,q).define(ba, dm, Np_s, _mesh->nghost);
   U_w(lev,q).setVal(0.0);
 
   U(lev,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
@@ -355,9 +329,9 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
 
     Fnum(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, quadrule->qMp_st_bd, 0);
 
-    Fnum_int_f(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, basefunc->Np_s, 0);
+    Fnum_int_f(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, Np_s, 0);
 
-    Fnum_int_c(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, basefunc->Np_s, 0);
+    Fnum_int_c(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, Np_s, 0);
   }
 }
 
@@ -365,11 +339,26 @@ void AmrDG::get_U_from_U_w(int M, int N, amrex::MultiFab* _U,
                           amrex::MultiFab* _U_w,
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-  //Can evalaute U_w (Np_s) at boundary using bd quadrature pts qM_s_bd or
-  //for the entire cell using qM_s
-  //M=quadrule->qM_s;
-  //N=basefunc->qM_s
+  switch(p) {
+    case 1: _get_U_from_U_w<1>(M,_U,_U_w,xi); break;
+    case 2: _get_U_from_U_w<2>(M,_U,_U_w,xi); break;
+    case 3: _get_U_from_U_w<3>(M,_U,_U_w,xi); break;
+    case 4: _get_U_from_U_w<4>(M,_U,_U_w,xi); break;
+    case 5: _get_U_from_U_w<5>(M,_U,_U_w,xi); break;
+    case 6: _get_U_from_U_w<6>(M,_U,_U_w,xi); break;
+    case 7: _get_U_from_U_w<7>(M,_U,_U_w,xi); break;
+    case 8: _get_U_from_U_w<8>(M,_U,_U_w,xi); break;
+    case 9: _get_U_from_U_w<9>(M,_U,_U_w,xi); break;
+    case 10: _get_U_from_U_w<10>(M,_U,_U_w,xi); break;
+    default: amrex::Abort("Unsupported polynomial order p");
+  }
+}
 
+template<int P>
+void AmrDG::_get_U_from_U_w(int M, amrex::MultiFab* _U,
+                          amrex::MultiFab* _U_w,
+                          const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
 #ifdef AMREX_USE_OMP
 #pragma omp parallel
 #endif
@@ -399,11 +388,16 @@ void AmrDG::get_U_from_U_w(int M, int N, amrex::MultiFab* _U,
           }
         });
 
-        amrex::ParallelFor(bx,N,[&] (int i, int j, int k,int n) noexcept
+        amrex::ParallelFor(bx,BasisLegendre<P>::Np_s,[&] (int i, int j, int k,int n) noexcept
         {
+          const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[n];
           for(int q=0 ; q<Q; ++q){
             for(int m = 0; m<M ; ++m){
-              (u[q])(i,j,k,m)+=((uw[q])(i,j,k,n)*basefunc->phi_s(n,basefunc->basis_idx_s,xi[m]));
+              double phi = 1.0;
+              for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                phi *= QuadratureGaussLegendre<P>::val[mi.idx[d]][QuadratureGaussLegendre<P>::node_idx(m, d, AMREX_SPACEDIM)];
+              }
+              (u[q])(i,j,k,m)+=(uw[q])(i,j,k,n)*phi;
             }
           }
         });
@@ -415,9 +409,26 @@ void AmrDG::get_H_from_H_w(int M, int N, amrex::MultiFab* _H,
                           amrex::MultiFab* _H_w,
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
-  //Can evalaute H_w (Np_st) at boundary using bd quadrature pts qM_st_bd or
-  //for the entire cell using qM_st
+  switch(p) {
+    case 1: _get_H_from_H_w<1>(M,_H,_H_w,xi); break;
+    case 2: _get_H_from_H_w<2>(M,_H,_H_w,xi); break;
+    case 3: _get_H_from_H_w<3>(M,_H,_H_w,xi); break;
+    case 4: _get_H_from_H_w<4>(M,_H,_H_w,xi); break;
+    case 5: _get_H_from_H_w<5>(M,_H,_H_w,xi); break;
+    case 6: _get_H_from_H_w<6>(M,_H,_H_w,xi); break;
+    case 7: _get_H_from_H_w<7>(M,_H,_H_w,xi); break;
+    case 8: _get_H_from_H_w<8>(M,_H,_H_w,xi); break;
+    case 9: _get_H_from_H_w<9>(M,_H,_H_w,xi); break;
+    case 10: _get_H_from_H_w<10>(M,_H,_H_w,xi); break;
+    default: amrex::Abort("Unsupported polynomial order p");
+  }
+}
 
+template<int P>
+void AmrDG::_get_H_from_H_w(int M, amrex::MultiFab* _H,
+                          amrex::MultiFab* _H_w,
+                          const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
+{
 #ifdef AMREX_USE_OMP
 #pragma omp parallel
 #endif
@@ -446,11 +457,93 @@ void AmrDG::get_H_from_H_w(int M, int N, amrex::MultiFab* _H,
           }
         });
 
-        amrex::ParallelFor(bx,N,[&] (int i, int j, int k,int n) noexcept
+        amrex::ParallelFor(bx,BasisLegendre<P>::Np_st,[&] (int i, int j, int k,int n) noexcept
+        {
+          const auto& mi = MultiIndex<P, AMREX_SPACEDIM+1>::table[n];
+          for(int q=0 ; q<Q; ++q){
+            for(int m = 0; m<M ; ++m){
+              double phi = 1.0;
+              for (int d = 0; d < AMREX_SPACEDIM+1; ++d) {
+                phi *= QuadratureGaussLegendre<P>::val[mi.idx[d]][QuadratureGaussLegendre<P>::node_idx(m, d, AMREX_SPACEDIM+1)];
+              }
+              (h[q])(i,j,k,m)+=(hw[q])(i,j,k,n)*phi;
+            }
+          }
+        });
+      }
+    }
+}
+
+void AmrDG::get_H_from_H_w_bd(int M, int N, amrex::MultiFab* _H,
+                               amrex::MultiFab* _H_w,
+                               int d_fixed, int side)
+{
+  switch(p) {
+    case 1: _get_H_from_H_w_bd<1>(M,_H,_H_w,d_fixed,side); break;
+    case 2: _get_H_from_H_w_bd<2>(M,_H,_H_w,d_fixed,side); break;
+    case 3: _get_H_from_H_w_bd<3>(M,_H,_H_w,d_fixed,side); break;
+    case 4: _get_H_from_H_w_bd<4>(M,_H,_H_w,d_fixed,side); break;
+    case 5: _get_H_from_H_w_bd<5>(M,_H,_H_w,d_fixed,side); break;
+    case 6: _get_H_from_H_w_bd<6>(M,_H,_H_w,d_fixed,side); break;
+    case 7: _get_H_from_H_w_bd<7>(M,_H,_H_w,d_fixed,side); break;
+    case 8: _get_H_from_H_w_bd<8>(M,_H,_H_w,d_fixed,side); break;
+    case 9: _get_H_from_H_w_bd<9>(M,_H,_H_w,d_fixed,side); break;
+    case 10: _get_H_from_H_w_bd<10>(M,_H,_H_w,d_fixed,side); break;
+    default: amrex::Abort("Unsupported polynomial order p");
+  }
+}
+
+template<int P>
+void AmrDG::_get_H_from_H_w_bd(int M, amrex::MultiFab* _H,
+                                amrex::MultiFab* _H_w,
+                                int d_fixed, int side)
+{
+    // Evaluates space-time basis at boundary quad points.
+    // Fixed dim d_fixed has xi=±1 (side 0→-1, side 1→+1).
+    // Free dims (SPACEDIM total: D-1 spatial + time) use GL node lookups.
+#ifdef AMREX_USE_OMP
+#pragma omp parallel
+#endif
+    {
+      amrex::Vector<amrex::Array4<const amrex::Real>> hw(Q);
+      amrex::Vector<amrex::Array4<amrex::Real>> h(Q);
+
+      #ifdef AMREX_USE_OMP
+      for (MFIter mfi(_H_w[0],MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+      #else
+      for (MFIter mfi(_H_w[0],true); mfi.isValid(); ++mfi)
+      #endif
+      {
+        const amrex::Box& bx = mfi.growntilebox();
+
+        for(int q=0 ; q<Q; ++q){
+          hw[q] = _H_w[q].const_array(mfi);
+          h[q] = _H[q].array(mfi);
+        }
+        amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
         {
           for(int q=0 ; q<Q; ++q){
             for(int m = 0; m<M ; ++m){
-              (h[q])(i,j,k,m)+=((hw[q])(i,j,k,n)*basefunc->phi_st(n,basefunc->basis_idx_st,xi[m]));
+              (h[q])(i,j,k,m)=0.0;
+            }
+          }
+        });
+
+        amrex::ParallelFor(bx,BasisLegendre<P>::Np_st,[&] (int i, int j, int k,int n) noexcept
+        {
+          const auto& mi = MultiIndex<P, AMREX_SPACEDIM+1>::table[n];
+          for(int q=0 ; q<Q; ++q){
+            for(int m = 0; m<M ; ++m){
+              double phi = 1.0;
+              for (int a = 0; a <= AMREX_SPACEDIM; ++a) {
+                if (a == d_fixed) {
+                  phi *= QuadratureGaussLegendre<P>::bd_val[mi.idx[a]][side];
+                } else {
+                  int pos = QuadratureGaussLegendre<P>::bd_free_pos(a, d_fixed);
+                  phi *= QuadratureGaussLegendre<P>::val[mi.idx[a]][QuadratureGaussLegendre<P>::node_idx(m, pos, AMREX_SPACEDIM)];
+                }
+              }
+              (h[q])(i,j,k,m)+=(hw[q])(i,j,k,n)*phi;
             }
           }
         });
@@ -482,10 +575,10 @@ void AmrDG::set_predictor(const amrex::MultiFab* _U_w,
         hw[q] = _H_w[q].array(mfi);
       }
 
-      amrex::ParallelFor(bx, basefunc->Np_st,[&] (int i, int j, int k, int n) noexcept
+      amrex::ParallelFor(bx, Np_st,[&] (int i, int j, int k, int n) noexcept
       {
         for(int q=0 ; q<Q; ++q){
-          if(n<basefunc->Np_s)
+          if(n<Np_s)
           {
             //set first Np_s modes of H_w equalt to U_w
             amrex::Real tmp = (uw[q])(i,j,k,n);
@@ -656,7 +749,7 @@ void AmrDG::update_U_w(int lev)
           fnum[d] = state_fnum[d]->const_array(mfi);
         }
 
-        amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+        amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
         {
           rhs(i,j,k,n)+=(Mk_corr(n,n)*uw(i,j,k,n));
         });
@@ -664,7 +757,7 @@ void AmrDG::update_U_w(int lev)
         int shift[] = {0,0,0};
         for  (int d = 0; d < AMREX_SPACEDIM; ++d){
           amrex::Real S_norm = (Dt/(amrex::Real)dx[d]);
-          amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+          amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
           {
             for  (int m = 0; m < quadrule->qMp_st; ++m){
               rhs(i,j,k,n)+=S_norm*(Sk_corr[d](n,m)*((f)[d])(i,j,k,m));
@@ -673,7 +766,7 @@ void AmrDG::update_U_w(int lev)
 
           amrex::Real Mbd_norm = (Dt/(amrex::Real)dx[d]);
           shift[d] = 1;
-          amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+          amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
           {
             for  (int m = 0; m < quadrule->qMp_st_bd; ++m){
               rhs(i,j,k,n)-=(Mbd_norm*(Mkbdp[d](n,m)*((fnum)[d])(i+shift[0],j+shift[1], k+shift[2],m)
@@ -686,7 +779,7 @@ void AmrDG::update_U_w(int lev)
         if(flag_source_term)
         {
           amrex::Array4<amrex::Real> const& source = S(lev,q).array(mfi);
-          amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+          amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
           {
             for  (int m = 0; m < quadrule->qMp_st; ++m){
               rhs(i,j,k,n)+=((Dt/2.0)*Mk_corr_src(n,m)*source(i,j,k,m));
@@ -694,7 +787,7 @@ void AmrDG::update_U_w(int lev)
           });
         }
 
-        amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+        amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
         {
           rhs(i,j,k,n)/=Mk_corr(n,n);
           uw(i,j,k,n) = rhs(i,j,k,n);
@@ -745,10 +838,10 @@ void AmrDG::update_H_w(int lev)
           f[d] = state_f[d]->const_array(mfi);
         } 
         
-        amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
+        amrex::ParallelFor(bx, Np_st, [&] (int i, int j, int k, int n) noexcept
         {
           hw(i,j,k,n) = 0.0;
-          for(int m =0; m<basefunc->Np_s; ++m)
+          for(int m =0; m<Np_s; ++m)
           {
             rhs(i,j,k,n) += Mk_pred(n,m)*uw(i,j,k,m);
           }
@@ -756,7 +849,7 @@ void AmrDG::update_H_w(int lev)
 
         for(int d=0; d<AMREX_SPACEDIM; ++d)
         {
-          amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
+          amrex::ParallelFor(bx, Np_st, [&] (int i, int j, int k, int n) noexcept
           {
             for(int m =0; m<quadrule->qMp_st; ++m)
             {
@@ -768,7 +861,7 @@ void AmrDG::update_H_w(int lev)
         if(flag_source_term){
           amrex::Array4<amrex::Real> const& source = S(lev,q).array(mfi);
 
-          amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
+          amrex::ParallelFor(bx, Np_st, [&] (int i, int j, int k, int n) noexcept
           {
             for(int m =0; m<quadrule->qMp_st; ++m)
             {
@@ -777,13 +870,24 @@ void AmrDG::update_H_w(int lev)
           });
         }
 
-        amrex::ParallelFor(bx, basefunc->Np_st, [&] (int i, int j, int k, int n) noexcept
+        amrex::ParallelFor(bx, Np_st, [&] (int i, int j, int k, int n) noexcept
         {
-          for(int m =0; m<basefunc->Np_st; ++m){
+          for(int m =0; m<Np_st; ++m){
             hw(i,j,k,n) += Mk_h_w_inv(n,m)*rhs(i,j,k,m);
           }
         });
       }
     }
   }
+}
+
+amrex::Real AmrDG::phi_s(int idx, const amrex::Vector<amrex::Real>& x) const
+{
+    #define EVAL_CASE(PP) case PP: return BasisLegendre<PP>::phi_s(idx, x);
+    switch(p) {
+        EVAL_CASE(1) EVAL_CASE(2) EVAL_CASE(3) EVAL_CASE(4) EVAL_CASE(5)
+        EVAL_CASE(6) EVAL_CASE(7) EVAL_CASE(8) EVAL_CASE(9) EVAL_CASE(10)
+        default: amrex::Abort("Unsupported polynomial order p"); return 0.0;
+    }
+    #undef EVAL_CASE
 }
