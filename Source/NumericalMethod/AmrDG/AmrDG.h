@@ -508,6 +508,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   bool dtn_plt; bool dt_plt; int n; amrex::Real t; std::ostringstream oss;
   int last_progress = 0;  // Track last progress for bar updates
   amrex::Real t_last_regrid = 0.0; // Track last regrid time for dt_regrid
+  amrex::Real t_last_plt = 0.0; // Track last plot time for dt_outplt
   int n_regrids = 0; // Total number of regrids performed
 
   auto _mesh = mesh.lock();
@@ -556,7 +557,6 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
   }
 
-  ///*
   while(t<T)
   {  
     if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -666,10 +666,9 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     
     //Plotting at pre-specified times
     dtn_plt = (dtn_outplt > 0) && (n % dtn_outplt == 0);
-    dt_plt  = (dt_outplt > 0) && (std::abs(std::fmod(t, dt_outplt)) < 1e-02);
-    //use as tolerance dt_outplt, i.e same order of magnitude
+    dt_plt  = (dt_outplt > 0) && (t - t_last_plt >= dt_outplt - 1e-12);
     if(dtn_plt){PlotFile(model_pde,U_w,n, t);}
-    else if(dt_plt){PlotFile(model_pde,U_w,n, t);}
+    else if(dt_plt){PlotFile(model_pde,U_w,n, t); t_last_plt = t;}
 
     //Set time-step size
     Solver<NumericalMethodType>::set_Dt(model_pde);
@@ -690,7 +689,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     Print() << "Total number of time steps: " << n << "\n";
     Print() << "Total number of regrids: " << n_regrids << "\n";
   }
-  //*/
+
   amrex::ParallelDescriptor::Barrier();
 
   //Output t=T norm

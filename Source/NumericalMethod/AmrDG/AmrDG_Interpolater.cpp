@@ -83,30 +83,30 @@ const Eigen::MatrixXd& AmrDG::L2ProjInterp::get_flux_proj_mat(int d, int child_i
 
 void AmrDG::L2ProjInterp::flux_proj_mat()
 {
-    // 1. Setup dimensions
+    // Setup dimensions
     int num_face_children = (int)std::pow(2, AMREX_SPACEDIM - 1);
     int num_q_pts = numme->quadrule->qMp_st_bd;
 
-    // 2. Resize Outer Vectors [Direction]
+    // Resize Outer Vectors [Direction]
     P_flux_fc_low.resize(AMREX_SPACEDIM);
     P_flux_fc_high.resize(AMREX_SPACEDIM);
 
     for (int d = 0; d < AMREX_SPACEDIM; ++d) {
         
-        // 3. Resize Inner Vectors [Child Index]
+        // Resize Inner Vectors [Child Index]
         P_flux_fc_low[d].resize(num_face_children);
         P_flux_fc_high[d].resize(num_face_children);
 
         for (int k = 0; k < num_face_children; ++k) {
             
-            // 4. Resize the Eigen Matrices (Rows: Coarse Modes, Cols: Fine Quad Pts)
+            // Resize the Eigen Matrices (Rows: Coarse Modes, Cols: Fine Quad Pts)
             P_flux_fc_low[d][k].resize(numme->basefunc->Np_s, num_q_pts);
             P_flux_fc_low[d][k].setZero();
 
             P_flux_fc_high[d][k].resize(numme->basefunc->Np_s, num_q_pts);
             P_flux_fc_high[d][k].setZero();
 
-            // 5. Determine Tangential Shifts for this child 'k'
+            // Determine Tangential Shifts for this child 'k'
             // These are identical for both low and high faces because the tangential plane is shared
             amrex::Vector<amrex::Real> t_shifts(AMREX_SPACEDIM, 0.0);
             int temp_k = k;
@@ -119,11 +119,11 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
                 bit_counter++;
             }
 
-            // 6. Fill Matrix Elements
+            // Fill Matrix Elements
             for (int r = 0; r < numme->basefunc->Np_s; ++r) {         // Row: Coarse Mode
                 for (int m = 0; m < num_q_pts; ++m) {                 // Col: Fine Quad Point
                     
-                    // --- A. Geometry/Mapping Logic ---
+                    // --- Geometry/Mapping Logic ---
                     
                     // Get Fine Quad Point (space-time boundary point)
                     amrex::Vector<amrex::Real> xi_f = numme->quadrule->xi_ref_quad_st_bdm[d][m];
@@ -145,7 +145,7 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
                         }
                     }
                     
-                    // --- B. Evaluation ---
+                    // --- Evaluation ---
                     
                     // Evaluate Coarse Basis at both mapped points
                     amrex::Real phi_c_low  = numme->basefunc->phi_s(r, numme->basefunc->basis_idx_s, xi_c_low);
@@ -155,7 +155,7 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
                     amrex::Real w_m = numme->quad_weights_st_bdm[d][m];
                     amrex::Real w_p = numme->quad_weights_st_bdp[d][m];
                     
-                    // --- C. Assignment ---
+                    // --- Assignment ---
                     P_flux_fc_low[d][k](r, m)  = phi_c_low  * w_m;
                     P_flux_fc_high[d][k](r, m) = phi_c_high * w_p;
                 }
