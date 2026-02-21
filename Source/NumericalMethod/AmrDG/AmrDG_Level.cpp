@@ -233,178 +233,90 @@ void AmrDG::AMR_average_fine_coarse()
 void AmrDG::AMR_set_flux_registers()
 {
     auto _mesh = mesh.lock();
+    const int finest = _mesh->get_finest_lev();
 
-    // Allocate storage for AMR synchronization structures across the level hierarchy
-    flux_reg.resize(_mesh->get_finest_lev() + 1, Q);
-    coarse_fine_interface_mask.resize(_mesh->get_finest_lev() + 1);
-    fine_level_valid_mask.resize(_mesh->get_finest_lev() + 1);
-    // Level 0 flux_reg entries are already nullptr (default for unique_ptr)
+    flux_reg.resize(finest + 1, Q);
+    cf_face_b_coarse.resize(finest + 1, AMREX_SPACEDIM);
+    cf_face_b_fine.resize(finest + 1, AMREX_SPACEDIM);
+    cf_face_child_idx.resize(finest + 1, AMREX_SPACEDIM);
 
-    for (int lev = 0; lev <= _mesh->get_finest_lev(); ++lev) {
-
-        // --- COARSE-FINE INTERFACE MASK SETUP ---
-        // This mask identifies coarse cells that are covered by finer grids.
-        // It is essential for DG kernels to decide whether to use a standard 
-        // numerical flux or a flux provided by/for a FluxRegister.
-        
-        if (lev < _mesh->get_finest_lev()) {
-            // Build a temporary mask based on the layout of level lev+1.
-            // 1 = Cell is covered by a fine patch; 0 = Cell is uncovered.
-            amrex::iMultiFab level_mask = amrex::makeFineMask(
-                _mesh->get_BoxArray(lev),
-                _mesh->get_DistributionMap(lev),
-                _mesh->get_BoxArray(lev+1),
-                _mesh->get_refRatio(lev),
-                0, 1);
-
-            coarse_fine_interface_mask[lev].define(
-                _mesh->get_BoxArray(lev),
-                _mesh->get_DistributionMap(lev),
-                1, _mesh->nghost);
-
-            // Safety: Initialize everything (including ghosts) to 0.
-            coarse_fine_interface_mask[lev].setVal(0);
-
-            // Sync coverage data across MPI ranks: Transfer fine-grid coverage metadata
-            // from whichever ranks own the fine boxes to the ranks owning the coarse boxes.
-            coarse_fine_interface_mask[lev].ParallelCopy(level_mask, 0, 0, 1);
-
-            // Sync across periodic/MPI boundaries: Ensure ghost cells reflect the
-            // refined status of neighbors so DG interface checks (i+1, i-1) work.
-            coarse_fine_interface_mask[lev].FillBoundary(_mesh->get_Geom(lev).periodicity());
-
-            // Fill non-periodic physical boundary ghost cells to match the adjacent
-            // valid cell. This prevents false C-F interface detections at domain
-            // boundary faces in numflux (where mask(ghost)=0 vs mask(valid)=1
-            // would otherwise look like a C-F interface).
-            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                if (!_mesh->get_Geom(lev).isPeriodic(d)) {
-                    const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
-                    int dom_lo = domain.smallEnd(d);
-                    int dom_hi = domain.bigEnd(d);
-                    for (amrex::MFIter mfi(coarse_fine_interface_mask[lev]); mfi.isValid(); ++mfi) {
-                        const amrex::Box& vbx = mfi.validbox();
-                        auto arr = coarse_fine_interface_mask[lev][mfi].array();
-                        if (vbx.smallEnd(d) == dom_lo) {
-                            amrex::Box ghost_lo = amrex::adjCellLo(vbx, d, 1);
-                            amrex::ParallelFor(ghost_lo, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
-                                amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
-                                amrex::IntVect iv_valid = iv; iv_valid[d] = dom_lo;
-                                arr(iv) = arr(iv_valid);
-                            });
-                        }
-                        if (vbx.bigEnd(d) == dom_hi) {
-                            amrex::Box ghost_hi = amrex::adjCellHi(vbx, d, 1);
-                            amrex::ParallelFor(ghost_hi, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
-                                amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
-                                amrex::IntVect iv_valid = iv; iv_valid[d] = dom_hi;
-                                arr(iv) = arr(iv_valid);
-                            });
-                        }
-                    }
-                }
-            }
-        } else {
-            // Finest level: No grids exist above this, so the entire mask is 0.
-            coarse_fine_interface_mask[lev].define(
-                _mesh->get_BoxArray(lev),
-                _mesh->get_DistributionMap(lev), 1, _mesh->nghost);
-            coarse_fine_interface_mask[lev].setVal(0);
-            coarse_fine_interface_mask[lev].FillBoundary(_mesh->get_Geom(lev).periodicity());
-        }
-
-        // --- VALID-CELL MASK SETUP ---
-        // Identifies where actual computational data exists (Valid=1, Physical Boundary/Empty=0).
-        // This allows DG kernels to branch between Riemann Solvers and Physical BCs.
-
-        fine_level_valid_mask[lev].define(
-            _mesh->get_BoxArray(lev),
-            _mesh->get_DistributionMap(lev),
-            1, _mesh->nghost);
-
-        //  Default all (Valid + Ghost) to 0.
-        fine_level_valid_mask[lev].setVal(0);
-
-        // Set only local valid cells to 1.
-        for (amrex::MFIter mfi(fine_level_valid_mask[lev]); mfi.isValid(); ++mfi) {
-            fine_level_valid_mask[lev][mfi].setVal<amrex::RunOn::Host>(
-                1, mfi.validbox(), 0, 1);
-        }
-
-        //  MPI & Periodic Sync.
-        // Ghost cells overlapping other patches (any rank) or periodic images become 1.
-        fine_level_valid_mask[lev].FillBoundary(_mesh->get_Geom(lev).periodicity());
-
-        // Fill non-periodic physical boundary ghost cells to 1 (treat as "valid")
-        // to prevent false F-C interface detections at domain boundary faces.
-        // At domain edges there is no coarse neighbor, so no F-C interface exists.
+    // Lambda: fill non-periodic physical boundary ghost cells of an iMultiFab.
+    // fill_val < 0 means copy from adjacent valid cell; fill_val >= 0 means constant.
+    auto fill_boundary_ghosts = [&](amrex::iMultiFab& mfab, int lev, int fill_val) {
         for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-            if (!_mesh->get_Geom(lev).isPeriodic(d)) {
-                const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
-                int dom_lo = domain.smallEnd(d);
-                int dom_hi = domain.bigEnd(d);
-                for (amrex::MFIter mfi(fine_level_valid_mask[lev]); mfi.isValid(); ++mfi) {
-                    const amrex::Box& vbx = mfi.validbox();
-                    auto arr = fine_level_valid_mask[lev][mfi].array();
-                    if (vbx.smallEnd(d) == dom_lo) {
-                        amrex::Box ghost_lo = amrex::adjCellLo(vbx, d, 1);
+            if (_mesh->get_Geom(lev).isPeriodic(d)) continue;
+            const amrex::Box& domain = _mesh->get_Geom(lev).Domain();
+            int dom_lo = domain.smallEnd(d);
+            int dom_hi = domain.bigEnd(d);
+            for (amrex::MFIter mfi(mfab); mfi.isValid(); ++mfi) {
+                const amrex::Box& vbx = mfi.validbox();
+                auto arr = mfab[mfi].array();
+                if (vbx.smallEnd(d) == dom_lo) {
+                    amrex::Box ghost_lo = amrex::adjCellLo(vbx, d, 1);
+                    if (fill_val >= 0) {
+                        int fv = fill_val;
                         amrex::ParallelFor(ghost_lo, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
-                            arr(i,j,k) = 1;
+                            arr(i,j,k) = fv;
+                        });
+                    } else {
+                        amrex::ParallelFor(ghost_lo, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                            amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
+                            amrex::IntVect iv_valid = iv; iv_valid[d] = dom_lo;
+                            arr(iv) = arr(iv_valid);
                         });
                     }
-                    if (vbx.bigEnd(d) == dom_hi) {
-                        amrex::Box ghost_hi = amrex::adjCellHi(vbx, d, 1);
+                }
+                if (vbx.bigEnd(d) == dom_hi) {
+                    amrex::Box ghost_hi = amrex::adjCellHi(vbx, d, 1);
+                    if (fill_val >= 0) {
+                        int fv = fill_val;
                         amrex::ParallelFor(ghost_hi, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
-                            arr(i,j,k) = 1;
+                            arr(i,j,k) = fv;
+                        });
+                    } else {
+                        amrex::ParallelFor(ghost_hi, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                            amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
+                            amrex::IntVect iv_valid = iv; iv_valid[d] = dom_hi;
+                            arr(iv) = arr(iv_valid);
                         });
                     }
                 }
             }
         }
+    };
 
-        // --- FLUX REGISTER INITIALIZATION ---
-        // Created for lev > 0 to handle flux conservation at the interface with lev-1.
-
-        if (lev > 0) {
-            for(int q=0; q<Q; ++q){
-                flux_reg(lev,q) = std::make_unique<amrex::FluxRegister>(
-                    _mesh->get_BoxArray(lev),
-                    _mesh->get_DistributionMap(lev),
-                    _mesh->get_refRatio(lev-1),
-                    lev,
-                    basefunc->Np_s
-                );
-            }
-        }
-    }
-
-    // --- PRECOMPUTE C-F INTERFACE FACE DATA ---
-    cf_face_b_coarse.resize(_mesh->get_finest_lev() + 1, AMREX_SPACEDIM);
-    cf_face_b_fine.resize(_mesh->get_finest_lev() + 1, AMREX_SPACEDIM);
-    cf_face_child_idx.resize(_mesh->get_finest_lev() + 1, AMREX_SPACEDIM);
-
-    for (int lev = 0; lev <= _mesh->get_finest_lev(); ++lev) {
+    for (int lev = 0; lev <= finest; ++lev) {
         const amrex::BoxArray& ba = _mesh->get_BoxArray(lev);
         const amrex::DistributionMapping& dm = _mesh->get_DistributionMap(lev);
 
-        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-            amrex::BoxArray face_ba = convert(ba, amrex::IntVect::TheDimensionVector(d));
+        // --- FLUX REGISTER (lev > 0) ---
+        if (lev > 0) {
+            for (int q = 0; q < Q; ++q) {
+                flux_reg(lev,q) = std::make_unique<amrex::FluxRegister>(
+                    ba, dm, _mesh->get_refRatio(lev-1), lev, basefunc->Np_s);
+            }
+        }
 
-            cf_face_b_coarse(lev,d).define(face_ba, dm, 1, 0);
-            cf_face_b_coarse(lev,d).setVal(0);
+        // --- COARSE SIDE: build mask + face data (lev < finest) ---
+        if (lev < finest) {
+            // Build coarse-fine interface mask (local, destroyed after face data)
+            amrex::iMultiFab cf_mask(ba, dm, 1, _mesh->nghost);
+            cf_mask.setVal(0);
+            amrex::iMultiFab level_mask = amrex::makeFineMask(
+                ba, dm, _mesh->get_BoxArray(lev+1), _mesh->get_refRatio(lev), 0, 1);
+            cf_mask.ParallelCopy(level_mask, 0, 0, 1);
+            cf_mask.FillBoundary(_mesh->get_Geom(lev).periodicity());
+            fill_boundary_ghosts(cf_mask, lev, -1); // copy from adjacent valid cell
 
-            cf_face_b_fine(lev,d).define(face_ba, dm, 1, 0);
-            cf_face_b_fine(lev,d).setVal(0);
+            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                amrex::BoxArray face_ba = convert(ba, amrex::IntVect::TheDimensionVector(d));
+                cf_face_b_coarse(lev,d).define(face_ba, dm, 1, 0);
+                cf_face_b_coarse(lev,d).setVal(0);
 
-            cf_face_child_idx(lev,d).define(face_ba, dm, 1, 0);
-            cf_face_child_idx(lev,d).setVal(0);
-
-            // Coarse side: detect C-F interface faces with ownership rule
-            if (lev < _mesh->get_finest_lev()) {
                 for (amrex::MFIter mfi(cf_face_b_coarse(lev,d)); mfi.isValid(); ++mfi) {
                     const amrex::Box& fbx = mfi.tilebox();
                     auto const& bc_arr = cf_face_b_coarse(lev,d)[mfi].array();
-                    auto const& msk = coarse_fine_interface_mask[lev].const_array(mfi);
+                    auto const& msk = cf_mask.const_array(mfi);
                     int face_lo_d = fbx.smallEnd(d);
 
                     amrex::ParallelFor(fbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
@@ -423,14 +335,38 @@ void AmrDG::AMR_set_flux_registers()
                     });
                 }
             }
+        } else {
+            // Finest level: no coarse-side C-F faces
+            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                amrex::BoxArray face_ba = convert(ba, amrex::IntVect::TheDimensionVector(d));
+                cf_face_b_coarse(lev,d).define(face_ba, dm, 1, 0);
+                cf_face_b_coarse(lev,d).setVal(0);
+            }
+        }
 
-            // Fine side: detect F-C interface faces and compute child sub-face index
-            if (lev > 0) {
+        // --- FINE SIDE: build mask + face data (lev > 0) ---
+        if (lev > 0) {
+            // Build valid-cell mask (local, destroyed after face data)
+            amrex::iMultiFab valid_mask(ba, dm, 1, _mesh->nghost);
+            valid_mask.setVal(0);
+            for (amrex::MFIter mfi(valid_mask); mfi.isValid(); ++mfi) {
+                valid_mask[mfi].setVal<amrex::RunOn::Host>(1, mfi.validbox(), 0, 1);
+            }
+            valid_mask.FillBoundary(_mesh->get_Geom(lev).periodicity());
+            fill_boundary_ghosts(valid_mask, lev, 1); // constant 1
+
+            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                amrex::BoxArray face_ba = convert(ba, amrex::IntVect::TheDimensionVector(d));
+                cf_face_b_fine(lev,d).define(face_ba, dm, 1, 0);
+                cf_face_b_fine(lev,d).setVal(0);
+                cf_face_child_idx(lev,d).define(face_ba, dm, 1, 0);
+                cf_face_child_idx(lev,d).setVal(0);
+
                 for (amrex::MFIter mfi(cf_face_b_fine(lev,d)); mfi.isValid(); ++mfi) {
                     const amrex::Box& fbx = mfi.tilebox();
                     auto const& bf_arr = cf_face_b_fine(lev,d)[mfi].array();
                     auto const& ci_arr = cf_face_child_idx(lev,d)[mfi].array();
-                    auto const& vmsk = fine_level_valid_mask[lev].const_array(mfi);
+                    auto const& vmsk = valid_mask.const_array(mfi);
 
                     amrex::ParallelFor(fbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
                         amrex::IntVect iv_left{AMREX_D_DECL(i,j,k)};
@@ -455,6 +391,15 @@ void AmrDG::AMR_set_flux_registers()
                         }
                     });
                 }
+            }
+        } else {
+            // Level 0: no fine-side F-C faces
+            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                amrex::BoxArray face_ba = convert(ba, amrex::IntVect::TheDimensionVector(d));
+                cf_face_b_fine(lev,d).define(face_ba, dm, 1, 0);
+                cf_face_b_fine(lev,d).setVal(0);
+                cf_face_child_idx(lev,d).define(face_ba, dm, 1, 0);
+                cf_face_child_idx(lev,d).setVal(0);
             }
         }
     }
@@ -482,8 +427,8 @@ void AmrDG::AMR_flux_correction()
                                        1.0, 0, 0, basefunc->Np_s,
                                        _mesh->get_Geom(l-1));
 
-                amr_interpolator->reflux(&(U_w(l-1,q)),
-                                         &(correction_mf),
+                amr_interpolator->reflux(U_w(l-1,q),
+                                         correction_mf,
                                          l-1,
                                          _mesh->get_Geom(l-1));
             }

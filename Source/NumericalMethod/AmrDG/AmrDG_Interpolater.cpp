@@ -5,8 +5,8 @@
 
 using namespace amrex;
 
-void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
-                               const amrex::MultiFab* correction_mf,
+void AmrDG::L2ProjInterp::reflux(amrex::MultiFab& U_crse,
+                               const amrex::MultiFab& correction_mf,
                                int lev,
                                const amrex::Geometry& crse_geom) noexcept
 {
@@ -19,40 +19,38 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab* U_crse,
     // Space: [-1, 1]^(D-1) -> Face Area => Factor: dvol / 2^(D-1)
     // amrex::Real jacobian = (Dt / 2.0) * (dvol / std::pow(2.0, AMREX_SPACEDIM - 1));
 
-    // Access the interface mask for the coarse level 'lev'
-    // This mask was created in AmrDG::AMR_set_flux_registers()
-    // Ghost cells at non-periodic boundaries are set to match adjacent valid cells,
-    // so neighbor checks are safe without explicit boundary guards.
-    auto const& msk = numme->coarse_fine_interface_mask[lev];
-
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
     {
-        for (MFIter mfi(*correction_mf, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        for (MFIter mfi(correction_mf, TilingIfNotGPU()); mfi.isValid(); ++mfi)
         {
             const Box& bx = mfi.tilebox();
 
-            amrex::Array4<const amrex::Real> corr = correction_mf->const_array(mfi);
-            amrex::Array4<amrex::Real> u_crse = U_crse->array(mfi);
+            amrex::Array4<const amrex::Real> corr = correction_mf.const_array(mfi);
+            amrex::Array4<amrex::Real> u_crse = U_crse.array(mfi);
 
-            auto const& msk_arr = msk.const_array(mfi);
+            // Reuse precomputed C-F interface face data (face-centered, per dimension)
+            amrex::Vector<amrex::Array4<const int>> bc_arr(AMREX_SPACEDIM);
+            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                bc_arr[d] = numme->cf_face_b_coarse(lev,d).const_array(mfi);
+            }
 
             amrex::ParallelFor(bx, [=] (int i, int j, int k) noexcept
             {
-              // Skip cells covered by fine level
-              if (msk_arr(i,j,k) != 0) return;
-
-              // Check if any neighbor is covered by fine (= at C-F interface)
+              // A cell is at the C-F interface if any of its surrounding faces
+              // (lo or hi in any dimension) was flagged in cf_face_b_coarse
               bool is_at_interface = false;
-              amrex::IntVect iv{AMREX_D_DECL(i,j,k)};
-
+              int shift[] = {0,0,0};
               for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                  amrex::IntVect unit_dir = amrex::IntVect::TheDimensionVector(d);
-                  if (msk_arr(iv + unit_dir) == 1 || msk_arr(iv - unit_dir) == 1) {
+                  shift[d] = 1;
+                  // lo face = (i,j,k), hi face = (i+shift[0], j+shift[1], k+shift[2])
+                  if (bc_arr[d](i,j,k) != 0 ||
+                      bc_arr[d](i+shift[0], j+shift[1], k+shift[2]) != 0) {
                       is_at_interface = true;
                       break;
                   }
+                  shift[d] = 0;
               }
 
               if (is_at_interface)
@@ -168,60 +166,26 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
 
 void AmrDG::L2ProjInterp::interp_proj_mat()
 { 
-  int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
+  constexpr int num_overlap_cells = 1 << AMREX_SPACEDIM;
 
-  //custom interpolation data structures
-  amr_projmat_int.resize(num_overlap_cells,amrex::Vector<int >(AMREX_SPACEDIM));
-  
   //coarse->fine projection matrix
   P_cf.resize(num_overlap_cells);
   for (int i = 0; i < num_overlap_cells; ++i) {
       P_cf[i].resize(numme->basefunc->Np_s, numme->basefunc->Np_s);
       P_cf[i].setZero();
-  } 
-  
+  }
+
   //fine->coarse projection matrix
-  P_fc.resize((int)std::pow(2,AMREX_SPACEDIM));
+  P_fc.resize(num_overlap_cells);
   for (int i = 0; i < num_overlap_cells; ++i) {
       P_fc[i].resize(numme->basefunc->Np_s, numme->basefunc->Np_s);
       P_fc[i].setZero();
-  } 
+  }
 
   //mass matrix (if multiplied by jacobian we get fine mass matrix, coarse mass matrix)
-  //jacobian is simolified in formulation and only added when doing actual interpolation
+  //jacobian is simplified in formulation and only added when doing actual interpolation
   M.resize(numme->basefunc->Np_s,numme->basefunc->Np_s);
   M.setZero();
-
-  //K=[-1,1]->amr->Km=[-1,0] u Kp=[0,1]
-  //need all combinations of sub itnervalls that are obtained when refining. 
-  //for simplificy just store the sing, i.e +,-
-  amrex::Vector<int> Kpm_int = {-1,1}; //=={Km,Kp}
-  //NB: the product of the plus [0,1] minus [-1,0] intervalls defined in each 
-  //entry of amr_projmat_int[idx] define completely
-  //a finer cell. e.g amr_projmat_int[idx] = [-1,1,-1] ==> [-1,0]x[0,1]x[-1,0]
-
-  #if (AMREX_SPACEDIM == 1)
-  for(int i=0; i<2;++i){
-    amr_projmat_int[i][0]= Kpm_int[i];
-  }   
-  #elif (AMREX_SPACEDIM == 2)
-  for(int i=0; i<2;++i){
-    for(int j=0; j<2;++j){
-      amr_projmat_int[2*i+j][0]= Kpm_int[i];
-      amr_projmat_int[2*i+j][1]= Kpm_int[j];
-    }
-  }  
-  #elif (AMREX_SPACEDIM == 3)
-  for(int i=0; i<2;++i){
-    for(int j=0; j<2;++j){
-      for(int k=0; k<2;++k){
-        amr_projmat_int[2*2*i+2*j+k][0]= Kpm_int[i];
-        amr_projmat_int[2*2*i+2*j+k][1]= Kpm_int[j];
-        amr_projmat_int[2*2*i+2*j+k][2]= Kpm_int[k];
-      }
-    }
-  }  
-  #endif
 
   //Compute mass matrices
   for(int j=0; j<numme->basefunc->Np_s;++j){
@@ -238,14 +202,13 @@ void AmrDG::L2ProjInterp::interp_proj_mat()
   //Compute projection matrices for each sub-cell (indicated by idx)
   for(int l=0; l<std::pow(2,AMREX_SPACEDIM); ++l)
   { 
-    //Define coordinate mapping between coarse cell and fine cell. 
-    //depending on intervalls of fine cell in each dimension we need to shift differently
-    //xi_f = 0.5*xi_c +-0.5 ==> "-":[-1,1]->[-1,0]  ,  "+":[-1,1]->[0,1]
-    //since we store intervalls just as +1,-1 , we can directly use that value to get correct shift   
-    //Construct mass matrix (identical do DG mass matrix, just cast it to Eigen)     
-    amrex::Real shift[AMREX_SPACEDIM]={AMREX_D_DECL(0.5*amr_projmat_int[l][0],
-                                        0.5*amr_projmat_int[l][1],
-                                        0.5*amr_projmat_int[l][2])};
+    //Define coordinate mapping between coarse cell and fine cell.
+    //xi_f = 0.5*xi_c +-0.5 ==> bit=0: [-1,1]->[-1,0] (shift=-0.5), bit=1: [-1,1]->[0,1] (shift=+0.5)
+    amrex::Real shift[AMREX_SPACEDIM];
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        int bit = (l >> (AMREX_SPACEDIM - 1 - d)) & 1;
+        shift[d] = bit ? 0.5 : -0.5;
+    }
 
     for(int j=0; j<numme->basefunc->Np_s;++j){
       for(int m=0; m<numme->basefunc->Np_s;++m){
@@ -307,8 +270,6 @@ void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
 { 
   Array4<Real const> const& crsearr = crse.const_array();
   Array4<Real> const& finearr = fine.array();
-  Box bx_c = crse.box();
-  Box bx_c_ref = bx_c.refine(ratio);
 
   Box fb = fine.box()& fine_region;
   //fine.box(): returns the Box that represents the entire memory allocated for the FArrayBox named fine. 
@@ -442,99 +403,22 @@ void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> co
 AmrDG::L2ProjInterp::IndexMap AmrDG::L2ProjInterp::set_fine_coarse_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
 {
     //pass fine cell index and return overlapping coarse cell index
-    //and index locating fine cell w.r.t coarse one reference frame
+    //and sub-cell index locating fine cell w.r.t coarse cell
     IndexMap _map;
+    IntVect fine{AMREX_D_DECL(i, j, k)};
+    IntVect crse = amrex::coarsen(fine, ratio);
 
-    // --- Calculate Coarse Cell Indices ---
-#if (AMREX_SPACEDIM == 1)
-    int _i = amrex::coarsen(i,ratio[0]);
-    int _j = 0; // Not used in 1D
-    int _k = 0; // Not used in 1D
-#elif (AMREX_SPACEDIM == 2)
-    int _i = amrex::coarsen(i,ratio[0]);
-    int _j = amrex::coarsen(j,ratio[1]);
-    int _k = 0; // Not used in 2D
-#elif (AMREX_SPACEDIM == 3)
-    int _i = amrex::coarsen(i,ratio[0]);
-    int _j = amrex::coarsen(j,ratio[1]);
-    int _k = amrex::coarsen(k,ratio[2]);
-#endif
+    _map.i = crse[0];
+    _map.j = (AMREX_SPACEDIM > 1) ? crse[1] : 0;
+    _map.k = (AMREX_SPACEDIM > 2) ? crse[2] : 0;
 
-    // Populate coarse cell indices in _map
-    _map.i = _i;
-    _map.j = _j;
-    _map.k = _k;
-
-    // --- Determine Sub-Cell Relative Position (si, sj, sk) ---
-    // These values indicate if the fine cell is in the "lower" (-1) or "upper" (1) half
-    // of the coarse cell along each dimension.
-    // This logic assumes a refinement ratio of 2.
-    int si, sj, sk;
-
-#if (AMREX_SPACEDIM == 1)
-    // For 1D, if fine index 'i' is even, it's the lower half; if odd, it's the upper half.
-    // This assumes ratio[0] is 2.
-    if ((i - _i * ratio[0]) == 0) { // Equivalent to i % ratio[0] == 0 for fine_idx >= 0
-        si = -1;
-    } else { // (i - _i * ratio[0]) == 1
-        si = 1;
+    // Sub-cell index from bit pattern: bit_d = fine[d] - crse[d]*ratio[d] (0 or 1)
+    // idx = sum_d bit_d * 2^(D-1-d), matching amr_projmat_int layout
+    int idx = 0;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        int bit = fine[d] - crse[d] * ratio[d];
+        idx += bit * (1 << (AMREX_SPACEDIM - 1 - d));
     }
-
-#elif (AMREX_SPACEDIM == 2)
-    // For x-dimension
-    if ((i - _i * ratio[0]) == 0) {
-        si = -1;
-    } else {
-        si = 1;
-    }
-    // For y-dimension
-    if ((j - _j * ratio[1]) == 0) {
-        sj = -1;
-    } else {
-        sj = 1;
-    }
-
-#elif (AMREX_SPACEDIM == 3)
-    // For x-dimension
-    if ((i - _i * ratio[0]) == 0) {
-        si = -1;
-    } else {
-        si = 1;
-    }
-    // For y-dimension
-    if ((j - _j * ratio[1]) == 0) {
-        sj = -1;
-    } else {
-        sj = 1;
-    }
-    // For z-dimension
-    if ((k - _k * ratio[2]) == 0) {
-        sk = -1;
-    } else {
-        sk = 1;
-    }
-
-#endif
-
-    // --- Retrieve Fine Sub-Cell Index (idx) ---
-    int idx = -1; // Initialize to -1 to detect if a match is found
-    for(int _idx_loop = 0; _idx_loop < std::pow(2,AMREX_SPACEDIM); ++_idx_loop)
-    {
-#if (AMREX_SPACEDIM == 1)
-        if((si == amr_projmat_int[_idx_loop][0]))
-#elif (AMREX_SPACEDIM == 2)
-        if((si == amr_projmat_int[_idx_loop][0]) && (sj == amr_projmat_int[_idx_loop][1]))
-#elif (AMREX_SPACEDIM == 3)
-        if((si == amr_projmat_int[_idx_loop][0]) && (sj == amr_projmat_int[_idx_loop][1])
-           && (sk == amr_projmat_int[_idx_loop][2]))
-#endif
-        {
-            idx = _idx_loop;
-            break;
-        }
-    }
-
-    // Populate fine sub-cell index in _map
     _map.fidx = idx;
 
     return _map;
@@ -543,116 +427,23 @@ AmrDG::L2ProjInterp::IndexMap AmrDG::L2ProjInterp::set_fine_coarse_idx_map(int i
 amrex::Vector<AmrDG::L2ProjInterp::IndexMap> AmrDG::L2ProjInterp::set_coarse_fine_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
 {
   //pass coarse cell index and return all fine cells indices and their
-  //respective rf-element indices to lcoate them w.r.t coarse cell
+  //respective sub-cell indices to locate them w.r.t coarse cell
 
-  int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
+  constexpr int num_children = 1 << AMREX_SPACEDIM;
+  amrex::Vector<IndexMap> _map(num_children);
 
-  amrex::Vector<IndexMap> _map;
-  _map.resize(num_overlap_cells);
+  IntVect base{AMREX_D_DECL(i * ratio[0], j * ratio[1], k * ratio[2])};
 
-#if (AMREX_SPACEDIM == 1)
-  const int faci = ratio[0];
-  const int ii = i*faci;
-  
-  int i_f,j_f,k_f;
-  for (int iref = 0; iref < faci; ++iref){        
-    i_f=ii+iref;
-    j_f = 0;
-    k_f = 0;
-
-    int si = (i_f % faci == 0) ? -1 : 1;
-            
-    int idx;
-    for(int _idx=0; _idx<num_overlap_cells; ++_idx)
-    { 
-      if((si ==amr_projmat_int[_idx][0]))
-      {
-        idx=_idx;
-        break;
+  for (int idx = 0; idx < num_children; ++idx) {
+      IntVect fine = base;
+      for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+          fine[d] += (idx >> (AMREX_SPACEDIM - 1 - d)) & 1;
       }
-    }
-
-    _map[idx].i = i_f;
-    _map[idx].j = j_f;
-    _map[idx].k = k_f;
-    _map[idx].fidx = idx;
-
-  }
-#elif (AMREX_SPACEDIM == 2) 
-  const int faci = ratio[0];
-  const int facj = ratio[1];
-  
-  const int ii = i*faci;
-  const int jj = j*facj;
-  
-  int i_f,j_f,k_f; 
-  for (int jref = 0; jref < facj; ++jref){
-    for (int iref = 0; iref < faci; ++iref){   
-      i_f=ii+iref;
-      j_f=jj+jref;
-      k_f = 0;
-
-      int si = (i_f % faci == 0) ? -1 : 1;
-      int sj = (j_f % facj == 0) ? -1 : 1;
-              
-      int idx;
-      for(int _idx=0; _idx<num_overlap_cells; ++_idx)
-      { 
-        if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1]))
-        {
-          idx=_idx;
-          break;
-        }
-      }
-
-      _map[idx].i = i_f;
-      _map[idx].j = j_f;
-      _map[idx].k = k_f;
+      _map[idx].i = fine[0];
+      _map[idx].j = (AMREX_SPACEDIM > 1) ? fine[1] : 0;
+      _map[idx].k = (AMREX_SPACEDIM > 2) ? fine[2] : 0;
       _map[idx].fidx = idx;
-
-    }
   }
-#elif (AMREX_SPACEDIM == 3) 
-  const int faci = ratio[0];
-  const int facj = ratio[1];
-  const int fack = ratio[2];
-
-  const int ii = i*faci;
-  const int jj = j*facj;
-  const int kk = k*fack;
-  
-  int i_f,j_f,k_f;
-  for (int kref = 0; kref < fack; ++kref){
-    for (int jref = 0; jref < facj; ++jref){
-      for (int iref = 0; iref < faci; ++iref){        
-        i_f=ii+iref;
-        j_f=jj+jref;
-        k_f=kk+kref;
-
-        int si = (i_f % faci == 0) ? -1 : 1;
-        int sj = (j_f % facj == 0) ? -1 : 1;
-        int sk = (k_f % fack == 0) ? -1 : 1;
-                
-        int idx;
-        for(int _idx=0; _idx<num_overlap_cells; ++_idx)
-        { 
-          if((si ==amr_projmat_int[_idx][0]) && (sj ==amr_projmat_int[_idx][1]) 
-            && (sk ==amr_projmat_int[_idx][2]))
-          {
-            idx=_idx;
-            break;
-          }
-        }
-
-        _map[idx].i = i_f;
-        _map[idx].j = j_f;
-        _map[idx].k = k_f;
-        _map[idx].fidx = idx;
-
-      }
-    }
-  }
-#endif  
 
   return _map;
 }

@@ -60,6 +60,7 @@ public:
 };
 
 // Flat 3D-indexed storage: replaces Vector<Vector<Vector<T>>> with (i,j,k) access
+//e.g for <level<dimension<eqn component>>>
 template <typename T>
 class Array3D {
     amrex::Vector<T> vec_;
@@ -517,15 +518,6 @@ class Solver
 
         //Numerical flux approximation Fnum(x,t) integrated at coarse lvl — (lev,d,q)
         solver::Array3D<amrex::MultiFab> Fnum_int_c;
-
-        //Store at each level the mask to identify cells
-        //at coarse-fine interface (0 = uncovered, 1 = covered by finer level)
-        amrex::Vector<amrex::iMultiFab> coarse_fine_interface_mask;
-
-        //Valid-cell mask for each level: 1 = valid cell on this level, 0 = not.
-        //Ghost cells filled via FillBoundary (handles periodicity correctly).
-        //Used for periodic-aware fine-coarse interface detection in numflux.
-        amrex::Vector<amrex::iMultiFab> fine_level_valid_mask;
 
         //Precomputed C-F interface face data per level per dimension — (lev,d)
         //Face-centered iMultiFabs, 1 component, 0 ghost cells

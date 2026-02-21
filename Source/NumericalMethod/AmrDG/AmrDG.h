@@ -268,7 +268,7 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
         const Eigen::MatrixXd& get_flux_proj_mat(int d, int child_idx, int b) const ;
 
-        void reflux(amrex::MultiFab* U_crse, const amrex::MultiFab* correction_mf,
+        void reflux(amrex::MultiFab& U_crse, const amrex::MultiFab& correction_mf,
                     int lev, const amrex::Geometry& crse_geom) noexcept;
 
         Box CoarseBox (const Box& fine, int ratio);
@@ -295,8 +295,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         //pass coarse cell index and return all fine cells indices and their
         //respective rf-element indices to lcoate them w.r.t coarse cell
         amrex::Vector<IndexMap> set_coarse_fine_idx_map(int i, int j, int k, const amrex::IntVect& ratio);
-
-        amrex::Vector<amrex::Vector<int >> amr_projmat_int;
 
         amrex::Vector<Eigen::MatrixXd> P_cf;
 
@@ -594,26 +592,47 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
       bool do_regrid_dt  = (_mesh->dt_regrid > 0) && (t - t_last_regrid >= _mesh->dt_regrid - 1e-12);
 
       if(do_regrid_dtn || do_regrid_dt){
+        // Snapshot geometry before regrid
+        int old_finest = _mesh->get_finest_lev();
+        amrex::Vector<amrex::BoxArray> old_ba(old_finest + 1);
+        for (int l = 0; l <= old_finest; ++l) {
+          old_ba[l] = _mesh->get_BoxArray(l);
+        }
+
         _mesh->regrid(0, t);
         amrex::ParallelDescriptor::Barrier();
 
-        //clear old flux register
-        flux_reg.clear();
-
-        //construct new flux register on new grid
-        AMR_set_flux_registers();
-
-        //re-allocate FillPatch temporaries on new grid
-        fillpatch_mf.resize(_mesh->get_finest_lev()+1, Q);
-        for(int l=0; l<=_mesh->get_finest_lev(); ++l){
-          for(int q=0; q<Q; ++q){
-            fillpatch_mf(l,q).define(U_w(l,q).boxArray(), U_w(l,q).DistributionMap(),
-                                      basefunc->Np_s, _mesh->nghost);
+        // Check if geometry actually changed
+        bool grid_changed = (_mesh->get_finest_lev() != old_finest);
+        if (!grid_changed) {
+          for (int l = 0; l <= _mesh->get_finest_lev(); ++l) {
+            if (_mesh->get_BoxArray(l) != old_ba[l]) {
+              grid_changed = true;
+              break;
+            }
           }
         }
 
+        if (grid_changed) {
+          //clear old flux register
+          flux_reg.clear();
+
+          //construct new flux register on new grid
+          AMR_set_flux_registers();
+
+          //re-allocate FillPatch temporaries on new grid
+          fillpatch_mf.resize(_mesh->get_finest_lev()+1, Q);
+          for(int l=0; l<=_mesh->get_finest_lev(); ++l){
+            for(int q=0; q<Q; ++q){
+              fillpatch_mf(l,q).define(U_w(l,q).boxArray(), U_w(l,q).DistributionMap(),
+                                        basefunc->Np_s, _mesh->nghost);
+            }
+          }
+
+          n_regrids++;
+        }
+
         t_last_regrid = t;
-        n_regrids++;
       }
     }  
     

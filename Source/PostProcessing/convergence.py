@@ -11,9 +11,9 @@ def get_convergence(p):
 
     #t=0 Analytical IC vs Coarse->Fine projection IC and correctness of L2 norm computation
     #   IC Analytical
-    p_E = {2:[0.00042583108055586113,5.5360950076592396e-05,7.0072370781971762e-06]}
+    #p_E = {2:[0.00042583108055586113,5.5360950076592396e-05,7.0072370781971762e-06]}
     #   IC projection
-    p_E = {2:[0.0030529774696598099 ,0.00042516378132576201,5.5019955705014079e-05]}
+    #p_E = {2:[0.0030529774696598099 ,0.00042516378132576201,5.5019955705014079e-05]}
 
     #Note: Lose approximately 1 refinement level of accuracy (error-wise) by interpolating
     #but both mantain same order of convergence (slope-wise).
@@ -23,19 +23,48 @@ def get_convergence(p):
     # Multi level - static refinement
     #   Analytical IC
     #p_E = {2:[0.0065278464577034796,0.0011023970814282044, 6.959679923363609e-05, 7.6752757712181714e-06]}
-
+    """""
+    --- Convergence Analysis for p=2 ---
+    Theoretical Order (TOC): 3
+    Global Empirical Order:  3.3182
+    ---------------------------------------------
+    Step   | N      | Error        | Local Slope
+    ---------------------------------------------
+    0      | 8      | 6.5278e-03 | -         
+    1      | 16     | 1.1024e-03 | 2.5660
+    2      | 32     | 6.9597e-05 | 3.9855
+    3      | 64     | 7.6753e-06 | 3.1807
+    ---------------------------------------------
+    """""
     #   Projected IC 
     #p_E = {2:[0.0065161678304828134,0.0011138811390704361,6.9862275494816416e-05]}
 
     # Multi level - dynamic refinement (dt_regrid = 2.0; approx 5 regrids) amr_c[l] = 1.4
-    #p_E = {2:[0.0033186281845524477,0.00042112800767480382,6.4383288440806528e-05 ]}
+    #p_E = {2:[0.0033186281845524477,0.00042112800767480382,6.4383288440806528e-05]}
+    """""
+    --- Convergence Analysis for p=2 ---
+    Theoretical Order (TOC): 3
+    Global Empirical Order:  2.8439
+    ---------------------------------------------
+    Step   | N      | Error        | Local Slope
+    ---------------------------------------------
+    0      | 8      | 3.3186e-03 | -         
+    1      | 16     | 4.2113e-04 | 2.9783
+    2      | 32     | 6.4383e-05 | 2.7095
+    ---------------------------------------------
+    """""
+    # Multi level - dynamic refinement (dt_regrid = 0.5; max 20 regrids) amr_c[l] = 1.4
+    #   Analytical IC
+    p_E = {2:[0.001895451857975676, 0.00019565364631156943,3.3569356967903638e-05]}
+    #number regrids= 6,17,19
+    
 
     # Multi level - dynamic refinement (dt_regrid = 0.5; approx 20 regrids) amr_c[l] = 1.4
     #p_E = {2:[0.0017060809914467333 ,0.00016645002888053664,3.0195089070121167e-05]}
 
     # Multi level - dynamic refinement (every 1step) amr_c[l] = 1.4
-    #p_E = {2:[0.0018782008100473721,0.00018983031022766459,2.8531662628985067e-05]}
-                           
+    #p_E = {2:[0.0018782008100473721,0.00018983031022766459, 2.8340092855919392e-05,5.470970586343867e-06]}
+               
     # Multi level - dynamic refinement (every 1step) amr_c[l] = 1.4, NO REFLUX
     #p_E = {2:[0.0022590299144886073,0.00043389295945724159,9.9539998686174079e-05]}
 
@@ -49,7 +78,11 @@ def get_convergence(p):
     #    - Dynamic regridding: accumulation tradeoff between error reduction 
     #    from more frequent regrids and error increase from interpolation.
 
-
+    #AMR error shows correct AMR behaviour 
+    # E_fine<= E_AMR<= E_coarse
+    # with static fine grid the order of convergence is correct
+    # with dnymic regridding the order of convergence is  reduced but still close to theoretical, 
+    #and can be improved by less frequent regrids (at the cost of more interpolation error). 
 
 
     
