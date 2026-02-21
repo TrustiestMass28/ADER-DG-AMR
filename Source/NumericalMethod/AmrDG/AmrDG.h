@@ -96,6 +96,9 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     void AMR_average_fine_coarse();
 
+    void setLimiterSettings(const std::string& type, amrex::Real M,
+                            const amrex::Vector<amrex::Real>& C, int interval);
+
     void AMR_clear_level_data(int lev);
 
     void AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, 
@@ -180,7 +183,30 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     amrex::Real setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,
                       int q, int lev);
-    
+
+    template <typename EquationType>
+    void Limiter_w(const std::shared_ptr<ModelEquation<EquationType>>& model_pde, int lev);
+
+    template <typename EquationType>
+    void Limiter_linear_tvb(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                            int i, int j, int k,
+                            amrex::Vector<amrex::Array4<amrex::Real>>* uw,
+                            amrex::Vector<amrex::Array4<amrex::Real>>* um,
+                            amrex::Vector<amrex::Array4<amrex::Real>>* up,
+                            amrex::Vector<amrex::Array4<amrex::Real>>* vw,
+                            int lev);
+
+    void get_u_from_u_w(int c, int i, int j, int k,
+                        amrex::Vector<amrex::Array4<amrex::Real>>* uw,
+                        amrex::Vector<amrex::Array4<amrex::Real>>* u,
+                        const amrex::Vector<amrex::Real>& xi);
+
+    amrex::Real minmodB(amrex::Real a1, amrex::Real a2, amrex::Real a3,
+                        bool& troubled_flag, int l) const;
+
+    amrex::Real minmod(amrex::Real a1, amrex::Real a2, amrex::Real a3,
+                       bool& troubled_flag) const;
+
     template<int P>
     struct Legendre {
         std::array<amrex::Real, P+1> val;
@@ -571,8 +597,15 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     int kroneckerDelta(int a, int b) const;
 
-    amrex::Real refMat_phiphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j, 
+    amrex::Real refMat_phiphi(int j, const amrex::Vector<amrex::Vector<int>>& idx_map_j,
                               int i, const amrex::Vector<amrex::Vector<int>>& idx_map_i) const ;
+
+    // Limiter settings
+    std::string limiter_type = "";          // "" = disabled, "TVB" = TVB limiter
+    amrex::Real TVB_M = 0.0;               // TVB constant M
+    amrex::Vector<amrex::Real> AMR_TVB_C;   // per-level TVB coefficient
+    int t_limit = -1;                       // apply every t_limit timesteps (<= 0 = disabled)
+    amrex::Vector<int> lin_mode_idx;        // indices of linear basis functions (one per SPACEDIM)
 
     //L2 projection quadrature matrix
     Eigen::MatrixXd quadmat;
@@ -922,9 +955,13 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
-    
-    //limit solution
-    //if((t_limit>0) && (n%t_limit==0)){Limiter_w(finest_level);}
+
+    // Apply limiter if enabled
+    if (limiter_type.size() > 0 && t_limit > 0 && (n % t_limit == 0)) {
+      for (int l = _mesh->get_finest_lev(); l >= 0; --l) {
+        Limiter_w(model_pde, l);
+      }
+    }
 
     // Gather valid fine cell solutions U_w into valid coarse cells
     Solver<NumericalMethodType>::AMR_average_fine_coarse();   
@@ -1085,6 +1122,8 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
   {
     AMR_flux_correction();
   }
+
+
 }
 
 template <typename EquationType>
@@ -1568,6 +1607,214 @@ void AmrDG::L2Norm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& mo
   #endif 
   
   LpNorm_DG_AMR(model_pde,2, GLquadptsL2norm,2*(quadrule->qMp_1d));
+}
+
+template <typename EquationType>
+void AmrDG::Limiter_w(const std::shared_ptr<ModelEquation<EquationType>>& model_pde, int lev)
+{
+  auto _mesh = mesh.lock();
+
+  Print() <<"AmrDG::Limiter_w |lev="<<lev<<"\n";
+
+  amrex::Vector<amrex::MultiFab> V_w(Q);
+  amrex::Vector<amrex::MultiFab> tmp_U_p(Q);
+  amrex::Vector<amrex::MultiFab> tmp_U_m(Q);
+
+  for(int q=0 ; q<Q; ++q){
+    if(limiter_type == "TVB")
+    {
+      V_w[q].define(U_w(lev,q).boxArray(), U_w(lev,q).DistributionMap(), AMREX_SPACEDIM, _mesh->nghost);
+      V_w[q].setVal(0.0);
+
+      tmp_U_p[q].define(U_w(lev,q).boxArray(), U_w(lev,q).DistributionMap(), quadrule->qMp_s_bd, _mesh->nghost);
+      tmp_U_p[q].setVal(0.0);
+
+      tmp_U_m[q].define(U_w(lev,q).boxArray(), U_w(lev,q).DistributionMap(), quadrule->qMp_s_bd, _mesh->nghost);
+      tmp_U_m[q].setVal(0.0);
+    }
+    else
+    {
+      V_w[q].define(U_w(lev,q).boxArray(), U_w(lev,q).DistributionMap(), Np_s, _mesh->nghost);
+      V_w[q].setVal(0.0);
+    }
+  }
+
+  amrex::Vector<amrex::MultiFab *> state_uw(Q);
+  amrex::Vector<amrex::MultiFab *> state_vw(Q);
+  amrex::Vector<amrex::MultiFab *> state_u(Q);
+  amrex::Vector<amrex::MultiFab *> state_tmp_um(Q);
+  amrex::Vector<amrex::MultiFab *> state_tmp_up(Q);
+
+  for(int q=0; q<Q; ++q){
+    state_tmp_um[q]=&(tmp_U_m[q]);
+    state_tmp_up[q]=&(tmp_U_p[q]);
+    state_uw[q]=&(U_w(lev,q));
+    state_vw[q]=&(V_w[q]);
+    state_u[q]=&(U(lev,q));
+  }
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel
+#endif
+  {
+    amrex::Vector<amrex::Array4<amrex::Real>> tmp_um(Q);
+    amrex::Vector<amrex::Array4<amrex::Real>> tmp_up(Q);
+    amrex::Vector<amrex::Array4<amrex::Real>> uw(Q);
+    amrex::Vector<amrex::Array4<amrex::Real>> vw(Q);
+    amrex::Vector<amrex::Array4<amrex::Real>> u(Q);
+
+    #ifdef AMREX_USE_OMP
+    for (MFIter mfi(*(state_uw[0]),MFItInfo().SetDynamic(true)); mfi.isValid(); ++mfi)
+    #else
+    for (MFIter mfi(*(state_uw[0]),true); mfi.isValid(); ++mfi)
+    #endif
+    {
+      const amrex::Box& bx = mfi.tilebox();
+
+      for(int q=0 ; q<Q; ++q){
+        tmp_um[q] = state_tmp_um[q]->array(mfi);
+        tmp_up[q] = state_tmp_up[q]->array(mfi);
+        uw[q] = state_uw[q]->array(mfi);
+        vw[q] = state_vw[q]->array(mfi);
+        u[q]  = state_u[q]->array(mfi);
+      }
+
+      amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
+      {
+        if(limiter_type == "TVB")
+        {
+          Limiter_linear_tvb(model_pde, i, j, k, &uw, &tmp_um, &tmp_up, &vw, lev);
+        }
+
+        // Rebuild derived (non-independent) solution components after limiting.
+        // The TVB limiter only modifies modes of the Q_unique independent
+        // components (e.g. rho, rho*u1, rho*u2, rho*e). Components q >= Q_unique
+        // are algebraically derived from these (e.g. angular momentum
+        // L3 = x1*rho*u2 - x2*rho*u1 in the Keplerian disc case).
+        // After the independent modes have been limited, the derived components
+        // become inconsistent and must be recomputed:
+        //   1. Evaluate limited independent quantities at quadrature points
+        //   2. Recompute derived quantities pointwise from the limited values
+        //   3. L2-project the recomputed pointwise values back to modes
+        // For standard Euler (Q_unique == Q) this block is skipped entirely.
+        if(Q_unique != Q){
+          int M = quadrule->qMp_s;
+          // Step 1+2: evaluate limited solution at quad points and recompute
+          // derived quantities pointwise
+          for(int m = 0; m<M ; ++m){
+            get_u_from_u_w(m, i, j, k, &uw, &u, quadrule->xi_ref_quad_s[m]);
+
+            for(int q=Q_unique; q<Q; ++q){
+              model_pde->pde_derived_qty(lev,q,m,i,j,k,&u,quadrule->xi_ref_quad_s[m]);
+            }
+          }
+
+          // Step 3: L2-project recomputed pointwise values back to modal
+          // representation for the derived components
+          for(int q=Q_unique; q<Q; ++q){
+            for(int n = 0; n<Np_s ; ++n){
+              amrex::Real sum = 0.0;
+              for(int m=0; m<quadrule->qMp_s; ++m)
+              {
+                sum+= (u[q])(i,j,k,m)*quadmat(n,m);
+              }
+              (uw[q])(i,j,k,n) = (sum/(refMat_phiphi(n,basis_idx_s,n,basis_idx_s)));
+            }
+          }
+        }
+      });
+    }
+  }
+
+  //sync internal ghost cells
+  for(int q=0; q<Q; ++q){
+    U_w(lev,q).FillBoundary(_mesh->get_Geom(lev).periodicity());
+  }
+}
+
+template <typename EquationType>
+void AmrDG::Limiter_linear_tvb(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
+                              int i, int j, int k,
+                              amrex::Vector<amrex::Array4<amrex::Real>>* uw,
+                              amrex::Vector<amrex::Array4<amrex::Real>>* um,
+                              amrex::Vector<amrex::Array4<amrex::Real>>* up,
+                              amrex::Vector<amrex::Array4<amrex::Real>>* vw,
+                              int lev)
+{
+  amrex::Vector<amrex::Vector<amrex::Real>> res_limit(AMREX_SPACEDIM,
+                                              amrex::Vector<amrex::Real>(Q_unique, 0.0));
+
+  amrex::Vector<amrex::Vector<amrex::Real>> L_EV;
+  amrex::Vector<amrex::Vector<amrex::Real>> R_EV;
+
+  amrex::Vector<int> troubled_flag(Q_unique,0);
+
+  for(int lin_idx=0; lin_idx<AMREX_SPACEDIM; ++lin_idx){
+    int s = lin_mode_idx[lin_idx];
+    int shift[] = {0,0,0};
+    int _d = 0;
+
+    for(int d=0; d<AMREX_SPACEDIM; ++d)
+    {
+      if(basis_idx_s[s][d] == 1)
+      {
+        shift[d] = 1;
+        _d = d;
+        break;
+      }
+    }
+
+    amrex::Real Dm_u_avg;
+    amrex::Real Dp_u_avg;
+    amrex::Real D_u;
+
+    L_EV = model_pde->pde_EV_Lmatrix(_d,0,i,j,k,uw);
+
+    for(int q=0; q<Q_unique; ++q){
+
+      Dm_u_avg = 0.0;
+      Dp_u_avg = 0.0;
+      D_u = 0.0;
+
+      for(int _q=0; _q<Q_unique; ++_q)
+      {
+        Dm_u_avg += 0.5*L_EV[q][_q]*(((*uw)[_q])(i,j,k,0)-
+                                          ((*uw)[_q])(i-shift[0],j-shift[1],k-shift[2],0));
+
+        Dp_u_avg += 0.5*L_EV[q][_q]*(((*uw)[_q])(i+shift[0],j+shift[1],k+shift[2],0)
+                                          -((*uw)[_q])(i,j,k,0));
+
+        D_u +=L_EV[q][_q]*((*uw)[_q])(i,j,k,s);
+      }
+      bool tmp_flag =false;
+
+      (*vw)[q](i,j,k,lin_idx)  = minmodB(D_u,Dm_u_avg,Dp_u_avg, tmp_flag, lev);
+
+      troubled_flag[q] = (troubled_flag[q] || tmp_flag);
+    }
+
+    R_EV = model_pde->pde_EV_Rmatrix(_d,0,i,j,k,uw);
+    for (int q = 0; q < Q_unique; ++q){
+      amrex::Real sum=0.0;
+      for (int _q = 0; _q < Q_unique; ++_q){
+        sum+=R_EV[q][_q]*((*vw)[_q])(i,j,k,lin_idx);
+      }
+      res_limit[lin_idx][q]=sum;
+    }
+  }
+
+  for (int q = 0; q < Q_unique; ++q){
+    if(troubled_flag[q]){
+      for(int n=1; n<Np_s; ++n){
+        (*uw)[q](i,j,k,n) = 0.0;
+      }
+
+      for(int lin_idx=0; lin_idx<AMREX_SPACEDIM; ++lin_idx){
+        int s = lin_mode_idx[lin_idx];
+        (*uw)[q](i,j,k,s)= res_limit[lin_idx][q];
+      }
+    }
+  }
 }
 
 #endif

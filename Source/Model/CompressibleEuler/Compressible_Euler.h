@@ -82,7 +82,20 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
                                  const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
 
     void set_pde_numeric_limits();
-    
+
+    //R,L matrices for limiting (non-const Array4 overload)
+    virtual amrex::Vector<amrex::Vector<amrex::Real>>
+    pde_EV_Rmatrix(int d, int m, int i, int j, int k,
+                  amrex::Vector<amrex::Array4<amrex::Real>>* u) const override;
+
+    virtual amrex::Vector<amrex::Vector<amrex::Real>>
+    pde_EV_Lmatrix(int d, int m, int i, int j, int k,
+                  amrex::Vector<amrex::Array4<amrex::Real>>* u) const override;
+
+    virtual void pde_derived_qty(int lev, int q, int m, int i, int j, int k,
+                              amrex::Vector<amrex::Array4<amrex::Real>>* u,
+                              amrex::Vector<amrex::Real> xi) override;
+
   private:
 
       //Flag to indicate if angular momentum is on/off

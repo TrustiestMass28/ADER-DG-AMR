@@ -116,56 +116,18 @@ class ModelEquation
   //Flag to indicate if source term is considered
   bool flag_source_term;    
 
-    /*
-    void setOfstream(std::shared_ptr<std::ofstream> _ofs) {
-      ofs = _ofs;
-    }
-                                                            
+    //R,L matrices for limiting (non-const Array4 overload)
+    virtual amrex::Vector<amrex::Vector<amrex::Real>>
+    pde_EV_Rmatrix(int d, int m, int i, int j, int k,
+                  amrex::Vector<amrex::Array4<amrex::Real>>* u) const = 0;
 
-    virtual void pde_derived_qty(int lev, int q, int m, int i, int j, int k, 
+    virtual amrex::Vector<amrex::Vector<amrex::Real>>
+    pde_EV_Lmatrix(int d, int m, int i, int j, int k,
+                  amrex::Vector<amrex::Array4<amrex::Real>>* u) const = 0;
+
+    virtual void pde_derived_qty(int lev, int q, int m, int i, int j, int k,
                               amrex::Vector<amrex::Array4<amrex::Real>>* u,
-                              amrex::Vector<amrex::Real> xi) = 0; 
-                                  
-    virtual void pde_BC(int lev, int dim,int side, int q,  int quad_pt_idx,
-                        const amrex::IntVect& iv, const int dcomp, const int ncomp,
-                        amrex::Vector<amrex::Real>* Ubc, 
-                        amrex::Vector<amrex::Real>* Ubc_valid) const = 0;
-                             
-    virtual amrex::Real pde_BC_gDirichlet(int d, int side, int q)  const = 0;
-    
-    virtual amrex::Real pde_BC_gNeumann(int d, int side, int q)  const = 0;
-
-    //R,L matrices for cell tagging                      
-    virtual amrex::Vector<amrex::Vector<amrex::Real>> 
-    pde_EV_Rmatrix(int d,int m, int i, int j, int k, 
-                  amrex::Vector<amrex::Array4<const amrex::Real>>* u) const = 0;
-
-    virtual amrex::Vector<amrex::Vector<amrex::Real>> 
-    pde_EV_Lmatrix(int d,int m, int i, int j, int k, 
-                  amrex::Vector<amrex::Array4<const amrex::Real>>* u) const = 0;
-                  
-    //R,L matrices for limiting                                 
-    virtual amrex::Vector<amrex::Vector<amrex::Real>> 
-    pde_EV_Rmatrix(int d,int m, int i, int j, int k, 
-                  amrex::Vector<amrex::Array4<amrex::Real>>* u) const = 0;
-                                                                               
-    virtual amrex::Vector<amrex::Vector<amrex::Real>> 
-    pde_EV_Lmatrix(int d,int m, int i, int j, int k, 
-                  amrex::Vector<amrex::Array4<amrex::Real>>* u) const = 0;
-                                                                                  
-    virtual amrex::Real get_DU_from_U_w(int d, int q, int i, int j, int k,
-                                         amrex::Vector<amrex::Array4<const amrex::Real>>* uw,
-                                         amrex::Vector<amrex::Real> xi) const = 0;
-                                        
-    virtual amrex::Real get_D2U_from_U_w(int d1, int d2, int q, int i, int j, int k,
-                                        amrex::Vector<amrex::Array4<const amrex::Real>>* uw,
-                                        amrex::Vector<amrex::Real> xi) const = 0;
-    
-    virtual amrex::Real pde_conservation(int lev,int d, int q,int i,int j,int k,
-                                        amrex::Vector<amrex::Array4<const amrex::Real>>* uw,
-                                        amrex::Vector<amrex::Array4<amrex::Real>>* u) const = 0;
-  
-     */
+                              amrex::Vector<amrex::Real> xi) = 0;
   protected:
 
     amrex::Real PDE_NUMERIC_LIMIT;

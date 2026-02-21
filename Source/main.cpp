@@ -23,11 +23,16 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 2; //polynomial degree
+      int p  = 1; //polynomial degree
       amrex::Real T = 10.0;
       amrex::Real c_dt = 0.9; //safety factor for CFL condition
 
       sim.setNumericalSettings(p,T,c_dt);
+
+      //LIMITER (set type="" or interval<=0 to disable)
+      std::string limiter_type = "";  // "TVB" to enable
+      amrex::Real TVB_M = 0.0;
+      int t_limit = -1;               // apply every t_limit timesteps
 
       //VALIDATION MODE
       //Set to true for convergence tests: uses analytical IC at all levels
@@ -59,6 +64,9 @@ int main(int argc, char* argv[])
         if(l==0){amr_c[l] = 1.4;}
         else{amr_c[l] = 1.0;}
       }
+
+      amrex::Vector<amrex::Real> amr_tvb_c(max_level > 0 ? max_level : 1, 1.0);
+      sim.setLimiterSettings(limiter_type, TVB_M, amr_tvb_c, t_limit);
 
       //BOUNDARY CONDITION
       int Q = sim.getQ();
@@ -111,11 +119,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 16;
+            n_cell_x = 32;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 16;
+            n_cell_y = 32;
 
 
             L_z_lo   = 0.0;

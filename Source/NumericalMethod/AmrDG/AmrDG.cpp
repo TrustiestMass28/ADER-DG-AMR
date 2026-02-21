@@ -51,6 +51,14 @@ void AmrDG::settings(int _p, amrex::Real _T, amrex::Real _c_dt) {
   c_dt = _c_dt;
 }
 
+void AmrDG::setLimiterSettings(const std::string& type, amrex::Real M,
+                               const amrex::Vector<amrex::Real>& C, int interval) {
+  limiter_type = type;
+  TVB_M = M;
+  AMR_TVB_C = C;
+  t_limit = interval;
+}
+
 void AmrDG::AMR_advanced_settings()
 {
   auto _mesh = mesh.lock();
@@ -174,6 +182,19 @@ void AmrDG::init()
       default: amrex::Abort("Unsupported polynomial order p");
   }
   #undef INIT_BASIS_CASE
+
+  // Find indices of linear basis functions (degree=1 in exactly one dimension, 0 in others)
+  lin_mode_idx.resize(AMREX_SPACEDIM);
+  for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+    for (int n = 0; n < Np_s; ++n) {
+      bool is_linear_d = (basis_idx_s[n][d] == 1);
+      bool others_zero = true;
+      for (int dd = 0; dd < AMREX_SPACEDIM; ++dd) {
+        if (dd != d && basis_idx_s[n][dd] != 0) { others_zero = false; break; }
+      }
+      if (is_linear_d && others_zero) { lin_mode_idx[d] = n; break; }
+    }
+  }
 
   //Set-up quadrature rule via compile-time dispatch
   #define INIT_QUAD_CASE(PP) \

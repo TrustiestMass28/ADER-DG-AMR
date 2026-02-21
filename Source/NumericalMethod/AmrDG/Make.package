@@ -10,6 +10,5 @@ CEXE_sources += AmrDG_TagCellRef.cpp
 CEXE_sources += AmrDG_Level.cpp
 CEXE_sources += AmrDG_Interpolater.cpp
 
-# Commented out for now
-#CEXE_sources += AmrDG_Limiter.cpp
+CEXE_sources += AmrDG_Limiter.cpp
 #CEXE_sources += AmrDG_Utils.cpp
