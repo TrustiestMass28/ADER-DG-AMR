@@ -126,13 +126,163 @@ amrex::Real Compressible_Euler::pde_BC_gNeumann(int d, int side, int q) const
   return g;
 }
 
-amrex::Real Compressible_Euler::smooth_discontinuity(amrex::Real xi, amrex::Real a, 
+amrex::Real Compressible_Euler::smooth_discontinuity(amrex::Real xi, amrex::Real a,
                                                     amrex::Real b, amrex::Real s) const
 {
-amrex::Real d; 
+amrex::Real d;
 d=a+0.5*(1.0+std::tanh(s*xi))*(b-a);
 
 return d;
+}
+
+amrex::Vector<amrex::Vector<amrex::Real>>
+Compressible_Euler::pde_EV_Rmatrix(int d, int m, int i, int j, int k,
+                      amrex::Vector<amrex::Array4<amrex::Real>>* u) const
+{
+  amrex::Real c = Soundspeed(u, i,j,k,m);
+  amrex::Vector<amrex::Vector<amrex::Real>> R_EV;
+  R_EV.resize(Q_model_unique,amrex::Vector<amrex::Real>(Q_model_unique));
+
+  #if (AMREX_SPACEDIM == 2)
+  amrex::Real u1 =((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+  amrex::Real u2 =((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+  amrex::Real ek  =0.5*(std::pow(u1,2)+std::pow(u2,2));
+  amrex::Real h  =(std::pow(c,2)/(gamma_adiab-1.0))+ek;
+
+  if(d==0){
+    R_EV =  {
+              {1.0,1.0,1.0,0.0},
+              {u1-c,u1,u1+c,0.0},
+              {u2,u2,u2,-1.0},
+              {h-c*u1,ek,h+c*u1,-u2}
+            };
+  }
+  else if(d==1){
+    R_EV =  {
+              {1.0,1.0,1.0,0.0},
+              {u1,u1,u1,1.0},
+              {u2-c,u2,u2+c,0.0},
+              {h-c*u2,ek,h+c*u2,u1}
+            };
+  }
+  #elif (AMREX_SPACEDIM == 3)
+  amrex::Real u1 =((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+  amrex::Real u2 =((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+  amrex::Real u3 =((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+  amrex::Real ek  =0.5*(std::pow(u1,2)+std::pow(u2,2)+std::pow(u3,2));
+  amrex::Real h  =(std::pow(c,2)/(gamma_adiab-1.0))+ek;
+
+  if(d==0){
+    R_EV =  {
+              {1.0,1.0,1.0,0.0,0.0},
+              {u1-c,u1,u1+c,0.0,0.0},
+              {u2,u2,u2,-1.0,0.0},
+              {u3,u3,u3,0.0,1.0},
+              {h-c*u1,ek,h+c*u1,-u2,u3}
+            };
+  }
+  else if(d==1){
+    R_EV =  {
+              {1.0,1.0,1.0,0.0,0.0},
+              {u1,u1,u1,1.0,0.0},
+              {u2-c,u2,u2+c,0.0,0.0},
+              {u3,u3,u3,0.0,-1.0},
+              {h-c*u2,ek,h+c*u2,u1,-u3}
+            };
+  }
+  else if(d==2){
+    R_EV =  {
+              {1.0,1.0,1.0,0.0,0.0},
+              {u1,u1,u1,-1.0,0.0},
+              {u2,u2,u2,0.0,1.0},
+              {u3-c,u3,u3+c,0.0,0.0},
+              {h-c*u3,ek,h+c*u3,-u1,u2}
+            };
+  }
+  #endif
+
+  return R_EV;
+}
+
+amrex::Vector<amrex::Vector<amrex::Real>>
+Compressible_Euler::pde_EV_Lmatrix(int d, int m, int i, int j, int k,
+                                  amrex::Vector<amrex::Array4<amrex::Real>>* u) const
+{
+  amrex::Real c = Soundspeed(u, i,j,k,m);
+  amrex::Vector<amrex::Vector<amrex::Real>> L_EV;
+  L_EV.resize(Q_model_unique,amrex::Vector<amrex::Real>(Q_model_unique));
+  #if (AMREX_SPACEDIM == 2)
+    amrex::Real u1 =((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+    amrex::Real u2 =((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+    amrex::Real ek  =0.5*(std::pow(u1,2)+std::pow(u2,2));
+    amrex::Real beta = 1.0/(2.0*std::pow(c,2));
+    amrex::Real gamma = gamma_adiab-1.0;
+    amrex::Real phi = gamma*ek;
+
+    if(d==0){
+      L_EV =  {
+                {beta*(phi+c*u1),-beta*(gamma*u1+c),-beta*gamma*u2,beta*gamma},
+                {1.0-2.0*beta*phi,2.0*beta*gamma*u1,2.0*beta*gamma*u2,-2.0*beta*gamma},
+                {beta*(phi-c*u1),-beta*(gamma*u1-c),-beta*(gamma*u2),beta*gamma},
+                {u2,0.0,-1.0,0.0}
+              };
+    }
+    else if(d==1){
+      L_EV =  {
+                {beta*(phi+c*u2),-beta*gamma*u1,-beta*(gamma*u2+c),beta*gamma},
+                {1.0-2.0*beta*phi,2.0*beta*gamma*u1,2.0*beta*gamma*u2,-2.0*beta*gamma},
+                {beta*(phi-c*u2),-beta*(gamma*u1),-beta*(gamma*u2-c),beta*gamma},
+                {-u1,1.0,0.0,0.0}
+              };
+    }
+  #elif (AMREX_SPACEDIM == 3)
+    amrex::Real u1 =((*u)[1])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+    amrex::Real u2 =((*u)[2])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+    amrex::Real u3 =((*u)[3])(i,j,k,m)/((*u)[0])(i,j,k,m) ;
+    amrex::Real ek  =0.5*(std::pow(u1,2)+std::pow(u2,2)+std::pow(u3,2));
+    amrex::Real beta = 1.0/(2.0*std::pow(c,2));
+    amrex::Real gamma = gamma_adiab-1.0;
+    amrex::Real phi = gamma*ek;
+
+    if(d==0){
+      L_EV =  {
+                {beta*(phi+c*u1),-beta*(gamma*u1+c),-beta*gamma*u2,-beta*gamma*u3,beta*gamma},
+                {1.0-2.0*beta*phi,2.0*beta*gamma*u1,2.0*beta*gamma*u2,2.0*beta*gamma*u3,-2.0*beta*gamma},
+                {beta*(phi-c*u1),-beta*(gamma*u1-c),-beta*(gamma*u2),-beta*gamma*u3,beta*gamma},
+                {u2,0.0,-1.0,0.0,0.0},
+                {-u3,0.0,0.0,1.0,0.0}
+              };
+    }
+    else if(d==1){
+      L_EV =  {
+                {beta*(phi+c*u2),-beta*gamma*u1,-beta*(gamma*u2+c),-beta*gamma*u3,beta*gamma},
+                {1.0-2.0*beta*phi,2.0*beta*gamma*u1,2.0*beta*gamma*u2,2.0*beta*gamma*u3,-2.0*beta*gamma},
+                {beta*(phi-c*u2),-beta*(gamma*u1),-beta*(gamma*u2-c),-beta*gamma*u3,beta*gamma},
+                {-u1,1.0,0.0,0.0,0.0},
+                {u3,0.0,0.0,-1.0,0.0}
+              };
+    }
+    else if(d==2){
+      L_EV =  {
+                {beta*(phi+c*u3),-beta*gamma*u1,-beta*gamma*u2,-beta*(gamma*u3+c),beta*gamma},
+                {1.0-2.0*beta*phi,2.0*beta*gamma*u1,2.0*beta*gamma*u2,2.0*beta*gamma*u3,-2.0*beta*gamma},
+                {beta*(phi-c*u3),-beta*(gamma*u1),-beta*gamma*u2,-beta*(gamma*u3-c),beta*gamma},
+                {u1,-1.0,0.0,0.0,0.0},
+                {-u2,0.0,1.0,0.0,0.0}
+              };
+    }
+  #endif
+
+  return L_EV;
+}
+
+void Compressible_Euler::pde_derived_qty(int lev, int q, int m, int i, int j, int k,
+                                      amrex::Vector<amrex::Array4<amrex::Real>>* u,
+                                      amrex::Vector<amrex::Real> xi)
+{
+  //Derived quantities (e.g. angular momentum) from limited unique quantities.
+  //Currently a stub: angular momentum case requires geometry info to be passed
+  //separately. For standard Euler (Q_unique == Q), this is never called.
 }
 
 /*

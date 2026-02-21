@@ -52,6 +52,9 @@ class Simulation
     //If false (default), levels > 0 use projection from coarser level
     void setValidationMode(bool use_analytical_ic);
 
+    void setLimiterSettings(const std::string& type, amrex::Real M,
+                            const amrex::Vector<amrex::Real>& C, int interval);
+
     int getQ();
 
   private:
@@ -175,6 +178,15 @@ template <typename NumericalMethodType,typename EquationType>
 void Simulation<NumericalMethodType,EquationType>::setValidationMode(bool use_analytical_ic)
 {
   solver->setValidationMode(use_analytical_ic);
+}
+
+template <typename NumericalMethodType,typename EquationType>
+void Simulation<NumericalMethodType,EquationType>::setLimiterSettings(const std::string& type,
+                                                                      amrex::Real M,
+                                                                      const amrex::Vector<amrex::Real>& C,
+                                                                      int interval)
+{
+  solver->setLimiterSettings(type, M, C, interval);
 }
 
 #endif // SIMULATION_H

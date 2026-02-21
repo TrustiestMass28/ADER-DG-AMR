@@ -102,6 +102,11 @@ class Solver
             flag_analytical_ic = use_analytical_ic;
         }
 
+        void setLimiterSettings(const std::string& type, amrex::Real M,
+                                const amrex::Vector<amrex::Real>& C, int interval) {
+            static_cast<NumericalMethodType*>(this)->setLimiterSettings(type, M, C, interval);
+        }
+
         //TODO: pass all tempaltes of other classes from which Solver might need data to init
         //like stuff from geometry for number of levels,...
         template <typename EquationType>
