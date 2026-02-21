@@ -23,16 +23,24 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 1; //polynomial degree
+      int p  = 2; //polynomial degree
       amrex::Real T = 10.0;
       amrex::Real c_dt = 0.9; //safety factor for CFL condition
-
-      sim.setNumericalSettings(p,T,c_dt);
 
       //LIMITER (set type="" or interval<=0 to disable)
       std::string limiter_type = "";  // "TVB" to enable
       amrex::Real TVB_M = 0.0;
       int t_limit = -1;               // apply every t_limit timesteps
+
+      //AMR
+      int max_level =1;             // number of levels = max_level + 1
+                                    // max_level=0 single level simulation
+                                    // max_level>0 multi  level simulation
+                                    // max_level==idx of maximum fine lvl
+
+      amrex::Vector<amrex::Real> amr_tvb_c(max_level + 1, 1.0);
+
+      sim.setNumericalSettings(p,T,c_dt,limiter_type,TVB_M,amr_tvb_c,t_limit);
 
       //VALIDATION MODE
       //Set to true for convergence tests: uses analytical IC at all levels
@@ -43,30 +51,21 @@ int main(int argc, char* argv[])
       //IO
       int dtn_outplt = -1;
       amrex::Real dt_outplt = -1;
-      
-      sim.setIO(dtn_outplt, dt_outplt);
 
-      //AMR
-      int max_level =1;             // number of levels = max_level + 1
-                                    // max_level=0 single level simulation
-                                    // max_level>0 multi  level simulation
-                                    // max_level==idx of maximum fine lvl
+      sim.setIO(dtn_outplt, dt_outplt);
 
       int dtn_regrid  = -1;          // try regrid every n timesteps
       int nghost = 1;                //number of ghost cells, dont change
       amrex::Real dt_regrid = 0.5;  //regrid every dt time, negative wont use it
-                              
+
       amrex::Vector<amrex::Real> amr_c(max_level);  //AMR refinement criteria based on value
       for(int l=0; l<max_level;++l)
       {
-        //code here if you want different coefficients 
+        //code here if you want different coefficients
         //for each level of refinement
         if(l==0){amr_c[l] = 1.4;}
         else{amr_c[l] = 1.0;}
       }
-
-      amrex::Vector<amrex::Real> amr_tvb_c(max_level > 0 ? max_level : 1, 1.0);
-      sim.setLimiterSettings(limiter_type, TVB_M, amr_tvb_c, t_limit);
 
       //BOUNDARY CONDITION
       int Q = sim.getQ();
@@ -119,11 +118,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){      
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 32;
+            n_cell_x = 16;
             
             L_y_lo   = 0.0;
             L_y_hi   = 10.0; 
-            n_cell_y = 32;
+            n_cell_y = 16;
 
 
             L_z_lo   = 0.0;

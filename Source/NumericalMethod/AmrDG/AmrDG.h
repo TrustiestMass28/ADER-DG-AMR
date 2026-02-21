@@ -60,7 +60,10 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
 
     ~AmrDG();
 
-    void settings(int _p, amrex::Real _T, amrex::Real _c_dt);
+    void settings(int _p, amrex::Real _T, amrex::Real _c_dt,
+                  const std::string& _limiter_type = "", amrex::Real _TVB_M = 0.0,
+                  const amrex::Vector<amrex::Real>& _AMR_TVB_C = {},
+                  int _t_limit = -1);
 
     void init();
 
@@ -95,9 +98,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void AMR_sync_initial_condition();
 
     void AMR_average_fine_coarse();
-
-    void setLimiterSettings(const std::string& type, amrex::Real M,
-                            const amrex::Vector<amrex::Real>& C, int interval);
 
     void AMR_clear_level_data(int lev);
 
@@ -191,8 +191,6 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void Limiter_linear_tvb(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                             int i, int j, int k,
                             amrex::Vector<amrex::Array4<amrex::Real>>* uw,
-                            amrex::Vector<amrex::Array4<amrex::Real>>* um,
-                            amrex::Vector<amrex::Array4<amrex::Real>>* up,
                             amrex::Vector<amrex::Array4<amrex::Real>>* vw,
                             int lev);
 
@@ -1616,21 +1614,19 @@ void AmrDG::Limiter_w(const std::shared_ptr<ModelEquation<EquationType>>& model_
 
   Print() <<"AmrDG::Limiter_w |lev="<<lev<<"\n";
 
+  //sync ghost cells so limiter stencil reads up-to-date neighbor data
+  //(after time_integration, valid cells are updated but ghost cells are stale)
+  for(int q=0; q<Q; ++q){
+    U_w(lev,q).FillBoundary(_mesh->get_Geom(lev).periodicity());
+  }
+
   amrex::Vector<amrex::MultiFab> V_w(Q);
-  amrex::Vector<amrex::MultiFab> tmp_U_p(Q);
-  amrex::Vector<amrex::MultiFab> tmp_U_m(Q);
 
   for(int q=0 ; q<Q; ++q){
     if(limiter_type == "TVB")
     {
       V_w[q].define(U_w(lev,q).boxArray(), U_w(lev,q).DistributionMap(), AMREX_SPACEDIM, _mesh->nghost);
       V_w[q].setVal(0.0);
-
-      tmp_U_p[q].define(U_w(lev,q).boxArray(), U_w(lev,q).DistributionMap(), quadrule->qMp_s_bd, _mesh->nghost);
-      tmp_U_p[q].setVal(0.0);
-
-      tmp_U_m[q].define(U_w(lev,q).boxArray(), U_w(lev,q).DistributionMap(), quadrule->qMp_s_bd, _mesh->nghost);
-      tmp_U_m[q].setVal(0.0);
     }
     else
     {
@@ -1642,12 +1638,8 @@ void AmrDG::Limiter_w(const std::shared_ptr<ModelEquation<EquationType>>& model_
   amrex::Vector<amrex::MultiFab *> state_uw(Q);
   amrex::Vector<amrex::MultiFab *> state_vw(Q);
   amrex::Vector<amrex::MultiFab *> state_u(Q);
-  amrex::Vector<amrex::MultiFab *> state_tmp_um(Q);
-  amrex::Vector<amrex::MultiFab *> state_tmp_up(Q);
 
   for(int q=0; q<Q; ++q){
-    state_tmp_um[q]=&(tmp_U_m[q]);
-    state_tmp_up[q]=&(tmp_U_p[q]);
     state_uw[q]=&(U_w(lev,q));
     state_vw[q]=&(V_w[q]);
     state_u[q]=&(U(lev,q));
@@ -1657,8 +1649,6 @@ void AmrDG::Limiter_w(const std::shared_ptr<ModelEquation<EquationType>>& model_
 #pragma omp parallel
 #endif
   {
-    amrex::Vector<amrex::Array4<amrex::Real>> tmp_um(Q);
-    amrex::Vector<amrex::Array4<amrex::Real>> tmp_up(Q);
     amrex::Vector<amrex::Array4<amrex::Real>> uw(Q);
     amrex::Vector<amrex::Array4<amrex::Real>> vw(Q);
     amrex::Vector<amrex::Array4<amrex::Real>> u(Q);
@@ -1672,8 +1662,6 @@ void AmrDG::Limiter_w(const std::shared_ptr<ModelEquation<EquationType>>& model_
       const amrex::Box& bx = mfi.tilebox();
 
       for(int q=0 ; q<Q; ++q){
-        tmp_um[q] = state_tmp_um[q]->array(mfi);
-        tmp_up[q] = state_tmp_up[q]->array(mfi);
         uw[q] = state_uw[q]->array(mfi);
         vw[q] = state_vw[q]->array(mfi);
         u[q]  = state_u[q]->array(mfi);
@@ -1683,7 +1671,7 @@ void AmrDG::Limiter_w(const std::shared_ptr<ModelEquation<EquationType>>& model_
       {
         if(limiter_type == "TVB")
         {
-          Limiter_linear_tvb(model_pde, i, j, k, &uw, &tmp_um, &tmp_up, &vw, lev);
+          Limiter_linear_tvb(model_pde, i, j, k, &uw, &vw, lev);
         }
 
         // Rebuild derived (non-independent) solution components after limiting.
@@ -1736,8 +1724,6 @@ template <typename EquationType>
 void AmrDG::Limiter_linear_tvb(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                               int i, int j, int k,
                               amrex::Vector<amrex::Array4<amrex::Real>>* uw,
-                              amrex::Vector<amrex::Array4<amrex::Real>>* um,
-                              amrex::Vector<amrex::Array4<amrex::Real>>* up,
                               amrex::Vector<amrex::Array4<amrex::Real>>* vw,
                               int lev)
 {

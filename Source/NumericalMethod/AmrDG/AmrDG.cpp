@@ -45,18 +45,17 @@ void AmrDG::DEBUG_print_MFab()
   }
 }
 
-void AmrDG::settings(int _p, amrex::Real _T, amrex::Real _c_dt) {
+void AmrDG::settings(int _p, amrex::Real _T, amrex::Real _c_dt,
+                     const std::string& _limiter_type, amrex::Real _TVB_M,
+                     const amrex::Vector<amrex::Real>& _AMR_TVB_C,
+                     int _t_limit) {
   p = _p;
   T = _T;
   c_dt = _c_dt;
-}
-
-void AmrDG::setLimiterSettings(const std::string& type, amrex::Real M,
-                               const amrex::Vector<amrex::Real>& C, int interval) {
-  limiter_type = type;
-  TVB_M = M;
-  AMR_TVB_C = C;
-  t_limit = interval;
+  limiter_type = _limiter_type;
+  TVB_M = _TVB_M;
+  AMR_TVB_C = _AMR_TVB_C;
+  t_limit = _t_limit;
 }
 
 void AmrDG::AMR_advanced_settings()

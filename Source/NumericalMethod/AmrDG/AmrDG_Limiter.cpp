@@ -74,7 +74,8 @@ amrex::Real AmrDG::minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3,
   }
   else
   {
-    troubled_flag = false;
+    //slopes disagree: cell is at an extremum, zero the slope
+    troubled_flag = true;
     return 0;
   }
 }
