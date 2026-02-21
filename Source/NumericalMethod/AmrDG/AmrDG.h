@@ -4,6 +4,7 @@
 #include <string>
 #include <limits>
 #include <numeric>
+#include <array>
 
 #ifdef AMREX_USE_OMP
 #include <omp.h>
@@ -180,55 +181,306 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     amrex::Real setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,
                       int q, int lev);
     
-    class BasisLegendre : public Basis
-    {
-      public:
-        BasisLegendre() = default;
+    template<int P>
+    struct Legendre {
+        std::array<amrex::Real, P+1> val;
+        std::array<amrex::Real, P+1> dval;
+        std::array<amrex::Real, P+1> ddval;
 
-        ~BasisLegendre() = default;
-
-        void init();
-        
-        void set_number_basis() override;
-
-        void set_idx_mapping_s() override;
-
-        void set_idx_mapping_st() override;
-
-        amrex::Real phi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map, 
-                            const amrex::Vector<amrex::Real>& x) const override;
-        
-        amrex::Real dphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
-                            const amrex::Vector<amrex::Real>& x, int d) const override;
-
-        amrex::Real ddphi_s(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
-          const amrex::Vector<amrex::Real>& x, int d1, int d2) const override;
-
-        amrex::Real phi_t(int tidx, amrex::Real tau) const override;
-
-        amrex::Real dtphi_t(int tidx, amrex::Real tau) const override;
-
-        amrex::Real phi_st(int idx, const amrex::Vector<amrex::Vector<int>>& idx_map,
-                            const amrex::Vector<amrex::Real>& x) const override;
-
-      private:
-        int factorial(int n) const;
-
-        amrex::Vector<int> basis_idx_linear; //used for limiting
+        explicit Legendre(amrex::Real x);
     };
 
-    class QuadratureGaussLegendre : public Quadrature
-    {
-      public:
-        QuadratureGaussLegendre() = default;
+    template<int P, int D>
+    struct MultiIndex {
+        static constexpr int compute_Np() {
+            long long result = 1;
+            for (int i = 0; i < D; ++i) {
+                result = result * (P + D - i) / (i + 1);
+            }
+            return static_cast<int>(result);
+        }
 
-        ~QuadratureGaussLegendre() = default;
+        static constexpr int Np = compute_Np();
 
-        void set_number_quadpoints() override; 
+        struct Entry { int idx[D]; };
 
+        static constexpr auto generate() {
+            std::array<Entry, Np> result{};
+            int ctr = 0;
+            if constexpr (D == 1) {
+                for (int ii = 0; ii <= P; ++ii) {
+                    result[ctr].idx[0] = ii;
+                    ctr++;
+                }
+            } else if constexpr (D == 2) {
+                for (int ii = 0; ii <= P; ++ii) {
+                    for (int jj = 0; jj <= P - ii; ++jj) {
+                        result[ctr].idx[0] = ii;
+                        result[ctr].idx[1] = jj;
+                        ctr++;
+                    }
+                }
+            } else if constexpr (D == 3) {
+                for (int ii = 0; ii <= P; ++ii) {
+                    for (int jj = 0; jj <= P - ii; ++jj) {
+                        for (int kk = 0; kk <= P - ii - jj; ++kk) {
+                            result[ctr].idx[0] = ii;
+                            result[ctr].idx[1] = jj;
+                            result[ctr].idx[2] = kk;
+                            ctr++;
+                        }
+                    }
+                }
+            } else if constexpr (D == 4) {
+                for (int ii = 0; ii <= P; ++ii) {
+                    for (int jj = 0; jj <= P - ii; ++jj) {
+                        for (int kk = 0; kk <= P - ii - jj; ++kk) {
+                            for (int tt = 0; tt <= P - ii - jj - kk; ++tt) {
+                                result[ctr].idx[0] = ii;
+                                result[ctr].idx[1] = jj;
+                                result[ctr].idx[2] = kk;
+                                result[ctr].idx[3] = tt;
+                                ctr++;
+                            }
+                        }
+                    }
+                }
+            }
+            return result;
+        }
+
+        static constexpr std::array<Entry, Np> table = generate();
+    };
+
+    template<int P>
+    struct BasisLegendre {
+        static constexpr int Np_s  = MultiIndex<P, AMREX_SPACEDIM>::Np;
+        static constexpr int Np_st = MultiIndex<P, AMREX_SPACEDIM + 1>::Np;
+        static constexpr int Np_t  = Np_st - Np_s;
+
+        static amrex::Real phi_s(int idx, const amrex::Vector<amrex::Real>& x);
+        static amrex::Real dphi_s(int idx, const amrex::Vector<amrex::Real>& x, int d);
+        static amrex::Real ddphi_s(int idx, const amrex::Vector<amrex::Real>& x, int d1, int d2);
+        static amrex::Real phi_t(int idx, amrex::Real tau);
+        static amrex::Real dtphi_t(int idx, amrex::Real tau);
+        static amrex::Real phi_st(int idx, const amrex::Vector<amrex::Real>& x);
+
+        static std::array<amrex::Real, Np_s> phi_s_all(const amrex::Vector<amrex::Real>& x);
+        static std::array<amrex::Real, Np_st> phi_st_all(const amrex::Vector<amrex::Real>& x);
+
+        static amrex::Vector<amrex::Vector<int>> get_basis_idx_s();
+        static amrex::Vector<amrex::Vector<int>> get_basis_idx_st();
+        static amrex::Vector<amrex::Vector<int>> get_basis_idx_t();
+    };
+
+    template<int P>
+    struct QuadratureGaussLegendre : public Quadrature {
+        static constexpr int N = P + 1;
+        using Table = std::array<std::array<double, N>, P+1>;
+
+    private:
+        static constexpr double cx_pi = 3.14159265358979323846;
+
+        static constexpr double cx_abs(double x) {
+            return x >= 0.0 ? x : -x;
+        }
+
+        static constexpr double cx_cos(double x) {
+            double result = 1.0;
+            double term = 1.0;
+            for (int n = 1; n <= 30; ++n) {
+                term *= -x * x / ((2*n - 1) * (2*n));
+                result += term;
+            }
+            return result;
+        }
+
+        // P_n(x) via Bonnet recurrence
+        static constexpr double cx_legendre(int n, double x) {
+            if (n == 0) return 1.0;
+            if (n == 1) return x;
+            double p0 = 1.0, p1 = x;
+            for (int k = 2; k <= n; ++k) {
+                double p2 = ((2*k - 1) * x * p1 - (k - 1) * p0) / k;
+                p0 = p1; p1 = p2;
+            }
+            return p1;
+        }
+
+        // P'_n(x) via identity P'_n = n*P_{n-1} + x*P'_{n-1}
+        static constexpr double cx_dlegendre(int n, double x) {
+            if (n == 0) return 0.0;
+            double p0 = 1.0, p1 = x;
+            double dp0 = 0.0, dp1 = 1.0;
+            for (int k = 2; k <= n; ++k) {
+                double p2 = ((2*k-1)*x*p1 - (k-1)*p0) / k;
+                double dp2 = k * p1 + x * dp1;
+                p0 = p1; p1 = p2;
+                dp0 = dp1; dp1 = dp2;
+            }
+            return dp1;
+        }
+
+        // P''_n(x) via identity P''_n = (n+1)*P'_{n-1} + x*P''_{n-1}
+        static constexpr double cx_ddlegendre(int n, double x) {
+            if (n <= 1) return 0.0;
+            double p0 = 1.0, p1 = x;
+            double dp0 = 0.0, dp1 = 1.0;
+            double ddp0 = 0.0, ddp1 = 0.0;
+            for (int k = 2; k <= n; ++k) {
+                double p2 = ((2*k-1)*x*p1 - (k-1)*p0) / k;
+                double dp2 = k * p1 + x * dp1;
+                double ddp2 = (k + 1) * dp1 + x * ddp1;
+                p0 = p1; p1 = p2;
+                dp0 = dp1; dp1 = dp2;
+                ddp0 = ddp1; ddp1 = ddp2;
+            }
+            return ddp1;
+        }
+
+        // i-th GL node via Newton-Raphson on P_N(x) = 0, i=1..N/2
+        static constexpr double cx_gl_node(int i) {
+            double theta = cx_pi * (i - 0.25) / (N + 0.5);
+            double x = cx_cos(theta);
+            for (int iter = 0; iter < 30; ++iter) {
+                double pval = cx_legendre(N, x);
+                double dpval = cx_dlegendre(N, x);
+                double dx = pval / dpval;
+                x -= dx;
+                if (cx_abs(dx) < 1e-16) break;
+            }
+            return x;
+        }
+
+        // All N GL nodes in paired ordering: [x1, -x1, x2, -x2, ..., 0]
+        static constexpr std::array<double, N> compute_nodes() {
+            std::array<double, N> result{};
+            int idx = 0;
+            for (int i = 1; i <= N/2; ++i) {
+                double x = cx_gl_node(i);
+                result[idx++] = x;
+                result[idx++] = -x;
+            }
+            if (N % 2 != 0) {
+                result[idx] = 0.0;
+            }
+            return result;
+        }
+
+        // GL weights: w_q = 2 / ((1 - x_q^2) * (P'_N(x_q))^2)
+        static constexpr std::array<double, N> compute_weights() {
+            std::array<double, N> result{};
+            auto nd = compute_nodes();
+            for (int q = 0; q < N; ++q) {
+                double x = nd[q];
+                double dp = cx_dlegendre(N, x);
+                result[q] = 2.0 / ((1.0 - x*x) * dp * dp);
+            }
+            return result;
+        }
+
+        // val[k][q] = P_k(nodes[q])
+        static constexpr Table compute_val_table() {
+            Table result{};
+            auto nd = compute_nodes();
+            for (int k = 0; k <= P; ++k)
+                for (int q = 0; q < N; ++q)
+                    result[k][q] = cx_legendre(k, nd[q]);
+            return result;
+        }
+
+        // dval[k][q] = P'_k(nodes[q])
+        static constexpr Table compute_dval_table() {
+            Table result{};
+            auto nd = compute_nodes();
+            for (int k = 0; k <= P; ++k)
+                for (int q = 0; q < N; ++q)
+                    result[k][q] = cx_dlegendre(k, nd[q]);
+            return result;
+        }
+
+        // ddval[k][q] = P''_k(nodes[q])
+        static constexpr Table compute_ddval_table() {
+            Table result{};
+            auto nd = compute_nodes();
+            for (int k = 0; k <= P; ++k)
+                for (int q = 0; q < N; ++q)
+                    result[k][q] = cx_ddlegendre(k, nd[q]);
+            return result;
+        }
+
+        // bd_val[k][side]: side 0 = x=-1, side 1 = x=+1
+        static constexpr std::array<std::array<double, 2>, P+1> compute_bd_val() {
+            std::array<std::array<double, 2>, P+1> result{};
+            for (int k = 0; k <= P; ++k) {
+                result[k][0] = cx_legendre(k, -1.0);
+                result[k][1] = cx_legendre(k,  1.0);
+            }
+            return result;
+        }
+
+        static constexpr std::array<std::array<double, 2>, P+1> compute_bd_dval() {
+            std::array<std::array<double, 2>, P+1> result{};
+            for (int k = 0; k <= P; ++k) {
+                result[k][0] = cx_dlegendre(k, -1.0);
+                result[k][1] = cx_dlegendre(k,  1.0);
+            }
+            return result;
+        }
+
+        // shifted_lo_val[k][q] = P_k(0.5*nodes[q] - 0.5)  (maps to [-1, 0])
+        static constexpr Table compute_shifted_lo_val() {
+            Table result{};
+            auto nd = compute_nodes();
+            for (int k = 0; k <= P; ++k)
+                for (int q = 0; q < N; ++q)
+                    result[k][q] = cx_legendre(k, 0.5 * nd[q] - 0.5);
+            return result;
+        }
+
+        // shifted_hi_val[k][q] = P_k(0.5*nodes[q] + 0.5)  (maps to [0, +1])
+        static constexpr Table compute_shifted_hi_val() {
+            Table result{};
+            auto nd = compute_nodes();
+            for (int k = 0; k <= P; ++k)
+                for (int q = 0; q < N; ++q)
+                    result[k][q] = cx_legendre(k, 0.5 * nd[q] + 0.5);
+            return result;
+        }
+
+    public:
+        static constexpr std::array<double, N> nodes = compute_nodes();
+        static constexpr std::array<double, N> weights = compute_weights();
+
+        static constexpr Table val   = compute_val_table();
+        static constexpr Table dval  = compute_dval_table();
+        static constexpr Table ddval = compute_ddval_table();
+
+        static constexpr std::array<std::array<double, 2>, P+1> bd_val  = compute_bd_val();
+        static constexpr std::array<std::array<double, 2>, P+1> bd_dval = compute_bd_dval();
+
+        static constexpr Table shifted_lo_val = compute_shifted_lo_val();
+        static constexpr Table shifted_hi_val = compute_shifted_hi_val();
+
+        // Tensor-product index decomposition:
+        // flat index m -> 1D node index for dimension d
+        // d=0 slowest varying, d=D_total-1 fastest
+        static constexpr int node_idx(int m, int d, int D_total) {
+            int divisor = 1;
+            for (int i = 0; i < D_total - 1 - d; ++i) divisor *= N;
+            return (m / divisor) % N;
+        }
+
+        // For boundary quadrature: maps actual dim a to position among free dims
+        // (excluding fixed dim d_fixed). Returns -1 for a == d_fixed.
+        static constexpr int bd_free_pos(int a, int d_fixed) {
+            if (a == d_fixed) return -1;
+            return (a < d_fixed) ? a : a - 1;
+        }
+
+        // --- Runtime methods (definitions in AmrDG_Quadrature.cpp) ---
+        void set_number_quadpoints() override;
         void set_quadpoints() override;
-
-        void NewtonRhapson(amrex::Real &x, int n); 
     };
 
     
@@ -278,8 +530,11 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
         void interp_proj_mat();
 
         void flux_proj_mat();
-        
-      private:      
+
+        template<int P> void _interp_proj_mat();
+        template<int P> void _flux_proj_mat();
+
+      private:
 
         struct IndexMap{
           int i;
@@ -348,6 +603,12 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     void get_H_from_H_w(int M, int N, amrex::MultiFab* _H,
                         amrex::MultiFab* _H_w,
                         const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
+
+    // Boundary-specific: evaluates space-time basis at boundary quad points
+    // d_fixed = fixed spatial dim, side = 0 (bdm, xi=-1) or 1 (bdp, xi=+1)
+    void get_H_from_H_w_bd(int M, int N, amrex::MultiFab* _H,
+                           amrex::MultiFab* _H_w,
+                           int d_fixed, int side);
 
     void update_U_w(int lev);
 
@@ -421,9 +682,32 @@ class AmrDG : public Solver<AmrDG>, public std::enable_shared_from_this<AmrDG>
     //TODO: mybe nested functions ptr dont need to be shared
     //      also mabye can use again CRTP and define them genrally inside Solver
 
-    std::shared_ptr<BasisLegendre> basefunc;  //TODO:maybe doe snot need to be shared
+    // Runtime basis data (populated from BasisLegendre<P> at init)
+    int Np_s;
+    int Np_st;
+    amrex::Vector<amrex::Vector<int>> basis_idx_s;
+    amrex::Vector<amrex::Vector<int>> basis_idx_st;
+    amrex::Vector<amrex::Vector<int>> basis_idx_t;
 
-    std::shared_ptr<QuadratureGaussLegendre> quadrule;  //TODO:maybe doe snot need to be shared
+    // Runtime dispatch helper for basis evaluation (non-hot paths)
+    amrex::Real phi_s(int idx, const amrex::Vector<amrex::Real>& x) const;
+
+    // Template implementations for dispatch
+    template<int P> void _get_U_from_U_w(int M, amrex::MultiFab* _U,
+                        amrex::MultiFab* _U_w,
+                        const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
+    template<int P> void _get_H_from_H_w(int M, amrex::MultiFab* _H,
+                        amrex::MultiFab* _H_w,
+                        const amrex::Vector<amrex::Vector<amrex::Real>>& xi);
+    template<int P> void _get_H_from_H_w_bd(int M, amrex::MultiFab* _H,
+                        amrex::MultiFab* _H_w,
+                        int d_fixed, int side);
+    template<int P> void _set_vandermat();
+    template<int P> void _set_ref_element_matrix();
+
+    static void NewtonRhapson(amrex::Real &x, int n);
+
+    std::shared_ptr<Quadrature> quadrule;
 
     std::shared_ptr<L2ProjInterp> amr_interpolator;
 
@@ -462,7 +746,7 @@ void AmrDG::set_initial_condition(const std::shared_ptr<ModelEquation<EquationTy
         uw[q] = state_uw[q]->array(mfi);
       }
 
-      amrex::ParallelFor(bx,basefunc->Np_s,[&] (int i, int j, int k, int n) noexcept
+      amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
       {
         for(int q=0; q<Q; ++q){
           uw[q](i,j,k,n) = set_initial_condition_U_w(model_pde,lev,q,n,i, j, k);
@@ -483,7 +767,7 @@ amrex::Real AmrDG::set_initial_condition_U_w(const std::shared_ptr<ModelEquation
     sum+= set_initial_condition_U(model_pde,lev,q,i,j,k,quadrule->xi_ref_quad_s[m])*quadmat(n,m);   
   }
   
-  return (sum/(refMat_phiphi(n,basefunc->basis_idx_s,n,basefunc->basis_idx_s)));  
+  return (sum/(refMat_phiphi(n,basis_idx_s,n,basis_idx_s)));
 }
 
 template <typename EquationType> 
@@ -553,7 +837,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   for(int l=0; l<=_mesh->get_finest_lev(); ++l){
     for(int q=0; q<Q; ++q){
       fillpatch_mf(l,q).define(U_w(l,q).boxArray(), U_w(l,q).DistributionMap(),
-                                basefunc->Np_s, _mesh->nghost);
+                                Np_s, _mesh->nghost);
     }
   }
 
@@ -625,7 +909,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
           for(int l=0; l<=_mesh->get_finest_lev(); ++l){
             for(int q=0; q<Q; ++q){
               fillpatch_mf(l,q).define(U_w(l,q).boxArray(), U_w(l,q).DistributionMap(),
-                                        basefunc->Np_s, _mesh->nghost);
+                                        Np_s, _mesh->nghost);
             }
           }
 
@@ -653,7 +937,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         fillpatch_mf(l,q).setVal(0.0);
       }
 
-      AMR_FillPatch(l, t, &fillpatch_mf(l,0), 0, basefunc->Np_s);
+      AMR_FillPatch(l, t, &fillpatch_mf(l,0), 0, Np_s);
 
       for(int q=0 ; q<Q; ++q){
         std::swap(U_w(l,q),fillpatch_mf(l,q));
@@ -744,7 +1028,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     int iter=0;
     while(iter<p)
     {
-      get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st, &H(l,0), &H_w(l,0),quadrule->xi_ref_quad_st);
+      get_H_from_H_w(quadrule->qMp_st,Np_st, &H(l,0), &H_w(l,0),quadrule->xi_ref_quad_st);
       if(model_pde->flag_source_term){
         Solver<NumericalMethodType>::source(l,quadrule->qMp_st,model_pde, &H(l,0), &S(l,0),quadrule->xi_ref_quad_st);
       }
@@ -760,7 +1044,7 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
     }
 
     //use found predictor to compute corrector
-    get_H_from_H_w(quadrule->qMp_st,basefunc->Np_st, &H(l,0), &H_w(l,0),quadrule->xi_ref_quad_st);
+    get_H_from_H_w(quadrule->qMp_st,Np_st, &H(l,0), &H_w(l,0),quadrule->xi_ref_quad_st);
     if(model_pde->flag_source_term){
       Solver<NumericalMethodType>::source(l,quadrule->qMp_st,model_pde, &H(l,0), &S(l,0),quadrule->xi_ref_quad_st);
     }
@@ -768,26 +1052,26 @@ void AmrDG::ADER(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
 
       Solver<NumericalMethodType>::flux(l,d,quadrule->qMp_st,model_pde, &H(l,0), &F(l,d,0),quadrule->xi_ref_quad_st);
 
-      get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st, &H_m(l,0), &H_w(l,0),quadrule->xi_ref_quad_st_bdm[d]);
+      get_H_from_H_w_bd(quadrule->qMp_st_bd,Np_st, &H_m(l,0), &H_w(l,0), d, 0);
       Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde, &H_m(l,0), &Fm(l,0), &DFm(l,0),quadrule->xi_ref_quad_st_bdm[d]);
 
-      get_H_from_H_w(quadrule->qMp_st_bd,basefunc->Np_st, &H_p(l,0), &H_w(l,0),quadrule->xi_ref_quad_st_bdp[d]);
+      get_H_from_H_w_bd(quadrule->qMp_st_bd,Np_st, &H_p(l,0), &H_w(l,0), d, 1);
       Solver<NumericalMethodType>::flux_bd(l,d,quadrule->qMp_st_bd,model_pde, &H_p(l,0), &Fp(l,0), &DFp(l,0),quadrule->xi_ref_quad_st_bdp[d]);
 
-      Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,basefunc->Np_s, &H_m(l,0), &H_p(l,0), &Fm(l,0), &Fp(l,0), &DFm(l,0), &DFp(l,0));
+      Solver<NumericalMethodType>::numflux(l,d,quadrule->qMp_st_bd,Np_s, &H_m(l,0), &H_p(l,0), &Fm(l,0), &Fp(l,0), &DFm(l,0), &DFp(l,0));
 
       if ((_mesh->L > 1))
       {
         for (int q = 0; q < Q; ++q) {
           if (l < _mesh->get_finest_lev() && flux_reg(l+1,0)) {
             flux_reg(l+1,q)->CrseAdd(Fnum_int_c(l,d,q), d,
-                        0, 0, static_cast<int>(basefunc->Np_s),
+                        0, 0, static_cast<int>(Np_s),
                         -1.0, _mesh->get_Geom(l));
           }
 
           if (l > 0 && flux_reg(l,0)) {
             flux_reg(l,q)->FineAdd(Fnum_int_f(l,d,q), d,
-                          0, 0, static_cast<int>(basefunc->Np_s),
+                          0, 0, static_cast<int>(Np_s),
                           1.0);
           }
         }
@@ -908,7 +1192,7 @@ void AmrDG::set_Dt(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     dx_avg /= (amrex::Real)AMREX_SPACEDIM;
 
     //get solution evaluated at cells
-    get_U_from_U_w(quadrule->qMp_s, basefunc->Np_s, &U(l,0), &U_w(l,0), quadrule->xi_ref_quad_s);
+    get_U_from_U_w(quadrule->qMp_s, Np_s, &U(l,0), &U_w(l,0), quadrule->xi_ref_quad_s);
 
     //vector to accumulate all the min dt of all cells of given layer computed by this rank
     amrex::Vector<amrex::Real> rank_min_dt;
@@ -1049,8 +1333,8 @@ void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& mo
     
     for(int q=0; q<Q;++q){
       amrex::BoxArray c_ba = U_w(l,q).boxArray();
-      U_h_DG[q].define(c_ba, U_w(l,q).DistributionMap(), basefunc->Np_s, _mesh->nghost);
-      amrex::MultiFab::Copy(U_h_DG[q], U_w(l,q), 0, 0, basefunc->Np_s, _mesh->nghost);
+      U_h_DG[q].define(c_ba, U_w(l,q).DistributionMap(), Np_s, _mesh->nghost);
+      amrex::MultiFab::Copy(U_h_DG[q], U_w(l,q), 0, 0, Np_s, _mesh->nghost);
     }
 
     // Get number of cells of full level and intersection level
@@ -1128,8 +1412,8 @@ void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& mo
                   }
 
                   amrex::Real u_h = 0.0;          
-                  for (int n = 0; n < basefunc->Np_s; ++n){  
-                    u_h += uh[q](i,j,k,n)*(basefunc->phi_s(n,basefunc->basis_idx_s,quad_pt[m]));
+                  for (int n = 0; n < Np_s; ++n){  
+                    u_h += uh[q](i,j,k,n)*(phi_s(n,quad_pt[m]));
                   }
                         
                   amrex::Real u = 0.0;
@@ -1164,8 +1448,8 @@ void AmrDG::LpNorm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& mo
                 }
                   
                 amrex::Real u_h = 0.0;          
-                for (int n = 0; n < basefunc->Np_s; ++n){  
-                  u_h += uh[q](i,j,k,n)*(basefunc->phi_s(n,basefunc->basis_idx_s,quad_pt[m]));
+                for (int n = 0; n < Np_s; ++n){  
+                  u_h += uh[q](i,j,k,n)*(phi_s(n,quad_pt[m]));
                 }
                       
                 amrex::Real u = 0.0;
@@ -1239,7 +1523,7 @@ void AmrDG::L2Norm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& mo
       xiq = (1.0-(1.0/(8.0*std::pow((double)N,2)))
           +(1.0/(8.0*std::pow((double)N,3))))*std::cos(theta);
     }
-    quadrule->NewtonRhapson(xiq, N);
+    NewtonRhapson(xiq, N);
     GLquadpts.push_back(xiq);   
     GLquadpts.push_back(-xiq);  
   }
@@ -1251,7 +1535,7 @@ void AmrDG::L2Norm_DG_AMR(const std::shared_ptr<ModelEquation<EquationType>>& mo
     theta = M_PI*(i - 0.25)/((double)N + 0.5);
     xiq = (1.0-(1.0/(8.0*std::pow((double)N,2)))
           +(1.0/(8.0*std::pow((double)N,3))))*std::cos(theta);
-    quadrule->NewtonRhapson(xiq, N);
+    NewtonRhapson(xiq, N);
     GLquadpts.push_back(xiq);   
   }//TODO: dont rememebr why is it different than in AmrDG_Quadrature
   

@@ -63,11 +63,11 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
 
   amrex::Vector<amrex::MultiFab> _mf(Q);
   for(int q=0 ; q<Q; ++q){
-    _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
+    _mf[q].define(ba, dm, Np_s, _mesh->nghost);
     _mf[q].setVal(0.0);
   }
 
-  AMR_FillPatch(lev, time, _mf.data(), 0, basefunc->Np_s);
+  AMR_FillPatch(lev, time, _mf.data(), 0, Np_s);
   //clear existing level MFabs defined on old ba,dm
   _mesh->ClearLevel(lev);
 
@@ -82,7 +82,7 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
 
 void AmrDG::AMR_interpolate_initial_condition(int lev)
 {
-  AMR_FillFromCoarsePatch(lev, 0.0, &U_w(lev,0), 0, basefunc->Np_s);
+  AMR_FillFromCoarsePatch(lev, 0.0, &U_w(lev,0), 0, Np_s);
 }
 
 void AmrDG::AMR_sync_initial_condition()
@@ -104,10 +104,10 @@ void AmrDG::AMR_sync_initial_condition()
         for (int q = 0; q < Q; ++q) {
             const amrex::BoxArray& ba = U_w(l,q).boxArray();
             const amrex::DistributionMapping& dm = U_w(l,q).DistributionMap();
-            _mf[q].define(ba, dm, basefunc->Np_s, _mesh->nghost);
+            _mf[q].define(ba, dm, Np_s, _mesh->nghost);
             _mf[q].setVal(0.0);
         }
-        AMR_FillPatch(l, 0.0, _mf.data(), 0, basefunc->Np_s);
+        AMR_FillPatch(l, 0.0, _mf.data(), 0, Np_s);
         for (int q = 0; q < Q; ++q) {
             std::swap(U_w(l,q), _mf[q]);
         }
@@ -124,7 +124,7 @@ void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
 
   Solver<NumericalMethodType>::set_init_data_system(lev,ba,dm);
 
-  AMR_FillFromCoarsePatch(lev, time, &U_w(lev,0), 0, basefunc->Np_s);
+  AMR_FillFromCoarsePatch(lev, time, &U_w(lev,0), 0, Np_s);
 }
 
 // fill an entire multifab by interpolating from the coarser level
@@ -293,7 +293,7 @@ void AmrDG::AMR_set_flux_registers()
         if (lev > 0) {
             for (int q = 0; q < Q; ++q) {
                 flux_reg(lev,q) = std::make_unique<amrex::FluxRegister>(
-                    ba, dm, _mesh->get_refRatio(lev-1), lev, basefunc->Np_s);
+                    ba, dm, _mesh->get_refRatio(lev-1), lev, Np_s);
             }
         }
 
@@ -415,7 +415,7 @@ void AmrDG::AMR_flux_correction()
             if (flux_reg(l,q)) {
                 amrex::MultiFab correction_mf(U_w(l-1,q).boxArray(),
                                               U_w(l-1,q).DistributionMap(),
-                                              basefunc->Np_s, _mesh->nghost);
+                                              Np_s, _mesh->nghost);
                 correction_mf.setVal(0.0);
 
                 amrex::MultiFab dummy_vol(U_w(l-1,q).boxArray(),
@@ -424,7 +424,7 @@ void AmrDG::AMR_flux_correction()
                 dummy_vol.setVal(1.0);
 
                 flux_reg(l,q)->Reflux(correction_mf, dummy_vol,
-                                       1.0, 0, 0, basefunc->Np_s,
+                                       1.0, 0, 0, Np_s,
                                        _mesh->get_Geom(l-1));
 
                 amr_interpolator->reflux(U_w(l-1,q),

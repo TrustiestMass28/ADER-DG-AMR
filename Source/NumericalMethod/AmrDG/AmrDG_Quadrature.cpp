@@ -4,80 +4,79 @@
 using namespace amrex;
 
 
-void AmrDG::QuadratureGaussLegendre::set_number_quadpoints()
+template<int P>
+void AmrDG::QuadratureGaussLegendre<P>::set_number_quadpoints()
 {
-  qMp_1d = (numme->p+1);
+  qMp_1d = N;
 
-  qMp_s = (int)std::pow(qMp_1d,AMREX_SPACEDIM);//space  L2 projection
+  qMp_s = (int)std::pow(N,AMREX_SPACEDIM);//space  L2 projection
 
-  qMp_s_bd = (int)std::pow(qMp_1d,AMREX_SPACEDIM-1);//surface  L2 projection
+  qMp_s_bd = (int)std::pow(N,AMREX_SPACEDIM-1);//surface  L2 projection
 
-  qMp_t = qMp_1d;
+  qMp_t = N;
 
-  qMp_st = (int)std::pow(qMp_1d,AMREX_SPACEDIM+1);//space+time
+  qMp_st = (int)std::pow(N,AMREX_SPACEDIM+1);//space+time
 
-  qMp_st_bd = (int)std::pow(qMp_1d,AMREX_SPACEDIM);//(space-1)+time  
+  qMp_st_bd = (int)std::pow(N,AMREX_SPACEDIM);//(space-1)+time
 }
 
-void AmrDG::QuadratureGaussLegendre::set_quadpoints()
+template<int P>
+void AmrDG::QuadratureGaussLegendre<P>::set_quadpoints()
 {
-  //Generate qMp_1d==p+1 quadrature points
-  int N = qMp_1d;
+  //Resize data structures holding quadrature data
+  xi_ref_quad_s.resize(qMp_s,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
 
-  amrex::Vector<amrex::Real> GLquadpts;
-  amrex::Real xiq = 0.0;
-  amrex::Real theta = 0.0;
-  for(int i=1; i<= (int)(N/2); ++i)
-  {
-    theta = M_PI*(i - 0.25)/((double)N + 0.5);
-    
-    if((1<=i) && (i<= (int)((1.0/3.0)*(double)N))){
-      xiq = (1-0.125*(1.0/std::pow(N,2))+0.125*(1.0/std::pow(N,3))-(1.0/384.0)
-            *(1.0/std::pow(N,4))*(39.0-28.0*(1.0/std::pow(std::sin(theta),2))))
-            *std::cos(theta);
-    }
-    else if((i>(int)((1.0/3.0)*(double)N)) && (i<= (int)((double)N/2))){
-      xiq = (1.0-(1.0/(8.0*std::pow((double)N,2)))
-            +(1.0/(8.0*std::pow((double)N,3))))*std::cos(theta);
-    }
-    
-    NewtonRhapson(xiq, N);
-    GLquadpts.push_back(xiq);   
-    GLquadpts.push_back(-xiq);  
-  }
+  xi_ref_quad_s_bdm.resize(AMREX_SPACEDIM,
+                            amrex::Vector<amrex::Vector<amrex::Real>> (qMp_s_bd,
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM)));
 
-  if(N%2!=0)//if odd number, then i=1,...,N/2 will miss one value
-  {
-    GLquadpts.push_back(0.0);  
-  }
-    
+  xi_ref_quad_s_bdp.resize(AMREX_SPACEDIM,
+                            amrex::Vector<amrex::Vector<amrex::Real>> (qMp_s_bd,
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM)));
+
+  xi_ref_quad_t.resize(qMp_t,amrex::Vector<amrex::Real> (1));
+
+  xi_ref_quad_st.resize(qMp_st,amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1));
+
+  xi_ref_quad_st_bdm.resize(AMREX_SPACEDIM,
+                            amrex::Vector<amrex::Vector<amrex::Real>> (qMp_st_bd,
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
+
+  xi_ref_quad_st_bdp.resize(AMREX_SPACEDIM,
+                            amrex::Vector<amrex::Vector<amrex::Real>> (qMp_st_bd,
+                            amrex::Vector<amrex::Real> (AMREX_SPACEDIM+1)));
+
+  //construct a center point of a [-1,1]^D cell
+  xi_ref_quad_s_center.resize(1,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
+
+  //Fill quadrature points from compile-time nodes
   amrex::Real bd_val = 1.0;
 
   #if (AMREX_SPACEDIM == 1)
     for(int i=0; i<N;++i){
       for(int t=0; t<N;++t){
-        xi_ref_quad_st[t+N*i][0]=GLquadpts[i];
-        xi_ref_quad_st[t+N*i][1]=GLquadpts[t];
+        xi_ref_quad_st[t+N*i][0]=nodes[i];
+        xi_ref_quad_st[t+N*i][1]=nodes[t];
       }
     }
-    
+
     xi_ref_quad_s_bdm[0][0][0] = -bd_val;
-    xi_ref_quad_s_bdm[0][0][1] = GLquadpts[0];
+    xi_ref_quad_s_bdm[0][0][1] = nodes[0];
     xi_ref_quad_s_bdp[0][0][0] = bd_val;
-    xi_ref_quad_s_bdp[0][0][1] = GLquadpts[0];
-    
-    for(int i=0; i<N;++i){     
-      xi_ref_quad_t[i][0]=GLquadpts[i];
-      xi_ref_quad_s[i][0]=GLquadpts[i];
-    } 
+    xi_ref_quad_s_bdp[0][0][1] = nodes[0];
+
+    for(int i=0; i<N;++i){
+      xi_ref_quad_t[i][0]=nodes[i];
+      xi_ref_quad_s[i][0]=nodes[i];
+    }
 
   #elif (AMREX_SPACEDIM == 2)
     for(int i=0; i<N;++i){
       for(int j=0; j<N;++j){
         for(int t=0; t<N;++t){
-          xi_ref_quad_st[t+j*N+N*N*i][0]=GLquadpts[i];
-          xi_ref_quad_st[t+j*N+N*N*i][1]=GLquadpts[j]; 
-          xi_ref_quad_st[t+j*N+N*N*i][2]=GLquadpts[t];
+          xi_ref_quad_st[t+j*N+N*N*i][0]=nodes[i];
+          xi_ref_quad_st[t+j*N+N*N*i][1]=nodes[j];
+          xi_ref_quad_st[t+j*N+N*N*i][2]=nodes[t];
         }
       }
     }
@@ -88,22 +87,22 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
           if(d==0)
           {
             xi_ref_quad_st_bdm[d][t+N*i][0] = -bd_val;
-            xi_ref_quad_st_bdm[d][t+N*i][1] = GLquadpts[i]; 
-            xi_ref_quad_st_bdm[d][t+N*i][2] = GLquadpts[t]; 
+            xi_ref_quad_st_bdm[d][t+N*i][1] = nodes[i];
+            xi_ref_quad_st_bdm[d][t+N*i][2] = nodes[t];
             xi_ref_quad_st_bdp[d][t+N*i][0] = bd_val;
-            xi_ref_quad_st_bdp[d][t+N*i][1] = GLquadpts[i]; 
-            xi_ref_quad_st_bdp[d][t+N*i][2] = GLquadpts[t]; 
+            xi_ref_quad_st_bdp[d][t+N*i][1] = nodes[i];
+            xi_ref_quad_st_bdp[d][t+N*i][2] = nodes[t];
           }
           else if(d==1)
           {
-            xi_ref_quad_st_bdm[d][t+N*i][0] = GLquadpts[i];
-            xi_ref_quad_st_bdm[d][t+N*i][1] = -bd_val; 
-            xi_ref_quad_st_bdm[d][t+N*i][2] = GLquadpts[t]; 
-            xi_ref_quad_st_bdp[d][t+N*i][0] = GLquadpts[i];
-            xi_ref_quad_st_bdp[d][t+N*i][1] = bd_val; 
-            xi_ref_quad_st_bdp[d][t+N*i][2] = GLquadpts[t]; 
+            xi_ref_quad_st_bdm[d][t+N*i][0] = nodes[i];
+            xi_ref_quad_st_bdm[d][t+N*i][1] = -bd_val;
+            xi_ref_quad_st_bdm[d][t+N*i][2] = nodes[t];
+            xi_ref_quad_st_bdp[d][t+N*i][0] = nodes[i];
+            xi_ref_quad_st_bdp[d][t+N*i][1] = bd_val;
+            xi_ref_quad_st_bdp[d][t+N*i][2] = nodes[t];
           }
-        } 
+        }
       }
     }
 
@@ -112,41 +111,41 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
         if(d==0)
         {
           xi_ref_quad_s_bdm[d][i][0] = -bd_val;
-          xi_ref_quad_s_bdm[d][i][1] = GLquadpts[i]; 
+          xi_ref_quad_s_bdm[d][i][1] = nodes[i];
           xi_ref_quad_s_bdp[d][i][0] = bd_val;
-          xi_ref_quad_s_bdp[d][i][1] = GLquadpts[i]; 
+          xi_ref_quad_s_bdp[d][i][1] = nodes[i];
         }
         else if(d==1)
         {
-          xi_ref_quad_s_bdm[d][i][0] = GLquadpts[i];
-          xi_ref_quad_s_bdm[d][i][1] = -bd_val; 
-          xi_ref_quad_s_bdp[d][i][0] = GLquadpts[i];
-          xi_ref_quad_s_bdp[d][i][1] = bd_val; 
+          xi_ref_quad_s_bdm[d][i][0] = nodes[i];
+          xi_ref_quad_s_bdm[d][i][1] = -bd_val;
+          xi_ref_quad_s_bdp[d][i][0] = nodes[i];
+          xi_ref_quad_s_bdp[d][i][1] = bd_val;
         }
-      } 
+      }
     }
 
     for(int i=0; i<N;++i){
-      xi_ref_quad_t[i][0]=GLquadpts[i];
+      xi_ref_quad_t[i][0]=nodes[i];
       for(int j=0; j<N;++j){
-        xi_ref_quad_s[j+N*i][0]=GLquadpts[i];
-        xi_ref_quad_s[j+N*i][1]=GLquadpts[j]; 
+        xi_ref_quad_s[j+N*i][0]=nodes[i];
+        xi_ref_quad_s[j+N*i][1]=nodes[j];
       }
-    } 
+    }
 #elif (AMREX_SPACEDIM == 3)
     for(int i=0; i<N;++i){
       for(int j=0; j<N;++j){
         for(int k=0; k<N;++k){
           for(int t=0; t<N;++t){
-            xi_ref_quad_st[t+k*N+N*N*j+N*N*N*i][0]=GLquadpts[i];
-            xi_ref_quad_st[t+k*N+N*N*j+N*N*N*i][1]=GLquadpts[j]; 
-            xi_ref_quad_st[t+k*N+N*N*j+N*N*N*i][2]=GLquadpts[k]; 
-            xi_ref_quad_st[t+k*N+N*N*j+N*N*N*i][3]=GLquadpts[t]; 
+            xi_ref_quad_st[t+k*N+N*N*j+N*N*N*i][0]=nodes[i];
+            xi_ref_quad_st[t+k*N+N*N*j+N*N*N*i][1]=nodes[j];
+            xi_ref_quad_st[t+k*N+N*N*j+N*N*N*i][2]=nodes[k];
+            xi_ref_quad_st[t+k*N+N*N*j+N*N*N*i][3]=nodes[t];
           }
         }
       }
     }
-    
+
     for(int i=0; i<N;++i){
       for(int j=0; j<N;++j){
         for(int t=0; t<N;++t){
@@ -154,35 +153,35 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
             if(d == 0)
             {
               xi_ref_quad_st_bdm[d][t+j*N+N*N*i][0] = -bd_val;
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][1] = GLquadpts[i]; 
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][3] = GLquadpts[t]; 
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][1] = nodes[i];
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][2] = nodes[j];
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][3] = nodes[t];
               xi_ref_quad_st_bdp[d][t+j*N+N*N*i][0] = bd_val;
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][1] = GLquadpts[i]; 
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][2] = GLquadpts[j];
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][3] = GLquadpts[t]; 
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][1] = nodes[i];
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][2] = nodes[j];
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][3] = nodes[t];
             }
             else if(d == 1)
             {
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][0] = GLquadpts[i];
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][1] = -bd_val; 
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][3] = GLquadpts[t]; 
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][0] = GLquadpts[i];
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][1] = bd_val; 
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][2] = GLquadpts[j]; 
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][3] = GLquadpts[t]; 
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][0] = nodes[i];
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][1] = -bd_val;
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][2] = nodes[j];
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][3] = nodes[t];
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][0] = nodes[i];
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][1] = bd_val;
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][2] = nodes[j];
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][3] = nodes[t];
             }
             else if(d == 2)
             {
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][0] = GLquadpts[i];
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][1] = GLquadpts[j]; 
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][2] = -bd_val; 
-              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][3] = GLquadpts[t]; 
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][0] = GLquadpts[i];
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][1] = GLquadpts[j]; 
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][2] = bd_val; 
-              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][3] = GLquadpts[t]; 
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][0] = nodes[i];
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][1] = nodes[j];
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][2] = -bd_val;
+              xi_ref_quad_st_bdm[d][t+j*N+N*N*i][3] = nodes[t];
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][0] = nodes[i];
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][1] = nodes[j];
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][2] = bd_val;
+              xi_ref_quad_st_bdp[d][t+j*N+N*N*i][3] = nodes[t];
             }
           }
         }
@@ -195,34 +194,34 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
           if(d == 0)
           {
             xi_ref_quad_s_bdm[d][j+N*i][0] = -bd_val;
-            xi_ref_quad_s_bdm[d][j+N*i][1] = GLquadpts[i]; 
-            xi_ref_quad_s_bdm[d][j+N*i][2] = GLquadpts[j]; 
+            xi_ref_quad_s_bdm[d][j+N*i][1] = nodes[i];
+            xi_ref_quad_s_bdm[d][j+N*i][2] = nodes[j];
 
             xi_ref_quad_s_bdp[d][j+N*i][0] = bd_val;
-            xi_ref_quad_s_bdp[d][j+N*i][1] = GLquadpts[i]; 
-            xi_ref_quad_s_bdp[d][j+N*i][2] = GLquadpts[j];
+            xi_ref_quad_s_bdp[d][j+N*i][1] = nodes[i];
+            xi_ref_quad_s_bdp[d][j+N*i][2] = nodes[j];
 
           }
           else if(d == 1)
           {
-            xi_ref_quad_s_bdm[d][j+N*i][0] = GLquadpts[i];
-            xi_ref_quad_s_bdm[d][j+N*i][1] = -bd_val; 
-            xi_ref_quad_s_bdm[d][j+N*i][2] = GLquadpts[j]; 
+            xi_ref_quad_s_bdm[d][j+N*i][0] = nodes[i];
+            xi_ref_quad_s_bdm[d][j+N*i][1] = -bd_val;
+            xi_ref_quad_s_bdm[d][j+N*i][2] = nodes[j];
 
-            xi_ref_quad_s_bdp[d][j+N*i][0] = GLquadpts[i];
-            xi_ref_quad_s_bdp[d][j+N*i][1] = bd_val; 
-            xi_ref_quad_s_bdp[d][j+N*i][2] = GLquadpts[j]; 
+            xi_ref_quad_s_bdp[d][j+N*i][0] = nodes[i];
+            xi_ref_quad_s_bdp[d][j+N*i][1] = bd_val;
+            xi_ref_quad_s_bdp[d][j+N*i][2] = nodes[j];
 
           }
           else if(d == 2)
           {
-            xi_ref_quad_s_bdm[d][j+N*i][0] = GLquadpts[i];
-            xi_ref_quad_s_bdm[d][j+N*i][1] = GLquadpts[j]; 
-            xi_ref_quad_s_bdm[d][j+N*i][2] = -bd_val; 
+            xi_ref_quad_s_bdm[d][j+N*i][0] = nodes[i];
+            xi_ref_quad_s_bdm[d][j+N*i][1] = nodes[j];
+            xi_ref_quad_s_bdm[d][j+N*i][2] = -bd_val;
 
-            xi_ref_quad_s_bdp[d][j+N*i][0] = GLquadpts[i];
-            xi_ref_quad_s_bdp[d][j+N*i][1] = GLquadpts[j]; 
-            xi_ref_quad_s_bdp[d][j+N*i][2] = bd_val; 
+            xi_ref_quad_s_bdp[d][j+N*i][0] = nodes[i];
+            xi_ref_quad_s_bdp[d][j+N*i][1] = nodes[j];
+            xi_ref_quad_s_bdp[d][j+N*i][2] = bd_val;
 
           }
         }
@@ -230,27 +229,27 @@ void AmrDG::QuadratureGaussLegendre::set_quadpoints()
     }
 
     for(int i=0; i<N;++i){
-      xi_ref_quad_t[i][0]=GLquadpts[i];
+      xi_ref_quad_t[i][0]=nodes[i];
       for(int j=0; j<N;++j){
         for(int k=0; k<N;++k){
-          xi_ref_quad_s[k+N*j+N*N*i][0]=GLquadpts[i];
-          xi_ref_quad_s[k+N*j+N*N*i][1]=GLquadpts[j]; 
-          xi_ref_quad_s[k+N*j+N*N*i][2]=GLquadpts[k]; 
+          xi_ref_quad_s[k+N*j+N*N*i][0]=nodes[i];
+          xi_ref_quad_s[k+N*j+N*N*i][1]=nodes[j];
+          xi_ref_quad_s[k+N*j+N*N*i][2]=nodes[k];
         }
       }
     }
-#endif 
+#endif
 
   for  (int d = 0; d < AMREX_SPACEDIM; ++d){
     xi_ref_quad_s_center[0][d]=0.0;
   }
-  
+
 }
 
-void AmrDG::QuadratureGaussLegendre::NewtonRhapson(amrex::Real& x, int n)
+void AmrDG::NewtonRhapson(amrex::Real& x, int n)
 {
   int niter = 1000;
-    
+
   amrex::Real TOL= 1e-15;
   amrex::Real error;
   amrex::Real x_new = 0.0;
@@ -260,10 +259,22 @@ void AmrDG::QuadratureGaussLegendre::NewtonRhapson(amrex::Real& x, int n)
     amrex::Real df = (std::assoc_legendre(n,1,x))/(std::sqrt(1.0-std::pow(x,2.0)));
     amrex::Real f = std::legendre(n, x);
     x_new = x-(f/df);
-    
+
     error = std::abs(x_new-x);
     x = x_new;
-    
-    if(error<=TOL){break;}    
+
+    if(error<=TOL){break;}
   }
 }
+
+// Explicit instantiations
+template struct AmrDG::QuadratureGaussLegendre<1>;
+template struct AmrDG::QuadratureGaussLegendre<2>;
+template struct AmrDG::QuadratureGaussLegendre<3>;
+template struct AmrDG::QuadratureGaussLegendre<4>;
+template struct AmrDG::QuadratureGaussLegendre<5>;
+template struct AmrDG::QuadratureGaussLegendre<6>;
+template struct AmrDG::QuadratureGaussLegendre<7>;
+template struct AmrDG::QuadratureGaussLegendre<8>;
+template struct AmrDG::QuadratureGaussLegendre<9>;
+template struct AmrDG::QuadratureGaussLegendre<10>;

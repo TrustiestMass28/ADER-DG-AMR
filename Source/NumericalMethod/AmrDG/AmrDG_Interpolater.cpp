@@ -55,14 +55,14 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab& U_crse,
 
               if (is_at_interface)
               {
-                  Eigen::VectorXd f_delta(numme->basefunc->Np_s);
-                  for(int n=0; n<numme->basefunc->Np_s; ++n){
+                  Eigen::VectorXd f_delta(numme->Np_s);
+                  for(int n=0; n<numme->Np_s; ++n){
                       f_delta(n) = corr(i,j,k,n);
                   }
 
                   Eigen::VectorXd delta_u_w = inv_jac * (Minv * f_delta);
 
-                  for (int n = 0; n < numme->basefunc->Np_s; ++n) {
+                  for (int n = 0; n < numme->Np_s; ++n) {
                       u_crse(i, j, k, n) += delta_u_w(n);
                   }
               }
@@ -83,6 +83,18 @@ const Eigen::MatrixXd& AmrDG::L2ProjInterp::get_flux_proj_mat(int d, int child_i
 
 void AmrDG::L2ProjInterp::flux_proj_mat()
 {
+    #define FLUX_PROJ_CASE(PP) case PP: _flux_proj_mat<PP>(); break;
+    switch(numme->p) {
+        FLUX_PROJ_CASE(1) FLUX_PROJ_CASE(2) FLUX_PROJ_CASE(3) FLUX_PROJ_CASE(4) FLUX_PROJ_CASE(5)
+        FLUX_PROJ_CASE(6) FLUX_PROJ_CASE(7) FLUX_PROJ_CASE(8) FLUX_PROJ_CASE(9) FLUX_PROJ_CASE(10)
+        default: amrex::Abort("Unsupported polynomial order p");
+    }
+    #undef FLUX_PROJ_CASE
+}
+
+template<int P>
+void AmrDG::L2ProjInterp::_flux_proj_mat()
+{
     // Setup dimensions
     int num_face_children = (int)std::pow(2, AMREX_SPACEDIM - 1);
     int num_q_pts = numme->quadrule->qMp_st_bd;
@@ -92,72 +104,60 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
     P_flux_fc_high.resize(AMREX_SPACEDIM);
 
     for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-        
+
         // Resize Inner Vectors [Child Index]
         P_flux_fc_low[d].resize(num_face_children);
         P_flux_fc_high[d].resize(num_face_children);
 
         for (int k = 0; k < num_face_children; ++k) {
-            
+
             // Resize the Eigen Matrices (Rows: Coarse Modes, Cols: Fine Quad Pts)
-            P_flux_fc_low[d][k].resize(numme->basefunc->Np_s, num_q_pts);
+            P_flux_fc_low[d][k].resize(AmrDG::BasisLegendre<P>::Np_s, num_q_pts);
             P_flux_fc_low[d][k].setZero();
 
-            P_flux_fc_high[d][k].resize(numme->basefunc->Np_s, num_q_pts);
+            P_flux_fc_high[d][k].resize(AmrDG::BasisLegendre<P>::Np_s, num_q_pts);
             P_flux_fc_high[d][k].setZero();
 
             // Determine Tangential Shifts for this child 'k'
-            // These are identical for both low and high faces because the tangential plane is shared
             amrex::Vector<amrex::Real> t_shifts(AMREX_SPACEDIM, 0.0);
             int temp_k = k;
             int bit_counter = 0;
             for(int dir=0; dir<AMREX_SPACEDIM; ++dir) {
-                if (dir == d) continue; 
-                // k maps to: 0 -> -0.5, 1 -> +0.5
+                if (dir == d) continue;
                 int is_upper = (temp_k >> bit_counter) & 1;
                 t_shifts[dir] = (is_upper) ? 0.5 : -0.5;
                 bit_counter++;
             }
 
-            // Fill Matrix Elements
-            for (int r = 0; r < numme->basefunc->Np_s; ++r) {         // Row: Coarse Mode
-                for (int m = 0; m < num_q_pts; ++m) {                 // Col: Fine Quad Point
-                    
-                    // --- Geometry/Mapping Logic ---
-                    
-                    // Get Fine Quad Point (space-time boundary point)
-                    amrex::Vector<amrex::Real> xi_f = numme->quadrule->xi_ref_quad_st_bdm[d][m];
-                    
-                    // Map to Coarse Parent Coordinate System for both sides
-                    amrex::Vector<amrex::Real> xi_c_low(AMREX_SPACEDIM);
-                    amrex::Vector<amrex::Real> xi_c_high(AMREX_SPACEDIM);
-
+            // Fill Matrix Elements using QuadratureGaussLegendre lookups
+            for (int r = 0; r < AmrDG::BasisLegendre<P>::Np_s; ++r) {
+                const auto& mi = AmrDG::MultiIndex<P, AMREX_SPACEDIM>::table[r];
+                for (int m = 0; m < num_q_pts; ++m) {
+                    // phi_s at coarse boundary: normal dim d has xi=±1,
+                    // tangential dims use shifted GL nodes (0.5*node + shift)
+                    double phi_low = 1.0;
+                    double phi_high = 1.0;
                     for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
                         if (dim == d) {
-                            // Normal Direction:
-                            xi_c_low[dim]  = -1.0; // Projection onto Low face of parent
-                            xi_c_high[dim] =  1.0; // Projection onto High face of parent
+                            phi_low  *= AmrDG::QuadratureGaussLegendre<P>::bd_val[mi.idx[dim]][0]; // xi=-1
+                            phi_high *= AmrDG::QuadratureGaussLegendre<P>::bd_val[mi.idx[dim]][1]; // xi=+1
                         } else {
-                            // Tangential: Shift to correct quadrant (same for both)
-                            amrex::Real t_val = 0.5 * xi_f[dim] + t_shifts[dim];
-                            xi_c_low[dim]  = t_val;
-                            xi_c_high[dim] = t_val;
+                            // Tangential dim: 0.5*nodes[q_a] + t_shifts[dim]
+                            int pos = AmrDG::QuadratureGaussLegendre<P>::bd_free_pos(dim, d);
+                            int q_a = AmrDG::QuadratureGaussLegendre<P>::node_idx(m, pos, AMREX_SPACEDIM);
+                            const auto& tbl = (t_shifts[dim] < 0.0)
+                                ? AmrDG::QuadratureGaussLegendre<P>::shifted_lo_val
+                                : AmrDG::QuadratureGaussLegendre<P>::shifted_hi_val;
+                            phi_low  *= tbl[mi.idx[dim]][q_a];
+                            phi_high *= tbl[mi.idx[dim]][q_a];
                         }
                     }
-                    
-                    // --- Evaluation ---
-                    
-                    // Evaluate Coarse Basis at both mapped points
-                    amrex::Real phi_c_low  = numme->basefunc->phi_s(r, numme->basefunc->basis_idx_s, xi_c_low);
-                    amrex::Real phi_c_high = numme->basefunc->phi_s(r, numme->basefunc->basis_idx_s, xi_c_high);
-                    
-                    // Get Fine Weight (space-time boundary weights)
+
                     amrex::Real w_m = numme->quad_weights_st_bdm[d][m];
                     amrex::Real w_p = numme->quad_weights_st_bdp[d][m];
-                    
-                    // --- Assignment ---
-                    P_flux_fc_low[d][k](r, m)  = phi_c_low  * w_m;
-                    P_flux_fc_high[d][k](r, m) = phi_c_high * w_p;
+
+                    P_flux_fc_low[d][k](r, m)  = phi_low  * w_m;
+                    P_flux_fc_high[d][k](r, m) = phi_high * w_p;
                 }
             }
         }
@@ -165,74 +165,87 @@ void AmrDG::L2ProjInterp::flux_proj_mat()
 }
 
 void AmrDG::L2ProjInterp::interp_proj_mat()
-{ 
+{
+    #define INTERP_PROJ_CASE(PP) case PP: _interp_proj_mat<PP>(); break;
+    switch(numme->p) {
+        INTERP_PROJ_CASE(1) INTERP_PROJ_CASE(2) INTERP_PROJ_CASE(3) INTERP_PROJ_CASE(4) INTERP_PROJ_CASE(5)
+        INTERP_PROJ_CASE(6) INTERP_PROJ_CASE(7) INTERP_PROJ_CASE(8) INTERP_PROJ_CASE(9) INTERP_PROJ_CASE(10)
+        default: amrex::Abort("Unsupported polynomial order p");
+    }
+    #undef INTERP_PROJ_CASE
+}
+
+template<int P>
+void AmrDG::L2ProjInterp::_interp_proj_mat()
+{
   constexpr int num_overlap_cells = 1 << AMREX_SPACEDIM;
 
   //coarse->fine projection matrix
   P_cf.resize(num_overlap_cells);
   for (int i = 0; i < num_overlap_cells; ++i) {
-      P_cf[i].resize(numme->basefunc->Np_s, numme->basefunc->Np_s);
+      P_cf[i].resize(AmrDG::BasisLegendre<P>::Np_s, AmrDG::BasisLegendre<P>::Np_s);
       P_cf[i].setZero();
   }
 
   //fine->coarse projection matrix
   P_fc.resize(num_overlap_cells);
   for (int i = 0; i < num_overlap_cells; ++i) {
-      P_fc[i].resize(numme->basefunc->Np_s, numme->basefunc->Np_s);
+      P_fc[i].resize(AmrDG::BasisLegendre<P>::Np_s, AmrDG::BasisLegendre<P>::Np_s);
       P_fc[i].setZero();
   }
 
-  //mass matrix (if multiplied by jacobian we get fine mass matrix, coarse mass matrix)
-  //jacobian is simplified in formulation and only added when doing actual interpolation
-  M.resize(numme->basefunc->Np_s,numme->basefunc->Np_s);
+  //mass matrix
+  M.resize(AmrDG::BasisLegendre<P>::Np_s, AmrDG::BasisLegendre<P>::Np_s);
   M.setZero();
 
   //Compute mass matrices
-  for(int j=0; j<numme->basefunc->Np_s;++j){
-    for(int n=0; n<numme->basefunc->Np_s;++n){
-      M(j,n)= numme->refMat_phiphi(j,numme->basefunc->basis_idx_s,n,numme->basefunc->basis_idx_s);
+  for(int j=0; j<AmrDG::BasisLegendre<P>::Np_s;++j){
+    for(int n=0; n<AmrDG::BasisLegendre<P>::Np_s;++n){
+      M(j,n)= numme->refMat_phiphi(j,numme->basis_idx_s,n,numme->basis_idx_s);
     }
   }
 
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(M, Eigen::ComputeThinU | Eigen::ComputeThinV);
-  Eigen::VectorXd singularValues = svd.singularValues();  
-  Minv = svd.matrixV() * singularValues.asDiagonal().inverse() 
+  Eigen::VectorXd singularValues = svd.singularValues();
+  Minv = svd.matrixV() * singularValues.asDiagonal().inverse()
                               * svd.matrixU().transpose();
 
   //Compute projection matrices for each sub-cell (indicated by idx)
   for(int l=0; l<std::pow(2,AMREX_SPACEDIM); ++l)
-  { 
-    //Define coordinate mapping between coarse cell and fine cell.
-    //xi_f = 0.5*xi_c +-0.5 ==> bit=0: [-1,1]->[-1,0] (shift=-0.5), bit=1: [-1,1]->[0,1] (shift=+0.5)
+  {
     amrex::Real shift[AMREX_SPACEDIM];
     for (int d = 0; d < AMREX_SPACEDIM; ++d) {
         int bit = (l >> (AMREX_SPACEDIM - 1 - d)) & 1;
         shift[d] = bit ? 0.5 : -0.5;
     }
 
-    for(int j=0; j<numme->basefunc->Np_s;++j){
-      for(int m=0; m<numme->basefunc->Np_s;++m){
+    for(int j=0; j<AmrDG::BasisLegendre<P>::Np_s;++j){
+      for(int m=0; m<AmrDG::BasisLegendre<P>::Np_s;++m){
 
-        //loop over quadrature points
         amrex::Real sum_cf = 0.0;
         amrex::Real sum_fc = 0.0;
+        const auto& mi_m = AmrDG::MultiIndex<P, AMREX_SPACEDIM>::table[m];
+        const auto& mi_j = AmrDG::MultiIndex<P, AMREX_SPACEDIM>::table[j];
         for(int q=0; q<numme->quadrule->qMp_s; ++q)
         {
-          //Shift the quadrature point
-          amrex::Vector<amrex::Real> xi_ref_shift(AMREX_SPACEDIM);
+          // phi_s(idx, 0.5*nodes[q_d] + shift[d]) = prod_d P_{mi[d]}(0.5*nodes[q_d] + shift[d])
+          // shift[d] = -0.5 → shifted_lo_val, shift[d] = +0.5 → shifted_hi_val
+          double phi_m = 1.0;
+          double phi_j = 1.0;
           for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-              xi_ref_shift[d] = 0.5 * (numme->quadrule->xi_ref_quad_s[q][d]) + shift[d];
+            int q_d = AmrDG::QuadratureGaussLegendre<P>::node_idx(q, d, AMREX_SPACEDIM);
+            const auto& tbl = (shift[d] < 0.0) ? AmrDG::QuadratureGaussLegendre<P>::shifted_lo_val
+                                                : AmrDG::QuadratureGaussLegendre<P>::shifted_hi_val;
+            phi_m *= tbl[mi_m.idx[d]][q_d];
+            phi_j *= tbl[mi_j.idx[d]][q_d];
           }
-          
-          //Use pre-computed QuadratureMatrix quadmat
-          sum_cf += (numme->quadmat(j,q)*numme->basefunc->phi_s(m,numme->basefunc->basis_idx_s,xi_ref_shift));
-          sum_fc += (numme->quadmat(m,q)*numme->basefunc->phi_s(j,numme->basefunc->basis_idx_s,xi_ref_shift));
+
+          sum_cf += numme->quadmat(j,q) * phi_m;
+          sum_fc += numme->quadmat(m,q) * phi_j;
         }
 
         P_cf[l](j, m)= sum_cf;
-
         P_fc[l](j, m)= sum_fc;
-
       }
     }
   }
