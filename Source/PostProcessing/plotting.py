@@ -132,8 +132,50 @@ def _bounds_worker(args):
         return None
 
 
+def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays):
+    """Create a configured yt SlicePlot.
+
+    Parameters
+    ----------
+    with_overlays : bool
+        If True, add grids, cell edges, colorbar, axes, etc.
+        If False, produce a clean data-only image.
+    """
+    sl = yt.SlicePlot(ds, "z", field_to_plot, origin="native")
+
+    if cfg["min_val"] is not None:
+        sl.set_zlim(field=field_to_plot,
+                    zmin=cfg["min_val"], zmax=cfg["max_val"])
+    sl.set_log(field_name, log=False)
+    sl.set_cmap(field=field_name, cmap=cfg["cmap"])
+
+    if with_overlays:
+        sl.set_colorbar_label(field_name, cfg["label_cb"])
+        sl.set_colorbar_minorticks("all", True)
+        sl.show_colorbar()
+        sl.annotate_timestamp(corner="upper_left", draw_inset_box=True)
+        sl.annotate_title(cfg["label_title"])
+        sl.set_font_size(cfg["font_size"])
+        sl.set_axes_unit("m")
+        if cfg["show_grids"]:
+            sl.annotate_grids(alpha=1.0, linewidth=1.0)
+        if cfg["show_cell_edges"]:
+            sl.annotate_cell_edges(line_width=0.001, alpha=0.6, color="grey")
+    else:
+        sl.hide_colorbar()
+        sl.hide_axes(draw_frame=False)
+
+    sl.set_buff_size(cfg["dpi"] * cfg["fig_size"])
+    sl.set_figure_size(cfg["fig_size"])
+    sl.render()
+    return sl
+
+
 def _plot_worker(args):
     """Load, render, and save a single timestep plot."""
+    import matplotlib.pyplot as plt
+    import matplotlib.image as mpimg
+
     ts, idx, total, cfg = args
     path = os.path.join(
         cfg["data_dir"], f"{cfg['prefix']}_{ts}_q_{cfg['sol_n']}_plt",
@@ -147,39 +189,79 @@ def _plot_worker(args):
     ds = _worker_load(cfg, ts, cfg["sol_n"])
     field_to_plot, field_name, ds = _worker_prepare_field(ds, cfg, ts)
 
-    sl = yt.SlicePlot(ds, "z", field_to_plot, origin="native")
+    if cfg.get("side_by_side", False):
+        import numpy as np
+        from matplotlib.colors import Normalize
+        from matplotlib import cm
 
-    if cfg["min_val"] is not None:
-        sl.set_zlim(field=field_to_plot,
-                    zmin=cfg["min_val"], zmax=cfg["max_val"])
-    sl.set_log(field_name, log=False)
-    sl.set_cmap(field=field_name, cmap=cfg["cmap"])
+        # Right panel: full overlay plot saved to temp file
+        cfg_overlay = dict(cfg, show_cell_edges=True, show_grids=True)
+        ds2 = _worker_load(cfg, ts, cfg["sol_n"])
+        _, _, ds2 = _worker_prepare_field(ds2, cfg, ts)
+        sl_overlay = _make_slice(ds2, field_to_plot, field_name, cfg_overlay,
+                                 with_overlays=True)
+        tmp_over = os.path.join(cfg["plot_dir"], f"_tmp_over_{ts}.png")
+        sl_overlay.save(tmp_over)
+        tmp_over_actual = _find_saved(tmp_over)
+        img_r = mpimg.imread(tmp_over_actual)
+        h_r, w_r = img_r.shape[:2]
 
-    if not cfg.get("show_plot_info", True):
-        sl.hide_colorbar()
-        sl.hide_axes(draw_frame=False)
+        # Left panel: render data-only at matching height using frb
+        buff = cfg["dpi"] * cfg["fig_size"]
+        frb = sl_overlay.data_source.to_frb(
+            width=ds.domain_width[0], resolution=(buff, buff),
+        )
+        data = np.array(frb[field_to_plot])
+        vmin = cfg["min_val"] if cfg["min_val"] is not None else float(data.min())
+        vmax = cfg["max_val"] if cfg["max_val"] is not None else float(data.max())
+        norm = Normalize(vmin=vmin, vmax=vmax)
+        cmap_obj = cm.get_cmap(cfg["cmap"])
+        img_l_raw = cmap_obj(norm(data))  # RGBA array
+
+        # Scale left image to match right image height
+        from PIL import Image
+        pil_l = Image.fromarray((img_l_raw * 255).astype(np.uint8))
+        pil_l = pil_l.resize((h_r, h_r), Image.LANCZOS)  # square data
+        img_l = np.array(pil_l).astype(np.float32) / 255.0
+
+        # Stitch side by side
+        fig, (ax1, ax2) = plt.subplots(
+            1, 2, figsize=(cfg["fig_size"] * 2.4, cfg["fig_size"]),
+            gridspec_kw={"width_ratios": [h_r, w_r]},
+        )
+        ax1.imshow(img_l)
+        ax1.axis("off")
+        ax2.imshow(img_r)
+        ax2.axis("off")
+        fig.tight_layout(pad=0.2)
+
+        out_path = os.path.join(
+            cfg["plot_dir"], f"{ts}_sol_{cfg['sol_n']}_sidebyside.png",
+        )
+        fig.savefig(out_path, dpi=cfg["dpi"], bbox_inches="tight")
+        plt.close(fig)
+
+        os.remove(tmp_over_actual)
     else:
-        sl.set_colorbar_label(field_name, cfg["label_cb"])
-        sl.set_colorbar_minorticks("all", True)
-        sl.show_colorbar()
-        sl.annotate_timestamp(corner="upper_left", draw_inset_box=True)
-        sl.annotate_title(cfg["label_title"])
-        sl.set_font_size(cfg["font_size"])
-        sl.set_axes_unit("m")
+        show_overlays = cfg.get("show_plot_info", True)
+        sl = _make_slice(ds, field_to_plot, field_name, cfg,
+                         with_overlays=show_overlays)
+        out_path = os.path.join(
+            cfg["plot_dir"], f"{ts}_sol_{cfg['sol_n']}.png",
+        )
+        sl.save(out_path)
 
-    if cfg["show_grids"]:
-        sl.annotate_grids(alpha=1.0, linewidth=1.0)
-    if cfg["show_cell_edges"]:
-        sl.annotate_cell_edges(line_width=0.001, alpha=0.6, color="grey")
 
-    sl.set_buff_size(cfg["dpi"] * cfg["fig_size"])
-    sl.set_figure_size(cfg["fig_size"])
-    sl.render()
-
-    out_path = os.path.join(
-        cfg["plot_dir"], f"{ts}_sol_{cfg['sol_n']}.png",
-    )
-    sl.save(out_path)
+def _find_saved(base_path):
+    """yt.save() may append extra info to the filename. Find the actual file."""
+    if os.path.isfile(base_path):
+        return base_path
+    directory = os.path.dirname(base_path)
+    basename = os.path.basename(base_path).replace(".png", "")
+    for f in os.listdir(directory):
+        if f.startswith(basename) and f.endswith(".png"):
+            return os.path.join(directory, f)
+    return base_path
 
 
 # ======================================================================
@@ -318,7 +400,8 @@ class SimPlotter:
              n_max=None, interval=1, cmap="inferno", dpi=300,
              fig_size=5, font_size=20, show_grids=False,
              show_cell_edges=True, fixed_bounds=True,
-             cb_sample_every=1, show_plot_info=True):
+             cb_sample_every=1, show_plot_info=True,
+             side_by_side=False):
         """Main entry point: select timesteps and produce plots.
 
         Parameters
@@ -359,9 +442,12 @@ class SimPlotter:
             print("No timesteps to plot.")
             return
 
+        buff = dpi * fig_size
         print(f"Plotting sol_n={sol_n}, mode_n={mode_n}, "
               f"{len(timesteps)} timestep(s): "
               f"[{timesteps[0]} ... {timesteps[-1]}]")
+        print(f"  fig_size={fig_size}in, dpi={dpi}, "
+              f"buff_size={buff}px ({buff}x{buff})")
 
         # Colorbar bounds (parallel)
         min_val, max_val = None, None
@@ -378,6 +464,7 @@ class SimPlotter:
             cmap=cmap, dpi=dpi, fig_size=fig_size, font_size=font_size,
             show_grids=show_grids, show_cell_edges=show_cell_edges,
             min_val=min_val, max_val=max_val, show_plot_info=show_plot_info,
+            side_by_side=side_by_side,
         )
 
         total = len(timesteps)
@@ -411,16 +498,20 @@ def main():
     # Toggle overlays
     show_amr_patches = False   # AMR patch boundaries
     show_cell_edges  = False   # individual cell contours
-    show_plot_info   = False    # False = data only (no colorbar, axes, title, timestamp)
+    show_plot_info   = False   # False = data only (no colorbar, axes, title, timestamp)
+    side_by_side     = True   # True = two panels: clean data | data + overlays
+
+    opts = dict(show_grids=show_amr_patches, show_cell_edges=show_cell_edges,
+                show_plot_info=show_plot_info, side_by_side=side_by_side)
 
     # Plot ALL available timesteps for density (sol_n=0)
-    # plotter.plot(sol_n=0, mode="all", show_grids=show_amr_patches, show_cell_edges=show_cell_edges, show_plot_info=show_plot_info)
+    # plotter.plot(sol_n=0, mode="all", **opts)
 
     # Plot specific timesteps
-    plotter.plot(sol_n=0, mode="all", steps=[3156], show_grids=show_amr_patches, show_cell_edges=show_cell_edges, show_plot_info=show_plot_info)
+    plotter.plot(sol_n=0, mode="list", steps=[4243], **opts)
 
     # Plot a generated sequence: 0, 100, 200, ..., 2000
-    # plotter.plot(sol_n=0, mode="sequence", n_max=2000, interval=100, show_grids=show_amr_patches, show_cell_edges=show_cell_edges, show_plot_info=show_plot_info)
+    # plotter.plot(sol_n=0, mode="sequence", n_max=2000, interval=100, **opts)
 
 
 if __name__ == "__main__":
