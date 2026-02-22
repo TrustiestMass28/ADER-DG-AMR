@@ -96,6 +96,8 @@ class ModelEquation
   template <typename NumericalMethodType>
   bool pde_tag_cell_refinement(int lev, int i, int j, int k,
                                amrex::Real time, amrex::Real amr_c_lev,
+                               amrex::Vector<amrex::Array4<amrex::Real>>* uw,
+                               NumericalMethodType* solver,
                                const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
 
   //This function is required to be implemented by the user such that
@@ -184,9 +186,11 @@ template <typename EquationType>
 template <typename NumericalMethodType>
 bool ModelEquation<EquationType>::pde_tag_cell_refinement(int lev, int i, int j, int k,
                                                           amrex::Real time, amrex::Real amr_c_lev,
+                                                          amrex::Vector<amrex::Array4<amrex::Real>>* uw,
+                                                          NumericalMethodType* solver,
                                                           const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const
 {
-  return static_cast<const EquationType*>(this)->pde_tag_cell_refinement(lev, i, j, k, time, amr_c_lev, mesh);
+  return static_cast<const EquationType*>(this)->pde_tag_cell_refinement(lev, i, j, k, time, amr_c_lev, uw, solver, mesh);
 }
 
 #endif

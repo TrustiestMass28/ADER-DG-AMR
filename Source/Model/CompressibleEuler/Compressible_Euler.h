@@ -79,6 +79,8 @@ class Compressible_Euler : public ModelEquation<Compressible_Euler>
     template <typename NumericalMethodType>
     bool pde_tag_cell_refinement(int lev, int i, int j, int k,
                                  amrex::Real time, amrex::Real amr_c_lev,
+                                 amrex::Vector<amrex::Array4<amrex::Real>>* uw,
+                                 NumericalMethodType* solver,
                                  const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const;
 
     void set_pde_numeric_limits();
@@ -604,6 +606,8 @@ amrex::Real Compressible_Euler::Soundspeed(const amrex::Vector<amrex::Array4<T>>
 template <typename NumericalMethodType>
 bool Compressible_Euler::pde_tag_cell_refinement(int lev, int i, int j, int k,
                                                   amrex::Real time, amrex::Real amr_c_lev,
+                                                  amrex::Vector<amrex::Array4<amrex::Real>>* uw,
+                                                  NumericalMethodType* solver,
                                                   const std::shared_ptr<Mesh<NumericalMethodType>>& mesh) const
 {
   const auto prob_lo = mesh->get_Geom(lev).ProbLoArray();
@@ -623,13 +627,8 @@ bool Compressible_Euler::pde_tag_cell_refinement(int lev, int i, int j, int k,
     amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
     amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
 
-    //Dynamic refinement (vortex tracking)
     amrex::Real xc = x0 + u_infty * time;
     amrex::Real yc = y0 + v_infty * time;
-
-    //Static refinement
-    //amrex::Real xc = x0;
-    //amrex::Real yc = y0;
 
     amrex::Real dx_vortex = x - xc;
     amrex::Real dy_vortex = y - yc;
@@ -642,6 +641,44 @@ bool Compressible_Euler::pde_tag_cell_refinement(int lev, int i, int j, int k,
     amrex::Real r = std::sqrt(dx_vortex*dx_vortex + dy_vortex*dy_vortex);
 
     return (r <= std::pow(amr_c_lev, 2));
+  }
+  else if(model_case == "kelvin_helmolz_instability")
+  {
+    //TVB troubled cell indicator: tag cells where characteristic
+    //slopes exceed the TVB threshold (minmodB detection)
+    const auto& lmi = solver->get_lin_mode_idx();
+
+    for(int d = 0; d < AMREX_SPACEDIM; ++d)
+    {
+      int s = lmi[d];
+      int shift[] = {0, 0, 0};
+      shift[d] = 1;
+
+      auto L_EV = pde_EV_Lmatrix(d, 0, i, j, k, uw);
+
+      for(int q = 0; q < Q_model_unique; ++q)
+      {
+        amrex::Real D_u = 0.0;
+        amrex::Real Dm_u_avg = 0.0;
+        amrex::Real Dp_u_avg = 0.0;
+
+        for(int _q = 0; _q < Q_model_unique; ++_q)
+        {
+          D_u += L_EV[q][_q] * ((*uw)[_q])(i, j, k, s);
+
+          Dm_u_avg += 0.5 * L_EV[q][_q] * (((*uw)[_q])(i,j,k,0) -
+                      ((*uw)[_q])(i-shift[0], j-shift[1], k-shift[2], 0));
+
+          Dp_u_avg += 0.5 * L_EV[q][_q] * (((*uw)[_q])(i+shift[0], j+shift[1], k+shift[2], 0) -
+                      ((*uw)[_q])(i,j,k,0));
+        }
+
+        bool troubled = false;
+        solver->minmodB(D_u, Dm_u_avg, Dp_u_avg, troubled, lev, amr_c_lev);
+        if(troubled) return true;
+      }
+    }
+    return false;
   }
 
   return false;

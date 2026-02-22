@@ -37,14 +37,14 @@ void AmrDG::get_u_from_u_w(int c, int i, int j, int k,
 }
 
 amrex::Real AmrDG::minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3,
-                          bool &troubled_flag, int l) const
+                          bool &troubled_flag, int l, amrex::Real M) const
 {
   auto _mesh = mesh.lock();
   amrex::Real h;
   auto const dx = _mesh->get_Geom(l).CellSizeArray();
   h = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 
-  if(std::abs(a1)<= AMR_TVB_C[l]*TVB_M*std::pow(h,2.0))
+  if(std::abs(a1)<= AMR_TVB_C[l]*M*std::pow(h,2.0))
   {
     troubled_flag = false;
     return a1;
