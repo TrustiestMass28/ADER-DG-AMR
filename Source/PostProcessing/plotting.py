@@ -23,17 +23,17 @@ yt.utilities.logger.colorize_logging()
 
 def main_plot():
     """""---------------------------------------------""""" 
-    Nsteps = 1038
+    Nsteps = 200
     
     equation_type = "Compressible_Euler_2D"
     #["Compressible_Euler_2D","Advection"]
     mode_n =0
     sol_n  = 0
-    plot_every = 10
+    plot_every = 1
     tstep_lst = list(range(0,Nsteps+1,plot_every))
     out_name_prefix = "tstep"
     #if want to plot only one timestep or a coule of them use below
-    #tstep_lst = [Nsteps]
+    tstep_lst = [0,1731]
     """""
     plot_every          :   plot every number of timesteps
     NB: #if output data every x timesteps better to use plot_every=1, otherwise if we output all timesteps but jsut want to plot some, use plot_every!=1
