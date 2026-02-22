@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 2; //polynomial degree
+      int p  = 1; //polynomial degree
       amrex::Real T = 10.0;
       amrex::Real c_dt = 0.9; //safety factor for CFL condition
 
@@ -59,12 +59,12 @@ int main(int argc, char* argv[])
       }
       else if(simulation_case == "kelvin_helmolz_instability")
       {
-            T = 2.0;
-            max_level = 2;
-            dt_outplt = 0.1;
+            T = 10.0;
+            max_level = 3;
+            dt_outplt = 0.05;
             dtn_regrid = -1;
             dt_regrid = 0.05;
-            TVB_M = 700.0;       // high M for limiter: limit only strong discontinuities
+            TVB_M = 1000.0;       // high M for limiter: limit only strong discontinuities
             limiter_type = "TVB";
             t_limit = 1;
       }
@@ -81,8 +81,9 @@ int main(int argc, char* argv[])
       else if(simulation_case == "kelvin_helmolz_instability")
       {
             //amr_c[l] = TVB M value for tagging at level l
-            amr_c[0] = 50.0;
-            if(max_level > 1) amr_c[1] = 300.0;
+            amr_c[0] = 100.0;
+            amr_c[1] = 250.0;
+            if(max_level > 2) amr_c[2] = 500.0;
       }
 
       
