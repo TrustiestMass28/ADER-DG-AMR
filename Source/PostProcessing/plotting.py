@@ -6,7 +6,41 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from yt.units import dimensions
 
 warnings.filterwarnings("ignore")
-yt.utilities.logger.colorize_logging()
+yt.set_log_level("error")
+
+
+# ======================================================================
+# CLI
+# ======================================================================
+
+def main():
+    plotter = SimPlotter(
+        data_dir="../../Results/Simulation Data",
+        plot_dir="../../Results/Plots",
+        equation_type="Compressible_Euler_2D",
+        n_workers=4,      # set to 1 for serial execution
+    )
+
+    # Toggle overlays
+    show_amr_patches = False   # AMR patch boundaries
+    show_cell_edges  = False   # individual cell contours
+    show_plot_info   = False   # False = data only (no colorbar, axes, title, timestamp)
+    side_by_side     = True   # True = two panels: clean data | data + overlays
+
+    opts = dict(show_grids=show_amr_patches, show_cell_edges=show_cell_edges,
+                show_plot_info=show_plot_info, side_by_side=side_by_side)
+
+    # Plot ALL available timesteps for density (sol_n=0)
+    # plotter.plot(sol_n=0, mode="all", **opts)
+
+    # Plot specific timesteps
+    plotter.plot(sol_n=0, mode_n=0, mode="all", steps=[4243], **opts)
+
+    # Plot a generated sequence: 0, 100, 200, ..., 2000
+    # plotter.plot(sol_n=0, mode="sequence", n_max=2000, interval=100, **opts)
+
+    # Build GIF from previously saved plots
+    plotter.make_gif(sol_n=0, side_by_side=True, fps=10)
 
 
 # ======================================================================
@@ -21,17 +55,18 @@ UNITS_OVERRIDE = {
 
 FIELD_INFO = {
     "Advection": {
-        0: ("density_x_{m}", r"$\rho(\mathbf{x})\ $ ($\dfrac{kg}{m^3}$)",
+        #       (field_template,       label_cb,                                        label_title)
+        0: ("density_x_{m}",     r"$\rho(\mathbf{x})\ $ ($\dfrac{kg}{m^3}$)",
             r"Density $\rho(\mathbf{x})$"),
     },
     "Compressible_Euler_2D": {
-        0: ("mass_density_{m}", r"$\rho(\mathbf{x})\ $ ($\dfrac{kg}{m^3}$)",
+        0: ("mass_density_{m}",     r"$\rho(\mathbf{x})\ $ ($\dfrac{kg}{m^3}$)",
             r"Density $\rho(\mathbf{x})$"),
-        1: ("momentum_x_{m}", r"$u_1(\mathbf{x})\ $ ($\dfrac{m}{s}$)",
+        1: ("momentum_x_{m}",      r"$u_1(\mathbf{x})\ $ ($\dfrac{m}{s}$)",
             r"Velocity $u_1(\mathbf{x})$"),
-        2: ("momentum_y_{m}", r"$u_2(\mathbf{x})\ $ ($\dfrac{m}{s}$)",
+        2: ("momentum_y_{m}",      r"$u_2(\mathbf{x})\ $ ($\dfrac{m}{s}$)",
             r"Velocity $u_2(\mathbf{x})$"),
-        3: ("energy_density_{m}", r"$e(\mathbf{x})\ $ ($\dfrac{J}{kg}$)",
+        3: ("energy_density_{m}",  r"$e(\mathbf{x})\ $ ($\dfrac{J}{kg}$)",
             r"Specific Energy $e(\mathbf{x})$"),
         4: ("angular_momentum_z_{m}", r"$L_z(\mathbf{x})\ $ ($\dfrac{m^2}{s}$)",
             r"Angular momentum $L_z(\mathbf{x})$"),
@@ -132,14 +167,17 @@ def _bounds_worker(args):
         return None
 
 
-def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays):
+def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays,
+                show_timestamp=True):
     """Create a configured yt SlicePlot.
 
     Parameters
     ----------
     with_overlays : bool
-        If True, add grids, cell edges, colorbar, axes, etc.
-        If False, produce a clean data-only image.
+        If True, add colorbar, axes, title, font, grids, cell edges.
+        If False, produce a clean data-only image (no axes, no colorbar).
+    show_timestamp : bool
+        Show timestamp annotation (only when with_overlays is True).
     """
     sl = yt.SlicePlot(ds, "z", field_to_plot, origin="native")
 
@@ -153,7 +191,8 @@ def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays):
         sl.set_colorbar_label(field_name, cfg["label_cb"])
         sl.set_colorbar_minorticks("all", True)
         sl.show_colorbar()
-        sl.annotate_timestamp(corner="upper_left", draw_inset_box=True)
+        if show_timestamp:
+            sl.annotate_timestamp(corner="upper_left", draw_inset_box=True)
         sl.annotate_title(cfg["label_title"])
         sl.set_font_size(cfg["font_size"])
         sl.set_axes_unit("m")
@@ -168,6 +207,13 @@ def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays):
     sl.set_buff_size(cfg["dpi"] * cfg["fig_size"])
     sl.set_figure_size(cfg["fig_size"])
     sl.render()
+
+    # Shrink tick labels to avoid overlap at corners
+    if with_overlays:
+        tick_size = cfg["font_size"] * 0.6
+        for p in sl.plots.values():
+            p.axes.tick_params(labelsize=tick_size)
+
     return sl
 
 
@@ -190,44 +236,34 @@ def _plot_worker(args):
     field_to_plot, field_name, ds = _worker_prepare_field(ds, cfg, ts)
 
     if cfg.get("side_by_side", False):
-        import numpy as np
-        from matplotlib.colors import Normalize
-        from matplotlib import cm
-
-        # Right panel: full overlay plot saved to temp file
-        cfg_overlay = dict(cfg, show_cell_edges=True, show_grids=True)
+        # Left panel: cell edges + timestamp + title + colorbar
+        cfg_left = dict(cfg, show_cell_edges=True, show_grids=False)
         ds2 = _worker_load(cfg, ts, cfg["sol_n"])
         _, _, ds2 = _worker_prepare_field(ds2, cfg, ts)
-        sl_overlay = _make_slice(ds2, field_to_plot, field_name, cfg_overlay,
-                                 with_overlays=True)
-        tmp_over = os.path.join(cfg["plot_dir"], f"_tmp_over_{ts}.png")
-        sl_overlay.save(tmp_over)
-        tmp_over_actual = _find_saved(tmp_over)
-        img_r = mpimg.imread(tmp_over_actual)
+        sl_left = _make_slice(ds2, field_to_plot, field_name,
+                              cfg_left, with_overlays=True)
+        tmp_left = os.path.join(cfg["plot_dir"], f"_tmp_left_{ts}.png")
+        sl_left.save(tmp_left)
+        tmp_left_actual = _find_saved(tmp_left)
+
+        # Right panel: title + colorbar, no cell edges/grids/timestamp
+        cfg_right = dict(cfg, show_cell_edges=False, show_grids=False)
+        sl_right = _make_slice(ds, field_to_plot, field_name,
+                               cfg_right, with_overlays=True,
+                               show_timestamp=False)
+        tmp_right = os.path.join(cfg["plot_dir"], f"_tmp_right_{ts}.png")
+        sl_right.save(tmp_right)
+        tmp_right_actual = _find_saved(tmp_right)
+
+        # Stitch with shared title
+        img_l = mpimg.imread(tmp_left_actual)
+        img_r = mpimg.imread(tmp_right_actual)
+        h_l, w_l = img_l.shape[:2]
         h_r, w_r = img_r.shape[:2]
 
-        # Left panel: render data-only at matching height using frb
-        buff = cfg["dpi"] * cfg["fig_size"]
-        frb = sl_overlay.data_source.to_frb(
-            width=ds.domain_width[0], resolution=(buff, buff),
-        )
-        data = np.array(frb[field_to_plot])
-        vmin = cfg["min_val"] if cfg["min_val"] is not None else float(data.min())
-        vmax = cfg["max_val"] if cfg["max_val"] is not None else float(data.max())
-        norm = Normalize(vmin=vmin, vmax=vmax)
-        cmap_obj = cm.get_cmap(cfg["cmap"])
-        img_l_raw = cmap_obj(norm(data))  # RGBA array
-
-        # Scale left image to match right image height
-        from PIL import Image
-        pil_l = Image.fromarray((img_l_raw * 255).astype(np.uint8))
-        pil_l = pil_l.resize((h_r, h_r), Image.LANCZOS)  # square data
-        img_l = np.array(pil_l).astype(np.float32) / 255.0
-
-        # Stitch side by side
         fig, (ax1, ax2) = plt.subplots(
             1, 2, figsize=(cfg["fig_size"] * 2.4, cfg["fig_size"]),
-            gridspec_kw={"width_ratios": [h_r, w_r]},
+            gridspec_kw={"width_ratios": [w_l, w_r]},
         )
         ax1.imshow(img_l)
         ax1.axis("off")
@@ -241,7 +277,8 @@ def _plot_worker(args):
         fig.savefig(out_path, dpi=cfg["dpi"], bbox_inches="tight")
         plt.close(fig)
 
-        os.remove(tmp_over_actual)
+        os.remove(tmp_left_actual)
+        os.remove(tmp_right_actual)
     else:
         show_overlays = cfg.get("show_plot_info", True)
         sl = _make_slice(ds, field_to_plot, field_name, cfg,
@@ -482,36 +519,62 @@ class SimPlotter:
 
         print("Done.")
 
+    # ------------------------------------------------------------------
+    # GIF generation
+    # ------------------------------------------------------------------
+    def make_gif(self, sol_n=0, side_by_side=False, fps=10,
+                 output_name=None):
+        """Build an animated GIF from previously saved plot PNGs.
 
-# ======================================================================
-# CLI
-# ======================================================================
+        Parameters
+        ----------
+        sol_n : int
+            Solution component (must match the plots already generated).
+        side_by_side : bool
+            If True, look for ``*_sidebyside.png`` files.
+        fps : int
+            Frames per second for the GIF.
+        output_name : str, optional
+            Output filename. Defaults to ``sol_{sol_n}.gif`` or
+            ``sol_{sol_n}_sidebyside.gif``.
+        """
+        from PIL import Image as PILImage
 
-def main():
-    plotter = SimPlotter(
-        data_dir="../../Results/Simulation Data",
-        plot_dir="../../Results/Plots",
-        equation_type="Compressible_Euler_2D",
-        n_workers=4,      # set to 1 for serial execution
-    )
+        suffix = "_sidebyside" if side_by_side else ""
+        pattern = re.compile(
+            rf"^(\d+)_sol_{sol_n}{suffix}.*\.png$"
+        )
 
-    # Toggle overlays
-    show_amr_patches = False   # AMR patch boundaries
-    show_cell_edges  = False   # individual cell contours
-    show_plot_info   = False   # False = data only (no colorbar, axes, title, timestamp)
-    side_by_side     = True   # True = two panels: clean data | data + overlays
+        # Collect and sort frames by timestep number
+        frames_map = {}
+        for fname in os.listdir(self.plot_dir):
+            m = pattern.match(fname)
+            if m:
+                frames_map[int(m.group(1))] = fname
+        if not frames_map:
+            print(f"No PNG frames found for sol_n={sol_n}, "
+                  f"side_by_side={side_by_side}")
+            return
 
-    opts = dict(show_grids=show_amr_patches, show_cell_edges=show_cell_edges,
-                show_plot_info=show_plot_info, side_by_side=side_by_side)
+        sorted_steps = sorted(frames_map.keys())
+        print(f"Building GIF: {len(sorted_steps)} frames, {fps} fps ...")
 
-    # Plot ALL available timesteps for density (sol_n=0)
-    # plotter.plot(sol_n=0, mode="all", **opts)
+        frames = []
+        for ts in sorted_steps:
+            path = os.path.join(self.plot_dir, frames_map[ts])
+            img = PILImage.open(path).convert("RGB")
+            frames.append(img)
 
-    # Plot specific timesteps
-    plotter.plot(sol_n=0, mode="list", steps=[4243], **opts)
+        if output_name is None:
+            output_name = f"sol_{sol_n}{suffix}.gif"
+        out_path = os.path.join(self.plot_dir, output_name)
 
-    # Plot a generated sequence: 0, 100, 200, ..., 2000
-    # plotter.plot(sol_n=0, mode="sequence", n_max=2000, interval=100, **opts)
+        duration_ms = int(1000 / fps)
+        frames[0].save(
+            out_path, save_all=True, append_images=frames[1:],
+            duration=duration_ms, loop=0,
+        )
+        print(f"Saved: {out_path}")
 
 
 if __name__ == "__main__":
