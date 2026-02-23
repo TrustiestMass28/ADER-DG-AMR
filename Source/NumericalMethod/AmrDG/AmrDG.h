@@ -855,25 +855,10 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
   }
 
-  //Set up flux registers for AMR synchronization.
-  //The AMR grid hierarchy was already created by InitFromScratch
-  //(geometric tagging works on zero data).
-  //Ghost cells were synced during IC initialization:
-  //  - Projection IC: InterpFromCoarseLevel + FillBoundary in AMR_interpolate_initial_condition
-  //  - Analytical IC: AMR_sync_initial_condition (average_fine_coarse + FillBoundary)
-  if(_mesh->L > 1){
-    AMR_set_flux_registers();
-  }
-
-  //Pre-allocate FillPatch temporaries (reused every time step)
+  //Flux registers and FillPatch temporaries are set up after the initial
+  //regrid at n==0 inside the time loop, so no need to allocate them here
+  //on the uniform grid that will be immediately discarded.
   solver::Array2D<amrex::MultiFab> fillpatch_mf;
-  fillpatch_mf.resize(_mesh->get_finest_lev()+1, Q);
-  for(int l=0; l<=_mesh->get_finest_lev(); ++l){
-    for(int q=0; q<Q; ++q){
-      fillpatch_mf(l,q).define(U_w(l,q).boxArray(), U_w(l,q).DistributionMap(),
-                                Np_s, _mesh->nghost);
-    }
-  }
 
   while(t<T)
   {  
@@ -882,12 +867,13 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
         oss.str("");
         oss.clear();
 
-        // Calculate progress percentage
-        int progress = static_cast<int>((t / T) * 100.0);
-        progress = std::clamp(progress, 0, 100);
+        // Calculate progress per-mille (0–1000) for finer granularity
+        int progress = static_cast<int>((t / T) * 1000.0);
+        progress = std::clamp(progress, 0, 1000);
 
         // Update the text to show current time vs total time
-        oss << std::fixed << std::setprecision(0) << progress << "% "
+        int pct = progress / 10;
+        oss << std::fixed << std::setprecision(0) << pct << "% "
           << "t = " << std::fixed << std::setprecision(4) << t
           << " / " << T
           << " | Dt = " << std::scientific << std::setprecision(2) << Dt;
@@ -903,13 +889,13 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     }
 
     //Remake existing levels and create new fine levels from coarse
-    //Skip in validation mode: tagging is static, so regrid produces the same grid.
     if ((_mesh->L > 1)) //&& !flag_analytical_ic)
     {
       bool do_regrid_dtn = (_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0);
       bool do_regrid_dt  = (_mesh->dt_regrid > 0) && (t - t_last_regrid >= _mesh->dt_regrid - 1e-12);
+      bool do_regrid_init = (n == 0);
 
-      if(do_regrid_dtn || do_regrid_dt){
+      if(do_regrid_init || do_regrid_dtn || do_regrid_dt){
         // Snapshot geometry before regrid
         int old_finest = _mesh->get_finest_lev();
         amrex::Vector<amrex::BoxArray> old_ba(old_finest + 1);
@@ -1003,7 +989,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   if (amrex::ParallelDescriptor::IOProcessor()) {
     if (m_bar && !m_bar->is_completed()) {
         m_bar->set_option(indicators::option::PostfixText{"100% Done"});
-        m_bar->set_progress(100);
+        m_bar->set_progress(1000);
         m_bar->mark_as_completed();
         std::cout << std::flush;
     }

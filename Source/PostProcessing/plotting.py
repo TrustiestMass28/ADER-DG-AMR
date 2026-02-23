@@ -34,7 +34,7 @@ def main():
     # plotter.plot(sol_n=0, mode="all", **opts)
 
     # Plot specific timesteps
-    plotter.plot(sol_n=0, mode_n=0, mode="all", steps=[4243], **opts)
+    plotter.plot(sol_n=0, mode_n=0, mode="all", steps=[1580], **opts)
 
     # Plot a generated sequence: 0, 100, 200, ..., 2000
     # plotter.plot(sol_n=0, mode="sequence", n_max=2000, interval=100, **opts)

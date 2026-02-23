@@ -540,7 +540,7 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
                 std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
             },
             indicators::option::Stream{std::cout},  //CRITICAL for in-place update
-            indicators::option::MaxProgress{100} // REQUIRED for set_progress(0–100)
+            indicators::option::MaxProgress{1000} // REQUIRED for set_progress(0–1000)
         );
         std::cout << std::flush;
     }
