@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 1; //polynomial degree
+      int p  = 2; //polynomial degree
       amrex::Real T = 10.0;
       amrex::Real c_dt = 0.9; //safety factor for CFL condition
 
@@ -63,10 +63,14 @@ int main(int argc, char* argv[])
             max_level = 3;
             dt_outplt = 0.05;
             dtn_regrid = -1;
-            dt_regrid = 0.05;
-            TVB_M = 1000.0;       // high M for limiter: limit only strong discontinuities
+            dt_regrid = 0.1;
+            TVB_M = 700.0;
             limiter_type = "TVB";
             t_limit = 1;
+            //NB
+            //- Large M * h² , the limiter tolerates large jumps,  more features survive (good for
+            //vortices) but oscillations near shocks can slip through (bad)
+            //- Small M * h² , the limiter is strict, clean shocks but smooth features get clipped too
       }
 
       //Allocate after max_level is finalized
@@ -81,9 +85,9 @@ int main(int argc, char* argv[])
       else if(simulation_case == "kelvin_helmolz_instability")
       {
             //amr_c[l] = TVB M value for tagging at level l
-            amr_c[0] = 100.0;
-            amr_c[1] = 250.0;
-            if(max_level > 2) amr_c[2] = 500.0;
+            amr_c[0] = 500.0;
+            amr_c[1] = 1000.0;
+            if(max_level > 2) amr_c[2] = 2000.0;
       }
 
       
