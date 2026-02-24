@@ -21,26 +21,24 @@ def main():
         n_workers=4,      # set to 1 for serial execution
     )
 
-    # Toggle overlays
-    show_amr_patches = False   # AMR patch boundaries
-    show_cell_edges  = False   # individual cell contours
-    show_plot_info   = False   # False = data only (no colorbar, axes, title, timestamp)
-    side_by_side     = True   # True = two panels: clean data | data + overlays
+    opts = dict(
+        sol_n=0, mode_n=0, mode="all", steps=[1580],
+        show_grids=False, show_cell_edges=False, show_plot_info=False,
+    )
 
-    opts = dict(show_grids=show_amr_patches, show_cell_edges=show_cell_edges,
-                show_plot_info=show_plot_info, side_by_side=side_by_side)
+    # Full domain view
+    plotter.plot(**opts, view="domain")
 
-    # Plot ALL available timesteps for density (sol_n=0)
-    # plotter.plot(sol_n=0, mode="all", **opts)
+    # Zoomed detail view
+    plotter.plot(**opts, view="detail",
+                 zoom_center=(0.75, 0.75), zoom_factor=4.0)
 
-    # Plot specific timesteps
-    plotter.plot(sol_n=0, mode_n=0, mode="all", steps=[1580], **opts)
-
-    # Plot a generated sequence: 0, 100, 200, ..., 2000
-    # plotter.plot(sol_n=0, mode="sequence", n_max=2000, interval=100, **opts)
-
-    # Build GIF from previously saved plots
-    plotter.make_gif(sol_n=0, side_by_side=True, fps=10)
+    # Build GIFs into Doc/media
+    media_dir = "../../Doc/media"
+    plotter.make_gif(sol_n=0, view="domain", fps=10,
+                     output_name="kh_domain.gif", output_dir=media_dir)
+    plotter.make_gif(sol_n=0, view="detail", fps=10,
+                     output_name="kh_detail.gif", output_dir=media_dir)
 
 
 # ======================================================================
@@ -168,7 +166,7 @@ def _bounds_worker(args):
 
 
 def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays,
-                show_timestamp=True):
+                show_timestamp=True, zoom_center=None, zoom_factor=None):
     """Create a configured yt SlicePlot.
 
     Parameters
@@ -178,8 +176,20 @@ def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays,
         If False, produce a clean data-only image (no axes, no colorbar).
     show_timestamp : bool
         Show timestamp annotation (only when with_overlays is True).
+    zoom_center : tuple(float, float) or None
+        (x, y) center for the zoomed view.
+    zoom_factor : float or None
+        Zoom factor (e.g. 2.0 = show half the domain width in each direction).
     """
     sl = yt.SlicePlot(ds, "z", field_to_plot, origin="native")
+
+    if zoom_center is not None and zoom_factor is not None:
+        le = ds.domain_left_edge.d
+        re = ds.domain_right_edge.d
+        wx = (re[0] - le[0]) / zoom_factor
+        wy = (re[1] - le[1]) / zoom_factor
+        sl.set_center(list(zoom_center), unit="m")
+        sl.set_width(((wx, "m"), (wy, "m")))
 
     if cfg["min_val"] is not None:
         sl.set_zlim(field=field_to_plot,
@@ -204,7 +214,7 @@ def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays,
         sl.hide_colorbar()
         sl.hide_axes(draw_frame=False)
 
-    sl.set_buff_size(cfg["dpi"] * cfg["fig_size"])
+    sl.set_buff_size(int(cfg["dpi"] * cfg["fig_size"]))
     sl.set_figure_size(cfg["fig_size"])
     sl.render()
 
@@ -217,10 +227,48 @@ def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays,
     return sl
 
 
+def _render_row(cfg, ts, field_to_plot, field_name, show_timestamp=True,
+                zoom_center=None, zoom_factor=None):
+    """Render a pair of panels (left=cell edges, right=clean) and return
+    their image arrays.  When zoom_center/zoom_factor are given the view
+    is zoomed in with proportionally higher resolution."""
+    import matplotlib.image as mpimg
+
+    zoom_kw = dict(zoom_center=zoom_center, zoom_factor=zoom_factor)
+    tag = "full" if zoom_factor is None else "zoom"
+
+    # Left: cell edges + overlays
+    ds_l = _worker_load(cfg, ts, cfg["sol_n"])
+    _, _, ds_l = _worker_prepare_field(ds_l, cfg, ts)
+    cfg_l = dict(cfg, show_cell_edges=True, show_grids=False)
+    sl_l = _make_slice(ds_l, field_to_plot, field_name,
+                       cfg_l, with_overlays=True,
+                       show_timestamp=show_timestamp, **zoom_kw)
+    tmp_l = os.path.join(cfg["plot_dir"], f"_tmp_{tag}_left_{ts}.png")
+    sl_l.save(tmp_l)
+    tmp_l = _find_saved(tmp_l)
+
+    # Right: clean (no cell edges, no timestamp)
+    ds_r = _worker_load(cfg, ts, cfg["sol_n"])
+    _, _, ds_r = _worker_prepare_field(ds_r, cfg, ts)
+    cfg_r = dict(cfg, show_cell_edges=False, show_grids=False)
+    sl_r = _make_slice(ds_r, field_to_plot, field_name,
+                       cfg_r, with_overlays=True,
+                       show_timestamp=False, **zoom_kw)
+    tmp_r = os.path.join(cfg["plot_dir"], f"_tmp_{tag}_right_{ts}.png")
+    sl_r.save(tmp_r)
+    tmp_r = _find_saved(tmp_r)
+
+    img_l = mpimg.imread(tmp_l)
+    img_r = mpimg.imread(tmp_r)
+    os.remove(tmp_l)
+    os.remove(tmp_r)
+    return img_l, img_r
+
+
 def _plot_worker(args):
     """Load, render, and save a single timestep plot."""
     import matplotlib.pyplot as plt
-    import matplotlib.image as mpimg
 
     ts, idx, total, cfg = args
     path = os.path.join(
@@ -235,50 +283,33 @@ def _plot_worker(args):
     ds = _worker_load(cfg, ts, cfg["sol_n"])
     field_to_plot, field_name, ds = _worker_prepare_field(ds, cfg, ts)
 
-    if cfg.get("side_by_side", False):
-        # Left panel: cell edges + timestamp + title + colorbar
-        cfg_left = dict(cfg, show_cell_edges=True, show_grids=False)
-        ds2 = _worker_load(cfg, ts, cfg["sol_n"])
-        _, _, ds2 = _worker_prepare_field(ds2, cfg, ts)
-        sl_left = _make_slice(ds2, field_to_plot, field_name,
-                              cfg_left, with_overlays=True)
-        tmp_left = os.path.join(cfg["plot_dir"], f"_tmp_left_{ts}.png")
-        sl_left.save(tmp_left)
-        tmp_left_actual = _find_saved(tmp_left)
+    view = cfg.get("view", "domain")
 
-        # Right panel: title + colorbar, no cell edges/grids/timestamp
-        cfg_right = dict(cfg, show_cell_edges=False, show_grids=False)
-        sl_right = _make_slice(ds, field_to_plot, field_name,
-                               cfg_right, with_overlays=True,
-                               show_timestamp=False)
-        tmp_right = os.path.join(cfg["plot_dir"], f"_tmp_right_{ts}.png")
-        sl_right.save(tmp_right)
-        tmp_right_actual = _find_saved(tmp_right)
+    if view in ("domain", "detail"):
+        zoom_kw = {}
+        if view == "detail":
+            zoom_kw = dict(zoom_center=cfg["zoom_center"],
+                           zoom_factor=cfg["zoom_factor"])
 
-        # Stitch with shared title
-        img_l = mpimg.imread(tmp_left_actual)
-        img_r = mpimg.imread(tmp_right_actual)
-        h_l, w_l = img_l.shape[:2]
-        h_r, w_r = img_r.shape[:2]
+        img_l, img_r = _render_row(cfg, ts, field_to_plot, field_name,
+                                   show_timestamp=True,
+                                   **zoom_kw)
+        _, w_l = img_l.shape[:2]
+        _, w_r = img_r.shape[:2]
 
         fig, (ax1, ax2) = plt.subplots(
             1, 2, figsize=(cfg["fig_size"] * 2.4, cfg["fig_size"]),
             gridspec_kw={"width_ratios": [w_l, w_r]},
         )
-        ax1.imshow(img_l)
-        ax1.axis("off")
-        ax2.imshow(img_r)
-        ax2.axis("off")
+        ax1.imshow(img_l); ax1.axis("off")
+        ax2.imshow(img_r); ax2.axis("off")
         fig.tight_layout(pad=0.2)
 
         out_path = os.path.join(
-            cfg["plot_dir"], f"{ts}_sol_{cfg['sol_n']}_sidebyside.png",
+            cfg["plot_dir"], f"{ts}_sol_{cfg['sol_n']}_{view}.png",
         )
         fig.savefig(out_path, dpi=cfg["dpi"], bbox_inches="tight")
         plt.close(fig)
-
-        os.remove(tmp_left_actual)
-        os.remove(tmp_right_actual)
     else:
         show_overlays = cfg.get("show_plot_info", True)
         sl = _make_slice(ds, field_to_plot, field_name, cfg,
@@ -372,6 +403,11 @@ class SimPlotter:
         """
         if mode == "all":
             return self.discover_timesteps(q=q)
+        elif mode == "last":
+            all_steps = self.discover_timesteps(q=q)
+            if not all_steps:
+                return []
+            return [all_steps[-1]]
         elif mode == "list":
             if steps is None:
                 raise ValueError("mode='list' requires steps=[...]")
@@ -438,7 +474,8 @@ class SimPlotter:
              fig_size=5, font_size=20, show_grids=False,
              show_cell_edges=True, fixed_bounds=True,
              cb_sample_every=1, show_plot_info=True,
-             side_by_side=False):
+             view="domain",
+             zoom_center=None, zoom_factor=None):
         """Main entry point: select timesteps and produce plots.
 
         Parameters
@@ -501,7 +538,8 @@ class SimPlotter:
             cmap=cmap, dpi=dpi, fig_size=fig_size, font_size=font_size,
             show_grids=show_grids, show_cell_edges=show_cell_edges,
             min_val=min_val, max_val=max_val, show_plot_info=show_plot_info,
-            side_by_side=side_by_side,
+            view=view,
+            zoom_center=zoom_center, zoom_factor=zoom_factor,
         )
 
         total = len(timesteps)
@@ -522,27 +560,28 @@ class SimPlotter:
     # ------------------------------------------------------------------
     # GIF generation
     # ------------------------------------------------------------------
-    def make_gif(self, sol_n=0, side_by_side=False, fps=10,
-                 output_name=None):
+    def make_gif(self, sol_n=0, view="domain", fps=10,
+                 output_name=None, output_dir=None):
         """Build an animated GIF from previously saved plot PNGs.
 
         Parameters
         ----------
         sol_n : int
             Solution component (must match the plots already generated).
-        side_by_side : bool
-            If True, look for ``*_sidebyside.png`` files.
+        view : str
+            "domain" or "detail" — selects which set of PNGs to use.
         fps : int
             Frames per second for the GIF.
         output_name : str, optional
-            Output filename. Defaults to ``sol_{sol_n}.gif`` or
-            ``sol_{sol_n}_sidebyside.gif``.
+            Output filename. Defaults to ``sol_{sol_n}_{view}.gif``.
+        output_dir : str, optional
+            Directory for the GIF. Defaults to plot_dir.
         """
         from PIL import Image as PILImage
 
-        suffix = "_sidebyside" if side_by_side else ""
+        suffix = f"_{view}"
         pattern = re.compile(
-            rf"^(\d+)_sol_{sol_n}{suffix}.*\.png$"
+            rf"^(\d+)_sol_{sol_n}{suffix}\.png$"
         )
 
         # Collect and sort frames by timestep number
@@ -552,8 +591,7 @@ class SimPlotter:
             if m:
                 frames_map[int(m.group(1))] = fname
         if not frames_map:
-            print(f"No PNG frames found for sol_n={sol_n}, "
-                  f"side_by_side={side_by_side}")
+            print(f"No PNG frames found for sol_n={sol_n}, view={view}")
             return
 
         sorted_steps = sorted(frames_map.keys())
@@ -566,8 +604,10 @@ class SimPlotter:
             frames.append(img)
 
         if output_name is None:
-            output_name = f"sol_{sol_n}{suffix}.gif"
-        out_path = os.path.join(self.plot_dir, output_name)
+            output_name = f"sol_{sol_n}_{view}.gif"
+        gif_dir = output_dir if output_dir is not None else self.plot_dir
+        os.makedirs(gif_dir, exist_ok=True)
+        out_path = os.path.join(gif_dir, output_name)
 
         duration_ms = int(1000 / fps)
         frames[0].save(

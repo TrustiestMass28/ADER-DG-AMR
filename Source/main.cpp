@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
       //NUMERICAL
       int p  = 2; //polynomial degree
       amrex::Real T = 10.0;
-      amrex::Real c_dt = 0.9; //safety factor for CFL condition
+      amrex::Real c_dt = 0.8; //safety factor for CFL condition
 
       //LIMITER (set type="" or interval<=0 to disable)
       std::string limiter_type = "";  // "TVB" to enable
@@ -59,12 +59,12 @@ int main(int argc, char* argv[])
       }
       else if(simulation_case == "kelvin_helmolz_instability")
       {
-            T = 10.0;
+            T = 5.0;
             max_level = 3;
             dt_outplt = 0.05;
             dtn_regrid = -1;
             dt_regrid = 0.1;
-            TVB_M = 700.0;
+            TVB_M = 2000.0;
             limiter_type = "TVB";
             t_limit = 1;
             //NB
@@ -85,9 +85,9 @@ int main(int argc, char* argv[])
       else if(simulation_case == "kelvin_helmolz_instability")
       {
             //amr_c[l] = TVB M value for tagging at level l
-            amr_c[0] = 500.0;
+            amr_c[0] = 700.0;
             amr_c[1] = 1000.0;
-            if(max_level > 2) amr_c[2] = 2000.0;
+            amr_c[2] = 1500.0;
       }
 
       
@@ -185,11 +185,11 @@ int main(int argc, char* argv[])
       else if(simulation_case == "kelvin_helmolz_instability"){
             L_x_lo   = 0.0;
             L_x_hi   = 1.0;
-            n_cell_x = 32;
+            n_cell_x = 64;
 
             L_y_lo   = 0.0;
             L_y_hi   = 1.0;
-            n_cell_y = 32;
+            n_cell_y = 64;
 
             L_z_lo   = 0.0;
             L_z_hi   = 0.0;
