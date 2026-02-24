@@ -1,7 +1,9 @@
 
 # ADER-DG-AMR
 
-![Kelvin-Helmholtz Instability](Doc/media/kh_instability.gif)
+![Kelvin-Helmholtz Instability — Domain](Doc/media/kh_domain.gif)
+
+![Kelvin-Helmholtz Instability — Detail](Doc/media/kh_detail.gif)
 
 A block-structured Adaptive Mesh Refinement (AMR) framework for solving general multi-dimensional systems of hyperbolic partial differential equations (PDEs) with high-order accuracy in both space and time. The framework combines a modal Discontinuous Galerkin (DG) spatial discretization with Arbitrary Derivative (ADER) time integration, yielding a single-step, single-stage, fully discrete scheme of order p+1.
 

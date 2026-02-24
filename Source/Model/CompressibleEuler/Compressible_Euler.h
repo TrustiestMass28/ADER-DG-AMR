@@ -239,7 +239,7 @@ amrex::Real Compressible_Euler::pde_IC(int lev, int q, int i,int j,int k,
     //Kevin Schaal et. al., Astrophysical hydrodynamics with a high-order
     //discontinuous Galerking scheme and adaptive mesh refinement, 
     //Royal Astronomical Society (2015) ,https://doi.org/10.1093/mnras/stv1859
-    amrex::Real w0=0.1;
+    amrex::Real w0=0.2;
     amrex::Real sigma = 0.05/std::sqrt(2.0);
     
     amrex::Real rho =  ((y > 0.25) && (y < 0.75)) ? 2.0 : 1.0; 
