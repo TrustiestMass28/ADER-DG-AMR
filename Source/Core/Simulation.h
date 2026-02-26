@@ -46,7 +46,7 @@ class Simulation
                     Array<int,AMREX_SPACEDIM> const& _is_per, amrex::Vector<amrex::Real> amr_c,
                     int dtn_regrid = 0, amrex::Real dt_regrid = 0,int nghost= 1);
 
-    void setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix = "");
+    void setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix = "", int _restart_tstep = 0);
 
     //Set validation mode: if true, use analytical IC at all levels (for convergence tests)
     //If false (default), levels > 0 use projection from coarser level
@@ -71,6 +71,8 @@ class Simulation
     amrex::Real dt_outplt;   //data output physical time interval
 
     std::string out_name_prefix = "tstep";
+
+    int restart_tstep = 0;
 };
 
 /*
@@ -96,12 +98,12 @@ void Simulation<NumericalMethodType,EquationType>::run()
       std::filesystem::create_directories(simulation_data_dir);
     }
 
-    // Iterate through all files in the directory
-    for (const auto& entry : std::filesystem::directory_iterator(simulation_data_dir)) {
-      // Check if the filename contains out_name_prefix
-      if (entry.path().filename().string().find(out_name_prefix) != std::string::npos) {
-          //std::cout << "Deleting file: " << entry.path() << std::endl;
-          std::filesystem::remove_all(entry.path());  // Delete the file
+    if (restart_tstep == 0) {
+      // Fresh run: clean existing plotfiles
+      for (const auto& entry : std::filesystem::directory_iterator(simulation_data_dir)) {
+        if (entry.path().filename().string().find(out_name_prefix) != std::string::npos) {
+            std::filesystem::remove_all(entry.path());
+        }
       }
     }
   }
@@ -110,7 +112,7 @@ void Simulation<NumericalMethodType,EquationType>::run()
   mesh->init(solver);
   
   //set ptr to mesh and init grids
-  solver->init(model,mesh,dtn_outplt,dt_outplt,out_name_prefix);
+  solver->init(model,mesh,dtn_outplt,dt_outplt,out_name_prefix,restart_tstep);
 
   bdcond->init(model,solver,mesh);
   
@@ -153,10 +155,11 @@ void Simulation<NumericalMethodType,EquationType>::setGeometrySettings(const Rea
 } 
 
 template <typename NumericalMethodType,typename EquationType>
-void Simulation<NumericalMethodType,EquationType>::setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix)
+void Simulation<NumericalMethodType,EquationType>::setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix, int _restart_tstep)
 {
   dtn_outplt = _n_out;
   dt_outplt  = _t_out;
+  restart_tstep = _restart_tstep;
 
   // Check if the name_prefix is not empty
   if (!_out_name_prefix.empty()) {
