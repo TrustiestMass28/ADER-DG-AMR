@@ -23,9 +23,9 @@ int main(int argc, char* argv[])
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 2; //polynomial degree
+      int p  = 3; //polynomial degree
       amrex::Real T = 10.0;
-      amrex::Real c_dt = 0.8; //safety factor for CFL condition
+      amrex::Real c_dt = 0.5; //safety factor for CFL condition
 
       //LIMITER (set type="" or interval<=0 to disable)
       std::string limiter_type = "";  // "TVB" to enable
@@ -41,9 +41,10 @@ int main(int argc, char* argv[])
       //VALIDATION MODE
       //Set to true for convergence tests: uses analytical IC at all levels
       //Set to false for normal AMR: levels > 0 use projection from coarser level
-      bool validation_mode = false ;
+      bool validation_mode = true ;
 
       //IO
+      int restart_tstep = 0;    //set >0 to restart from plotfile at that timestep
       int dtn_outplt = -1;
       amrex::Real dt_outplt = -1;
       int dtn_regrid  = -1;          // try regrid every n timesteps
@@ -59,12 +60,26 @@ int main(int argc, char* argv[])
       }
       else if(simulation_case == "kelvin_helmolz_instability")
       {
+            /* tn=0->tn=11506
             T = 5.0;
-            max_level = 3;
+            max_level = 2;
             dt_outplt = 0.05;
             dtn_regrid = -1;
-            dt_regrid = 0.1;
-            TVB_M = 2000.0;
+            dt_regrid = 0.05;
+            TVB_M = 5000.0;
+            limiter_type = "TVB";
+            t_limit = 1;
+            */
+
+            //tn=10447
+
+            restart_tstep = 11506;
+            T = 5.0;
+            max_level = 2;
+            dt_outplt = 0.05;
+            dtn_regrid = -1;
+            dt_regrid = 0.05;
+            TVB_M = 5000.0;
             limiter_type = "TVB";
             t_limit = 1;
             //NB
@@ -85,16 +100,15 @@ int main(int argc, char* argv[])
       else if(simulation_case == "kelvin_helmolz_instability")
       {
             //amr_c[l] = TVB M value for tagging at level l
-            amr_c[0] = 700.0;
-            amr_c[1] = 1000.0;
-            amr_c[2] = 1500.0;
+            amr_c[0] = 1500.0;
+            amr_c[1] = 2500.0;
       }
 
       
 
       sim.setNumericalSettings(p,T,c_dt,limiter_type,TVB_M,amr_tvb_c,t_limit);
       sim.setValidationMode(validation_mode);
-      sim.setIO(dtn_outplt, dt_outplt);
+      sim.setIO(dtn_outplt, dt_outplt, "", restart_tstep);
 
 
       //BOUNDARY CONDITION

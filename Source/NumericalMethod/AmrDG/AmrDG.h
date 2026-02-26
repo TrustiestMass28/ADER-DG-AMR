@@ -832,20 +832,29 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   auto _mesh = mesh.lock();
 
   //Set timestep idx and time
-  n=0;
-  t= 0.0;  
+  if (restart_tstep > 0) {
+    n = restart_tstep;
+    t = restart_time;
+    t_last_plt = t;
+    t_last_regrid = t;
+  } else {
+    n = 0;
+    t = 0.0;
+  }
 
-  //Plot initial condition
-  dtn_plt =  (dtn_outplt > 0);
-  dt_plt = (dt_outplt > 0);
-  if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
-  
-  //Output t=0 norm
-  L1Norm_DG_AMR(model_pde);
-  L2Norm_DG_AMR(model_pde);
+  if (restart_tstep == 0) {
+    //Plot initial condition
+    dtn_plt =  (dtn_outplt > 0);
+    dt_plt = (dt_outplt > 0);
+    if(dtn_plt || dt_plt){PlotFile(model_pde,U_w,n, t);}
+
+    //Output t=0 norm
+    L1Norm_DG_AMR(model_pde);
+    L2Norm_DG_AMR(model_pde);
+  }
   
   Solver<NumericalMethodType>::set_Dt(model_pde);
-  
+
   if (amrex::ParallelDescriptor::IOProcessor()) {
     if (m_bar) {
         std::cout << "\n";
@@ -859,6 +868,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
   //regrid at n==0 inside the time loop, so no need to allocate them here
   //on the uniform grid that will be immediately discarded.
   solver::Array2D<amrex::MultiFab> fillpatch_mf;
+  bool first_step = true;
 
   while(t<T)
   {  
@@ -893,7 +903,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
     {
       bool do_regrid_dtn = (_mesh->dtn_regrid > 0) && (n % _mesh->dtn_regrid == 0);
       bool do_regrid_dt  = (_mesh->dt_regrid > 0) && (t - t_last_regrid >= _mesh->dt_regrid - 1e-12);
-      bool do_regrid_init = (n == 0);
+      bool do_regrid_init = first_step;
 
       if(do_regrid_init || do_regrid_dtn || do_regrid_dt){
         // Snapshot geometry before regrid
@@ -917,7 +927,7 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
           }
         }
 
-        if (grid_changed) {
+        if (grid_changed || first_step) {
           //clear old flux register
           flux_reg.clear();
 
@@ -938,8 +948,9 @@ void AmrDG::evolve(const std::shared_ptr<ModelEquation<EquationType>>& model_pde
 
         t_last_regrid = t;
       }
-    }  
-    
+      first_step = false;
+    }
+
     // Advance solution by one time-step.
     Solver<NumericalMethodType>::time_integration(model_pde,bdcond,t);
 

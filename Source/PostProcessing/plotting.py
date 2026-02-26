@@ -31,7 +31,7 @@ def main():
 
     # Zoomed detail view
     plotter.plot(**opts, view="detail",
-                 zoom_center=(0.75, 0.75), zoom_factor=4.0)
+                 zoom_center=(0.6, 0.8), zoom_factor=4.0)
 
     # Build GIFs into Doc/media
     media_dir = "../../Doc/media"

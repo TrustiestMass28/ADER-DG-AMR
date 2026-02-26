@@ -12,6 +12,7 @@
 #include <AMReX_MultiFabUtil.H>
 #include <AMReX_FillPatchUtil.H>
 #include <AMReX_PlotFileUtil.H>
+#include <AMReX_PlotFileDataImpl.H>
 #include <AMReX_VisMF.H>
 #include <AMReX_PhysBCFunct.H>
 #include <AMReX_Print.H>
@@ -105,9 +106,10 @@ class Solver
         //TODO: pass all tempaltes of other classes from which Solver might need data to init
         //like stuff from geometry for number of levels,...
         template <typename EquationType>
-        void init(const std::shared_ptr<ModelEquation<EquationType>>& model_pde, 
+        void init(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                     std::shared_ptr<Mesh<NumericalMethodType>> _mesh,
-                    int _dtn_outplt, amrex::Real _dt_outplt, std::string _out_name_prefix);
+                    int _dtn_outplt, amrex::Real _dt_outplt, std::string _out_name_prefix,
+                    int _restart_tstep = 0);
 
         //reshape bc vector depending on solver used (e.g if use modal or not)
         void init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp);
@@ -404,6 +406,11 @@ class Solver
 
         std::string out_name_prefix;
 
+        int restart_tstep = 0;
+        amrex::Real restart_time = 0.0;
+
+        amrex::Real ReadPlotFile(int tstep);
+
         //Multifabs — solver::Array2D(lev,q), solver::Array3D(lev,d,q), solver::Array2D(lev,d)
 
         //solution vector U(x,t) — (lev,q)
@@ -500,14 +507,16 @@ amrex::Vector<amrex::Vector<amrex::BCRec>> Solver<NumericalMethodType>::get_null
 
 template <typename NumericalMethodType>
 template <typename EquationType>
-void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<EquationType>>& model_pde, 
+void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                                         std::shared_ptr<Mesh<NumericalMethodType>> _mesh,
-                                        int _dtn_outplt, amrex::Real _dt_outplt, std::string _out_name_prefix) 
+                                        int _dtn_outplt, amrex::Real _dt_outplt, std::string _out_name_prefix,
+                                        int _restart_tstep)
 {
     //set I/O
     dtn_outplt = _dtn_outplt;
     dt_outplt = _dt_outplt;
     out_name_prefix = _out_name_prefix;
+    restart_tstep = _restart_tstep;
 
     setMesh(_mesh);
     
@@ -565,10 +574,87 @@ void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<Equa
     // At this point: all levels 0..max_level exist as full-domain grids (AMReX's InitFromScratch creates uniform grids at every level). All data is
     // zero. All possible levels have been created
 
-    //Populate all grid levels with the IC
-    //afterwards apply regridding to tag cells
-    //and create AMR grids
-    set_initial_condition(model_pde);
+    //Populate all grid levels with the IC (or load from plotfile on restart)
+    if (restart_tstep > 0) {
+        // ReadPlotFile restores the AMR grid hierarchy from the plotfile
+        // (BoxArrays, DistributionMappings) and copies the solution data,
+        // so fine levels are preserved exactly as they were when saved.
+        restart_time = ReadPlotFile(restart_tstep);
+
+        // ParallelCopy only fills valid cells; ghost cells (especially at
+        // coarse-fine interfaces) remain uninitialized.  Do a full FillPatch
+        // (bottom-up so each coarser level is ready before the finer one).
+        for (int l = 0; l <= _mesh->get_finest_lev(); ++l) {
+            amrex::Vector<amrex::MultiFab> tmp(Q);
+            for (int q = 0; q < Q; ++q) {
+                tmp[q].define(U_w(l,q).boxArray(), U_w(l,q).DistributionMap(),
+                              U_w(l,q).nComp(), _mesh->nghost);
+                tmp[q].setVal(0.0);
+            }
+            static_cast<NumericalMethodType*>(this)->AMR_FillPatch(
+                l, restart_time, tmp.data(), 0, U_w(l,0).nComp());
+            for (int q = 0; q < Q; ++q) {
+                std::swap(U_w(l,q), tmp[q]);
+            }
+        }
+    } else {
+        set_initial_condition(model_pde);
+    }
+}
+
+template <typename NumericalMethodType>
+amrex::Real Solver<NumericalMethodType>::ReadPlotFile(int tstep)
+{
+    auto _mesh = mesh.lock();
+    amrex::Real loaded_time = 0.0;
+
+    // 1. Open plotfile for q=0 to read grid hierarchy metadata
+    std::string pltfile_q0 = "../Results/Simulation Data/" + out_name_prefix + "_" +
+                             std::to_string(tstep) + "_q_0_plt";
+    amrex::PlotFileDataImpl pltmeta(pltfile_q0);
+
+    loaded_time = pltmeta.time();
+    int plt_finest = pltmeta.finestLevel();
+    int restore_finest = std::min(plt_finest, _mesh->L - 1); // cap at max_level
+
+    // 2. Clear the full-domain fine grids created by InitFromScratch
+    for (int l = _mesh->get_finest_lev(); l > 0; --l) {
+        _mesh->ClearLevel(l);
+    }
+
+    // 3. Restore fine levels with the plotfile's AMR-adapted BoxArrays
+    _mesh->set_finest_lev(restore_finest);
+    for (int l = 1; l <= restore_finest; ++l) {
+        const amrex::BoxArray& ba = pltmeta.boxArray(l);
+        amrex::DistributionMapping dm(ba);
+
+        // Update AmrCore internal grids and distribution mapping
+        _mesh->SetBoxArray(l, ba);
+        _mesh->SetDistributionMap(l, dm);
+
+        // Allocate all MultiFabs for this level on the correct grid
+        set_init_data_system(l, ba, dm);
+    }
+
+    // 4. Copy solution data from plotfiles at all levels
+    for (int q = 0; q < Q; ++q) {
+        std::string pltfile_name = "../Results/Simulation Data/" + out_name_prefix + "_" +
+                                   std::to_string(tstep) + "_q_" + std::to_string(q) + "_plt";
+        amrex::PlotFileDataImpl pltdata(pltfile_name);
+
+        for (int l = 0; l <= restore_finest; ++l) {
+            amrex::MultiFab src = pltdata.get(l);
+            U_w(l,q).ParallelCopy(src, 0, 0, U_w(l,q).nComp());
+        }
+    }
+
+    if (amrex::ParallelDescriptor::IOProcessor()) {
+        amrex::Print() << "Restarting from timestep " << tstep
+                        << ", t = " << loaded_time
+                        << ", finest_level = " << restore_finest << "\n";
+    }
+
+    return loaded_time;
 }
 
 template <typename NumericalMethodType>

@@ -76,6 +76,9 @@ class Mesh : public amrex::AmrCore
 
         int get_finest_lev();
 
+        // Reset finest_level (used by restart to discard full-domain fine grids)
+        void set_finest_lev(int lev);
+
         GpuArray<Real, AMREX_SPACEDIM> get_dx(int lev);
 
         amrex::Real get_dvol(int lev, int d);
@@ -196,6 +199,12 @@ template <typename NumericalMethodType>
 int Mesh<NumericalMethodType>::get_finest_lev()
 {
     return finest_level;
+}
+
+template <typename NumericalMethodType>
+void Mesh<NumericalMethodType>::set_finest_lev(int lev)
+{
+    finest_level = lev;
 }
 
 template <typename NumericalMethodType>
