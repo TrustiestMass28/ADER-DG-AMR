@@ -37,9 +37,9 @@ def main():
 
     # Build GIFs into Doc/media
     media_dir = "../../Results/Plots"#"../../Doc/media"
-    plotter.make_gif(sol_n=0, view="domain", fps=10, scale=0.5, colors=256,
+    plotter.make_gif(sol_n=0, view="domain", fps=10, scale=0.3, colors=256,
                      output_name="kh_domain.gif", output_dir=media_dir)
-    plotter.make_gif(sol_n=0, view="detail", fps=10, scale=0.5, colors=256,
+    plotter.make_gif(sol_n=0, view="detail", fps=10, scale=0.3, colors=256,
                      output_name="kh_detail.gif", output_dir=media_dir)
 
 
@@ -614,15 +614,12 @@ class SimPlotter:
             Resize factor applied to each frame before encoding (e.g. 0.5 =
             half width and height). Default 1.0 (no resize).
         colors : int
-            Number of colors in the GIF palette (2–256). Fewer colors reduce
-            file size at the cost of color accuracy. Default 256.
+            Number of colors in the GIF palette (2–256). Default 256.
         """
         from PIL import Image as PILImage
 
         suffix = f"_{view}"
-        pattern = re.compile(
-            rf"^(\d+)_sol_{sol_n}{suffix}\.png$"
-        )
+        pattern = re.compile(rf"^(\d+)_sol_{sol_n}{suffix}\.png$")
 
         # Collect and sort frames by timestep number
         frames_map = {}
@@ -658,7 +655,7 @@ class SimPlotter:
         duration_ms = int(1000 / fps)
         frames[0].save(
             out_path, save_all=True, append_images=frames[1:],
-            duration=duration_ms, loop=0,
+            optimize=True, duration=duration_ms, loop=0,
         )
         print(f"Saved: {out_path}")
 
