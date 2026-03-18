@@ -46,7 +46,7 @@ class Simulation
                     Array<int,AMREX_SPACEDIM> const& _is_per, amrex::Vector<amrex::Real> amr_c,
                     int dtn_regrid = 0, amrex::Real dt_regrid = 0,int nghost= 1);
 
-    void setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix = "", int _restart_tstep = 0);
+    void setIO(int _n_out, amrex::Real _t_out, std::string _sim_run = "", int _restart_tstep = 0);
 
     //Set validation mode: if true, use analytical IC at all levels (for convergence tests)
     //If false (default), levels > 0 use projection from coarser level
@@ -65,12 +65,12 @@ class Simulation
 
     std::shared_ptr<BoundaryCondition<EquationType,NumericalMethodType>> bdcond;
 
-    //I/O 
+    //I/O
     int dtn_outplt;   //data output time-steps interval
 
     amrex::Real dt_outplt;   //data output physical time interval
 
-    std::string out_name_prefix = "tstep";
+    std::string sim_run;    // optional further subfolder (e.g. "run_1")
 
     int restart_tstep = 0;
 };
@@ -88,31 +88,28 @@ Simulation<NumericalMethodType,EquationType>::~Simulation() {
 template <typename NumericalMethodType,typename EquationType>
 void Simulation<NumericalMethodType,EquationType>::run()
 {
+  // Build output directory path (all ranks need it for solver->init)
+  std::string simulation_data_dir = "../Results/Simulation Data/" + model->model_case;
+  if (!sim_run.empty()) {
+    simulation_data_dir += "/" + sim_run;
+  }
+
   if (amrex::ParallelDescriptor::IOProcessor()) {
-    std::string results_dir = "../Results";
-    std::string simulation_data_dir = results_dir + "/Simulation Data";
-    if (!std::filesystem::exists(results_dir)) {
-        std::filesystem::create_directories(results_dir);
-    }
-    if (!std::filesystem::exists(simulation_data_dir)) {
-      std::filesystem::create_directories(simulation_data_dir);
-    }
+    std::filesystem::create_directories(simulation_data_dir);
 
     if (restart_tstep == 0) {
-      // Fresh run: clean existing plotfiles
+      // Fresh run: clean existing plotfiles in this sim's directory
       for (const auto& entry : std::filesystem::directory_iterator(simulation_data_dir)) {
-        if (entry.path().filename().string().find(out_name_prefix) != std::string::npos) {
-            std::filesystem::remove_all(entry.path());
-        }
+        std::filesystem::remove_all(entry.path());
       }
     }
   }
-  
+
   //set ptr to solver, other init procedures
   mesh->init(solver);
-  
+
   //set ptr to mesh and init grids
-  solver->init(model,mesh,dtn_outplt,dt_outplt,out_name_prefix,restart_tstep);
+  solver->init(model,mesh,dtn_outplt,dt_outplt,simulation_data_dir,restart_tstep);
 
   bdcond->init(model,solver,mesh);
   
@@ -155,16 +152,12 @@ void Simulation<NumericalMethodType,EquationType>::setGeometrySettings(const Rea
 } 
 
 template <typename NumericalMethodType,typename EquationType>
-void Simulation<NumericalMethodType,EquationType>::setIO(int _n_out, amrex::Real _t_out, std::string _out_name_prefix, int _restart_tstep)
+void Simulation<NumericalMethodType,EquationType>::setIO(int _n_out, amrex::Real _t_out, std::string _sim_run, int _restart_tstep)
 {
-  dtn_outplt = _n_out;
-  dt_outplt  = _t_out;
+  dtn_outplt    = _n_out;
+  dt_outplt     = _t_out;
+  sim_run       = _sim_run;
   restart_tstep = _restart_tstep;
-
-  // Check if the name_prefix is not empty
-  if (!_out_name_prefix.empty()) {
-    out_name_prefix = _out_name_prefix;
-  }
 }
 
 template <typename NumericalMethodType,typename EquationType>

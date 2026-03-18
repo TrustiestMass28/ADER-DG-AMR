@@ -108,7 +108,7 @@ class Solver
         template <typename EquationType>
         void init(const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                     std::shared_ptr<Mesh<NumericalMethodType>> _mesh,
-                    int _dtn_outplt, amrex::Real _dt_outplt, std::string _out_name_prefix,
+                    int _dtn_outplt, amrex::Real _dt_outplt, std::string _data_dir,
                     int _restart_tstep = 0);
 
         //reshape bc vector depending on solver used (e.g if use modal or not)
@@ -404,7 +404,7 @@ class Solver
         int dtn_outplt;   //data output time-steps interval
         amrex::Real dt_outplt;   //data output physical time interval
 
-        std::string out_name_prefix;
+        std::string data_dir;  // full path to output directory
 
         int restart_tstep = 0;
         amrex::Real restart_time = 0.0;
@@ -509,13 +509,13 @@ template <typename NumericalMethodType>
 template <typename EquationType>
 void Solver<NumericalMethodType>::init( const std::shared_ptr<ModelEquation<EquationType>>& model_pde,
                                         std::shared_ptr<Mesh<NumericalMethodType>> _mesh,
-                                        int _dtn_outplt, amrex::Real _dt_outplt, std::string _out_name_prefix,
+                                        int _dtn_outplt, amrex::Real _dt_outplt, std::string _data_dir,
                                         int _restart_tstep)
 {
     //set I/O
     dtn_outplt = _dtn_outplt;
     dt_outplt = _dt_outplt;
-    out_name_prefix = _out_name_prefix;
+    data_dir = _data_dir;
     restart_tstep = _restart_tstep;
 
     setMesh(_mesh);
@@ -609,7 +609,7 @@ amrex::Real Solver<NumericalMethodType>::ReadPlotFile(int tstep)
     amrex::Real loaded_time = 0.0;
 
     // 1. Open plotfile for q=0 to read grid hierarchy metadata
-    std::string pltfile_q0 = "../Results/Simulation Data/" + out_name_prefix + "_" +
+    std::string pltfile_q0 = data_dir + "/tstep_" +
                              std::to_string(tstep) + "_q_0_plt";
     amrex::PlotFileDataImpl pltmeta(pltfile_q0);
 
@@ -638,7 +638,7 @@ amrex::Real Solver<NumericalMethodType>::ReadPlotFile(int tstep)
 
     // 4. Copy solution data from plotfiles at all levels
     for (int q = 0; q < Q; ++q) {
-        std::string pltfile_name = "../Results/Simulation Data/" + out_name_prefix + "_" +
+        std::string pltfile_name = data_dir + "/tstep_" +
                                    std::to_string(tstep) + "_q_" + std::to_string(q) + "_plt";
         amrex::PlotFileDataImpl pltdata(pltfile_name);
 
@@ -960,7 +960,7 @@ void Solver<NumericalMethodType>::PlotFile(const std::shared_ptr<ModelEquation<E
         }
 
         // Keep your original naming convention
-        std::string pltfile_name = "../Results/Simulation Data/" + out_name_prefix + "_" +
+        std::string pltfile_name = data_dir + "/tstep_" +
                                    std::to_string(tstep) + "_q_" + std::to_string(q) + "_plt";
 
         // Containers for the writer

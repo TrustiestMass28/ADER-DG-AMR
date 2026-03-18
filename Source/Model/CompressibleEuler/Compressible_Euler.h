@@ -627,8 +627,8 @@ bool Compressible_Euler::pde_tag_cell_refinement(int lev, int i, int j, int k,
     amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
     amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
 
-    amrex::Real xc = x0 + u_infty * time;
-    amrex::Real yc = y0 + v_infty * time;
+    amrex::Real xc = x0 ;//+ u_infty * time;
+    amrex::Real yc = y0 ;//+ v_infty * time;
 
     amrex::Real dx_vortex = x - xc;
     amrex::Real dy_vortex = y - yc;

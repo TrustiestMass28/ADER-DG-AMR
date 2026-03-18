@@ -67,6 +67,7 @@ def get_convergence(p):
                
     # Multi level - dynamic refinement (every 1step) amr_c[l] = 1.4, NO REFLUX
     #p_E = {2:[0.0022590299144886073,0.00043389295945724159,9.9539998686174079e-05]}
+    # Note: No refluxing causes a significant increase in error, but the order of convergence is still close to theoretical.
 
 
     #Conclusion

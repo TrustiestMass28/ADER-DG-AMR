@@ -18,12 +18,12 @@ int main(int argc, char* argv[])
       Simulation<AmrDG,Compressible_Euler> sim;
 
       //EQUATION
-      std::string simulation_case = "kelvin_helmolz_instability";
+      std::string simulation_case = "isentropic_vortex";
 
       sim.setModelSettings(simulation_case);
 
       //NUMERICAL
-      int p  = 3; //polynomial degree
+      int p  = 2; //polynomial degree
       amrex::Real T = 10.0;
       amrex::Real c_dt = 0.5; //safety factor for CFL condition
 
@@ -57,6 +57,9 @@ int main(int argc, char* argv[])
             T = 10.0;
             max_level = 1;
             limiter_type = "";
+            dtn_regrid = 1;
+            dt_regrid = -1;
+            c_dt = 0.9;
       }
       else if(simulation_case == "kelvin_helmolz_instability")
       {
@@ -69,6 +72,7 @@ int main(int argc, char* argv[])
             TVB_M = 5000.0;
             limiter_type = "TVB";
             t_limit = 1;
+            c_dt = 0.5;
             
             restart_tstep = 110708;
             
@@ -107,7 +111,8 @@ int main(int argc, char* argv[])
 
       sim.setNumericalSettings(p,T,c_dt,limiter_type,TVB_M,amr_tvb_c,t_limit);
       sim.setValidationMode(validation_mode);
-      sim.setIO(dtn_outplt, dt_outplt, "", restart_tstep);
+      std::string sim_run = "";  // set to e.g. "run_1" to store in a further subfolder
+      sim.setIO(dtn_outplt, dt_outplt, sim_run, restart_tstep);
 
 
       //BOUNDARY CONDITION
@@ -183,11 +188,11 @@ int main(int argc, char* argv[])
       if(simulation_case == "isentropic_vortex"){
             L_x_lo   = 0.0;
             L_x_hi   = 10.0;
-            n_cell_x = 16;
+            n_cell_x = 32;
 
             L_y_lo   = 0.0;
             L_y_hi   = 10.0;
-            n_cell_y = 16;
+            n_cell_y = 32;
 
             L_z_lo   = 0.0;
             L_z_hi   = 0.0;
