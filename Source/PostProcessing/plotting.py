@@ -29,17 +29,17 @@ def main():
     zoom_opts = dict(zoom_center=(0.6, 0.8), zoom_factor=2.5)
 
     # Full domain view (with dashed outline showing the zoomed region)
-    plotter.plot(**opts, view="domain", show_zoom_outline=True,
-                 zoom_outline_color="white", **zoom_opts)
+    #plotter.plot(**opts, view="domain", show_zoom_outline=True,
+    #             zoom_outline_color="white", **zoom_opts)
 
     # Zoomed detail view
-    plotter.plot(**opts, view="detail", **zoom_opts)
+    #plotter.plot(**opts, view="detail", **zoom_opts)
 
     # Build GIFs into Doc/media
     media_dir = "../../Results/Plots"#"../../Doc/media"
-    plotter.make_gif(sol_n=0, view="domain", fps=10,
+    plotter.make_gif(sol_n=0, view="domain", fps=10, scale=0.5, colors=256,
                      output_name="kh_domain.gif", output_dir=media_dir)
-    plotter.make_gif(sol_n=0, view="detail", fps=10,
+    plotter.make_gif(sol_n=0, view="detail", fps=10, scale=0.5, colors=256,
                      output_name="kh_detail.gif", output_dir=media_dir)
 
 
@@ -595,7 +595,7 @@ class SimPlotter:
     # GIF generation
     # ------------------------------------------------------------------
     def make_gif(self, sol_n=0, view="domain", fps=10,
-                 output_name=None, output_dir=None):
+                 output_name=None, output_dir=None, scale=1.0, colors=256):
         """Build an animated GIF from previously saved plot PNGs.
 
         Parameters
@@ -610,6 +610,12 @@ class SimPlotter:
             Output filename. Defaults to ``sol_{sol_n}_{view}.gif``.
         output_dir : str, optional
             Directory for the GIF. Defaults to plot_dir.
+        scale : float
+            Resize factor applied to each frame before encoding (e.g. 0.5 =
+            half width and height). Default 1.0 (no resize).
+        colors : int
+            Number of colors in the GIF palette (2–256). Fewer colors reduce
+            file size at the cost of color accuracy. Default 256.
         """
         from PIL import Image as PILImage
 
@@ -629,12 +635,18 @@ class SimPlotter:
             return
 
         sorted_steps = sorted(frames_map.keys())
-        print(f"Building GIF: {len(sorted_steps)} frames, {fps} fps ...")
+        print(f"Building GIF: {len(sorted_steps)} frames, {fps} fps, "
+              f"scale={scale}, colors={colors} ...")
 
         frames = []
         for ts in sorted_steps:
             path = os.path.join(self.plot_dir, frames_map[ts])
             img = PILImage.open(path).convert("RGB")
+            if scale != 1.0:
+                new_w = max(1, int(img.width * scale))
+                new_h = max(1, int(img.height * scale))
+                img = img.resize((new_w, new_h), PILImage.LANCZOS)
+            img = img.quantize(colors=colors, method=PILImage.Quantize.MEDIANCUT)
             frames.append(img)
 
         if output_name is None:
