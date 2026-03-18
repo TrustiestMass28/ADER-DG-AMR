@@ -22,19 +22,21 @@ def main():
     )
 
     opts = dict(
-        sol_n=0, mode_n=0, mode="all", steps=[1580],
+        sol_n=0, mode_n=0, mode="all", steps=[117101],
         show_grids=False, show_cell_edges=False, show_plot_info=False,
     )
 
-    # Full domain view
-    plotter.plot(**opts, view="domain")
+    zoom_opts = dict(zoom_center=(0.6, 0.8), zoom_factor=2.5)
+
+    # Full domain view (with dashed outline showing the zoomed region)
+    plotter.plot(**opts, view="domain", show_zoom_outline=True,
+                 zoom_outline_color="white", **zoom_opts)
 
     # Zoomed detail view
-    plotter.plot(**opts, view="detail",
-                 zoom_center=(0.6, 0.8), zoom_factor=4.0)
+    plotter.plot(**opts, view="detail", **zoom_opts)
 
     # Build GIFs into Doc/media
-    media_dir = "../../Doc/media"
+    media_dir = "../../Results/Plots"#"../../Doc/media"
     plotter.make_gif(sol_n=0, view="domain", fps=10,
                      output_name="kh_domain.gif", output_dir=media_dir)
     plotter.make_gif(sol_n=0, view="detail", fps=10,
@@ -166,7 +168,9 @@ def _bounds_worker(args):
 
 
 def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays,
-                show_timestamp=True, zoom_center=None, zoom_factor=None):
+                show_timestamp=True, zoom_center=None, zoom_factor=None,
+                zoom_outline_center=None, zoom_outline_factor=None,
+                zoom_outline_color="white"):
     """Create a configured yt SlicePlot.
 
     Parameters
@@ -224,26 +228,48 @@ def _make_slice(ds, field_to_plot, field_name, cfg, with_overlays,
         for p in sl.plots.values():
             p.axes.tick_params(labelsize=tick_size)
 
+    # Draw zoom-region outline on the full-domain view
+    if with_overlays and zoom_outline_center is not None and zoom_outline_factor is not None:
+        import matplotlib.patches as mpatches
+        le = ds.domain_left_edge.d
+        re = ds.domain_right_edge.d
+        wx = (re[0] - le[0]) / zoom_outline_factor
+        wy = (re[1] - le[1]) / zoom_outline_factor
+        x0 = zoom_outline_center[0] - wx / 2
+        y0 = zoom_outline_center[1] - wy / 2
+        for p in sl.plots.values():
+            rect = mpatches.Rectangle(
+                (x0, y0), wx, wy,
+                linewidth=2, edgecolor=zoom_outline_color, facecolor="none",
+                linestyle="--", zorder=10,
+            )
+            p.axes.add_patch(rect)
+
     return sl
 
 
 def _render_row(cfg, ts, field_to_plot, field_name, show_timestamp=True,
-                zoom_center=None, zoom_factor=None):
+                zoom_center=None, zoom_factor=None,
+                zoom_outline_center=None, zoom_outline_factor=None,
+                zoom_outline_color="white"):
     """Render a pair of panels (left=cell edges, right=clean) and return
     their image arrays.  When zoom_center/zoom_factor are given the view
     is zoomed in with proportionally higher resolution."""
     import matplotlib.image as mpimg
 
     zoom_kw = dict(zoom_center=zoom_center, zoom_factor=zoom_factor)
+    outline_kw = dict(zoom_outline_center=zoom_outline_center,
+                      zoom_outline_factor=zoom_outline_factor,
+                      zoom_outline_color=zoom_outline_color)
     tag = "full" if zoom_factor is None else "zoom"
 
     # Left: cell edges + overlays
     ds_l = _worker_load(cfg, ts, cfg["sol_n"])
     _, _, ds_l = _worker_prepare_field(ds_l, cfg, ts)
     cfg_l = dict(cfg, show_cell_edges=True, show_grids=False)
-    sl_l = _make_slice(ds_l, field_to_plot, field_name,
-                       cfg_l, with_overlays=True,
-                       show_timestamp=show_timestamp, **zoom_kw)
+    sl_l = _make_slice(ds_l, field_to_plot, field_name, cfg_l,
+                       with_overlays=True, show_timestamp=show_timestamp,
+                       **zoom_kw, **outline_kw)
     tmp_l = os.path.join(cfg["plot_dir"], f"_tmp_{tag}_left_{ts}.png")
     sl_l.save(tmp_l)
     tmp_l = _find_saved(tmp_l)
@@ -252,9 +278,9 @@ def _render_row(cfg, ts, field_to_plot, field_name, show_timestamp=True,
     ds_r = _worker_load(cfg, ts, cfg["sol_n"])
     _, _, ds_r = _worker_prepare_field(ds_r, cfg, ts)
     cfg_r = dict(cfg, show_cell_edges=False, show_grids=False)
-    sl_r = _make_slice(ds_r, field_to_plot, field_name,
-                       cfg_r, with_overlays=True,
-                       show_timestamp=False, **zoom_kw)
+    sl_r = _make_slice(ds_r, field_to_plot, field_name, cfg_r,
+                       with_overlays=True, show_timestamp=False,
+                       **zoom_kw, **outline_kw)
     tmp_r = os.path.join(cfg["plot_dir"], f"_tmp_{tag}_right_{ts}.png")
     sl_r.save(tmp_r)
     tmp_r = _find_saved(tmp_r)
@@ -287,13 +313,18 @@ def _plot_worker(args):
 
     if view in ("domain", "detail"):
         zoom_kw = {}
+        outline_kw = {}
         if view == "detail":
             zoom_kw = dict(zoom_center=cfg["zoom_center"],
                            zoom_factor=cfg["zoom_factor"])
+        elif cfg.get("show_zoom_outline") and cfg.get("zoom_center") is not None:
+            outline_kw = dict(zoom_outline_center=cfg["zoom_center"],
+                              zoom_outline_factor=cfg["zoom_factor"],
+                              zoom_outline_color=cfg.get("zoom_outline_color", "white"))
 
         img_l, img_r = _render_row(cfg, ts, field_to_plot, field_name,
                                    show_timestamp=True,
-                                   **zoom_kw)
+                                   **zoom_kw, **outline_kw)
         _, w_l = img_l.shape[:2]
         _, w_r = img_r.shape[:2]
 
@@ -470,12 +501,13 @@ class SimPlotter:
     # Plotting (parallel)
     # ------------------------------------------------------------------
     def plot(self, sol_n=0, mode_n=0, mode="all", steps=None,
-             n_max=None, interval=1, cmap="inferno", dpi=300,
+             n_max=None, interval=1, cmap="inferno_r", dpi=300,
              fig_size=5, font_size=20, show_grids=False,
              show_cell_edges=True, fixed_bounds=True,
              cb_sample_every=1, show_plot_info=True,
              view="domain",
-             zoom_center=None, zoom_factor=None):
+             zoom_center=None, zoom_factor=None,
+             show_zoom_outline=False, zoom_outline_color="white"):
         """Main entry point: select timesteps and produce plots.
 
         Parameters
@@ -540,6 +572,8 @@ class SimPlotter:
             min_val=min_val, max_val=max_val, show_plot_info=show_plot_info,
             view=view,
             zoom_center=zoom_center, zoom_factor=zoom_factor,
+            show_zoom_outline=show_zoom_outline,
+            zoom_outline_color=zoom_outline_color,
         )
 
         total = len(timesteps)

@@ -5,6 +5,8 @@
 
 ![Kelvin-Helmholtz Instability — Detail](Doc/media/kh_detail.gif)
 
+*(Kelvin-Helmholtz instability · DG order 4 (p=3) · 3 AMR levels · 64×64 (L0) → 128×128 (L1) → 256×256 (L2))*
+
 A block-structured Adaptive Mesh Refinement (AMR) framework for solving general multi-dimensional systems of hyperbolic partial differential equations (PDEs) with high-order accuracy in both space and time. The framework combines a modal Discontinuous Galerkin (DG) spatial discretization with Arbitrary Derivative (ADER) time integration, yielding a single-step, single-stage, fully discrete scheme of order p+1.
 
 The base classes are designed for extensibility: new numerical methods (FVM, FDM) and new PDE systems can be added by subclassing `Solver` and `ModelEquation` respectively. All hot-path dispatch uses the Curiously Recurring Template Pattern (CRTP) for zero-overhead compile-time polymorphism.

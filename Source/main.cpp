@@ -60,8 +60,8 @@ int main(int argc, char* argv[])
       }
       else if(simulation_case == "kelvin_helmolz_instability")
       {
-            /* tn=0->tn=11506
-            T = 5.0;
+            //tn=0->tn=11506
+            T = 7.0;
             max_level = 2;
             dt_outplt = 0.05;
             dtn_regrid = -1;
@@ -69,19 +69,9 @@ int main(int argc, char* argv[])
             TVB_M = 5000.0;
             limiter_type = "TVB";
             t_limit = 1;
-            */
-
-            //tn=10447
-
-            restart_tstep = 11506;
-            T = 5.0;
-            max_level = 2;
-            dt_outplt = 0.05;
-            dtn_regrid = -1;
-            dt_regrid = 0.05;
-            TVB_M = 5000.0;
-            limiter_type = "TVB";
-            t_limit = 1;
+            
+            restart_tstep = 110708;
+            
             //NB
             //- Large M * h² , the limiter tolerates large jumps,  more features survive (good for
             //vortices) but oscillations near shocks can slip through (bad)
@@ -100,8 +90,17 @@ int main(int argc, char* argv[])
       else if(simulation_case == "kelvin_helmolz_instability")
       {
             //amr_c[l] = TVB M value for tagging at level l
-            amr_c[0] = 1500.0;
-            amr_c[1] = 2500.0;
+            //t=0->86906
+            //amr_c[0] = 1500.0;
+            //amr_c[1] = 2500.0;
+
+            //t=86906->106168
+            //amr_c[0] = 1100.0;
+            //amr_c[1] = 2100.0;
+
+            //t=106168
+            amr_c[0] = 1300.0;
+            amr_c[1] = 2100.0;
       }
 
       
