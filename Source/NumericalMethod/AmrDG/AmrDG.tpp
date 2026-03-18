@@ -1,11 +1,11 @@
-#include "AmrDG.h"
 //#include "ModelEquation.h"
 
 using namespace amrex;
 
-void AmrDG::DEBUG_print_MFab() 
-{ 
-  //this function is used for debugging and prints out the specified MFab 
+template<int P>
+void AmrDG<P>::DEBUG_print_MFab()
+{
+  //this function is used for debugging and prints out the specified MFab
   //and if wanted also multilevel data. Is jsut a cleaner option
   //than copy paste the loop in the already dense code
   //user should implement wathever they want
@@ -28,16 +28,16 @@ void AmrDG::DEBUG_print_MFab()
 
     //const amrex::Box& bx = mfi.tilebox();
     const amrex::Box& bx = mfi.growntilebox();
-    
+
     amrex::FArrayBox& fabc= state_c[mfi];
     amrex::Array4<amrex::Real> const& uc = fabc.array();
-      
+
     const auto lo = lbound(bx);
-    const auto hi = ubound(bx);   
-    
+    const auto hi = ubound(bx);
+
       amrex::ParallelFor(bx, M,[&] (int i, int j, int k, int m) noexcept
-      {    
-        amrex::Print(nproc) << "Rank " << nproc << ": " 
+      {
+        amrex::Print(nproc) << "Rank " << nproc << ": "
                             << "i=" << i << ", j=" << j << ", k=" << k
                             << ", w=" << m << ", val=" << uc(i,j,k,m) << "\n";
       });
@@ -45,11 +45,11 @@ void AmrDG::DEBUG_print_MFab()
   }
 }
 
-void AmrDG::settings(int _p, amrex::Real _T, amrex::Real _c_dt,
+template<int P>
+void AmrDG<P>::settings(amrex::Real _T, amrex::Real _c_dt,
                      const std::string& _limiter_type, amrex::Real _TVB_M,
                      const amrex::Vector<amrex::Real>& _AMR_TVB_C,
                      int _t_limit) {
-  p = _p;
   T = _T;
   c_dt = _c_dt;
   limiter_type = _limiter_type;
@@ -58,7 +58,8 @@ void AmrDG::settings(int _p, amrex::Real _T, amrex::Real _c_dt,
   t_limit = _t_limit;
 }
 
-void AmrDG::AMR_advanced_settings()
+template<int P>
+void AmrDG<P>::AMR_advanced_settings()
 {
   auto _mesh = mesh.lock();
 
@@ -78,8 +79,9 @@ void AmrDG::AMR_advanced_settings()
   //iterate_on_new_grids = false;//will genrete only one new level per refinement step
 }
 
-void AmrDG::init()
-{ 
+template<int P>
+void AmrDG<P>::init()
+{
     const int width = 80;
     std::vector<std::string> logo = {
     "     _   __  __ ___     ___   ___ ",
@@ -121,7 +123,7 @@ void AmrDG::init()
   amrex::Print() << std::string(width, '#') << "\n";
 
   auto _mesh = mesh.lock();
-  
+
   //Set flat vectors size (L*Q, L*D*Q, L*D, or L)
   U_w.resize(_mesh->L, Q);
 
@@ -163,24 +165,10 @@ void AmrDG::init()
 
   H_m.resize(_mesh->L, Q);
 
-  //Basis function setup via compile-time dispatch
-  #define INIT_BASIS_CASE(PP) \
-      case PP: \
-          Np_s = BasisLegendre<PP>::Np_s; \
-          Np_st = BasisLegendre<PP>::Np_st; \
-          basis_idx_s = BasisLegendre<PP>::get_basis_idx_s(); \
-          basis_idx_st = BasisLegendre<PP>::get_basis_idx_st(); \
-          basis_idx_t = BasisLegendre<PP>::get_basis_idx_t(); \
-          break;
-
-  switch(p) {
-      INIT_BASIS_CASE(1) INIT_BASIS_CASE(2) INIT_BASIS_CASE(3)
-      INIT_BASIS_CASE(4) INIT_BASIS_CASE(5) INIT_BASIS_CASE(6)
-      INIT_BASIS_CASE(7) INIT_BASIS_CASE(8) INIT_BASIS_CASE(9)
-      INIT_BASIS_CASE(10)
-      default: amrex::Abort("Unsupported polynomial order p");
-  }
-  #undef INIT_BASIS_CASE
+  //Basis function setup via compile-time template parameter
+  basis_idx_s  = BasisLegendre<P>::get_basis_idx_s();
+  basis_idx_st = BasisLegendre<P>::get_basis_idx_st();
+  basis_idx_t  = BasisLegendre<P>::get_basis_idx_t();
 
   // Find indices of linear basis functions (degree=1 in exactly one dimension, 0 in others)
   lin_mode_idx.resize(AMREX_SPACEDIM);
@@ -195,52 +183,37 @@ void AmrDG::init()
     }
   }
 
-  //Set-up quadrature rule via compile-time dispatch
-  #define INIT_QUAD_CASE(PP) \
-      case PP: quadrule = std::make_shared<QuadratureGaussLegendre<PP>>(); break;
+  //Set-up quadrature rule via compile-time template parameter
+  quadrule.set_number_quadpoints();
+  quadrule.set_quadpoints();
 
-  switch(p) {
-      INIT_QUAD_CASE(1) INIT_QUAD_CASE(2) INIT_QUAD_CASE(3)
-      INIT_QUAD_CASE(4) INIT_QUAD_CASE(5) INIT_QUAD_CASE(6)
-      INIT_QUAD_CASE(7) INIT_QUAD_CASE(8) INIT_QUAD_CASE(9)
-      INIT_QUAD_CASE(10)
-      default: amrex::Abort("Unsupported polynomial order p");
-  }
-  #undef INIT_QUAD_CASE
-
-  //Number of quadrature pts
-  quadrule->set_number_quadpoints();
-
-  //Generation of quadrature pts (also resizes data structures)
-  quadrule->set_quadpoints();
-                              
   //Initialize generalized Vandermonde matrix and inverse
-  V = Eigen::MatrixXd::Zero(quadrule->qMp_st, Np_st);
-  Vinv = Eigen::MatrixXd::Zero(Np_st, quadrule->qMp_st);
+  V = Eigen::MatrixXd::Zero(quadrule.qMp_st, Np_st);
+  Vinv = Eigen::MatrixXd::Zero(Np_st, quadrule.qMp_st);
 
   //Initialize L2 projection quadrature matrix
-  quadmat = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_s);
+  quadmat = Eigen::MatrixXd::Zero(Np_s, quadrule.qMp_s);
 
   quadmat_bd.resize(AMREX_SPACEDIM);
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    quadmat_bd[d] = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_s_bd);
+    quadmat_bd[d] = Eigen::MatrixXd::Zero(Np_s, quadrule.qMp_s_bd);
   }
 
   //Initialize quadrature weights for cell faces st quadratures
-  quad_weights_st_bdm.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));
-  quad_weights_st_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule->qMp_st_bd));
+  quad_weights_st_bdm.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule.qMp_st_bd));
+  quad_weights_st_bdp.resize(AMREX_SPACEDIM,amrex::Vector<amrex::Real>(quadrule.qMp_st_bd));
 
   //Initialize generalized Element matrices for ADER-DG corrector
   Mk_corr = Eigen::MatrixXd::Zero(Np_s, Np_s);
-  Mk_corr_src = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_st);
+  Mk_corr_src = Eigen::MatrixXd::Zero(Np_s, quadrule.qMp_st);
 
   Sk_corr.resize(AMREX_SPACEDIM);
   Mkbdm.resize(AMREX_SPACEDIM);
   Mkbdp.resize(AMREX_SPACEDIM);
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    Sk_corr[d] = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_st);
-    Mkbdm[d] = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_st_bd);
-    Mkbdp[d] = Eigen::MatrixXd::Zero(Np_s, quadrule->qMp_st_bd);
+    Sk_corr[d] = Eigen::MatrixXd::Zero(Np_s, quadrule.qMp_st);
+    Mkbdm[d] = Eigen::MatrixXd::Zero(Np_s, quadrule.qMp_st_bd);
+    Mkbdp[d] = Eigen::MatrixXd::Zero(Np_s, quadrule.qMp_st_bd);
   }
 
   //Initialize generalized Element matrices for ADER predictor
@@ -248,20 +221,20 @@ void AmrDG::init()
   Mk_h_w_inv = Eigen::MatrixXd::Zero(Np_st, Np_st);
   Mk_pred = Eigen::MatrixXd::Zero(Np_st, Np_s);
   Mk_pred_src = Eigen::MatrixXd::Zero(Np_st, Np_st);
-  Mk_pred_srcVinv = Eigen::MatrixXd::Zero(Np_st, quadrule->qMp_st);
+  Mk_pred_srcVinv = Eigen::MatrixXd::Zero(Np_st, quadrule.qMp_st);
 
   Sk_pred.resize(AMREX_SPACEDIM);
   Sk_predVinv.resize(AMREX_SPACEDIM);
   for(int d=0; d<AMREX_SPACEDIM; ++d){
     Sk_pred[d] = Eigen::MatrixXd::Zero(Np_st, Np_st);
-    Sk_predVinv[d] = Eigen::MatrixXd::Zero(Np_st, quadrule->qMp_st);
+    Sk_predVinv[d] = Eigen::MatrixXd::Zero(Np_st, quadrule.qMp_st);
   }
-    
+
   //Construct system matrices
   set_vandermat();
-    
+
   set_ref_element_matrix();
-  
+
   //Set-up mesh interpolation
   amr_interpolator = std::make_shared<L2ProjInterp>();
 
@@ -272,7 +245,8 @@ void AmrDG::init()
   amr_interpolator->flux_proj_mat();
 }
 
-void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
+template<int P>
+void AmrDG<P>::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
 {
   //since use modal DG we will apply BCs to individual spatial modes
   n_comp = Np_s;
@@ -280,14 +254,15 @@ void AmrDG::init_bc(amrex::Vector<amrex::Vector<amrex::BCRec>>& bc, int& n_comp)
 
   //bc evaluated at all spatial quadrature point in ghost cells
   //then they will be projected back to n_comp modes
-  n_pt_bc = quadrule->qMp_s;
+  n_pt_bc = quadrule.qMp_s;
 }
 
-amrex::Real AmrDG::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev)
+template<int P>
+amrex::Real AmrDG<P>::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcomp,int q, int lev)
 {
   //BC projection u|bc->u_w|bc
   amrex::Real sum = 0.0;
-  for(int m=0; m<quadrule->qMp_s; ++m)
+  for(int m=0; m<quadrule.qMp_s; ++m)
   {
     sum+= quadmat(dcomp +comp,m)*bc[m];
   }
@@ -297,10 +272,12 @@ amrex::Real AmrDG::setBC(const amrex::Vector<amrex::Real>& bc, int comp,int dcom
   return sum;
 }
 
-AmrDG::~AmrDG(){
+template<int P>
+AmrDG<P>::~AmrDG(){
 }
 
-void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
+template<int P>
+void AmrDG<P>::set_init_data_system(int lev,const BoxArray& ba,
                                   const DistributionMapping& dm)
 {
   //Flat vectors already pre-sized in init(); just define rhs temporaries here
@@ -314,7 +291,8 @@ void AmrDG::set_init_data_system(int lev,const BoxArray& ba,
 }
 
 //Init data for given level for specific solution component
-void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
+template<int P>
+void AmrDG<P>::set_init_data_component(int lev,const BoxArray& ba,
                                     const DistributionMapping& dm, int q)
 {
   auto _mesh = mesh.lock();
@@ -322,32 +300,32 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
   H_w(lev,q).define(ba, dm, Np_st, _mesh->nghost);
   H_w(lev,q).setVal(0.0);
 
-  H(lev,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
+  H(lev,q).define(ba, dm, quadrule.qMp_st, _mesh->nghost);
   H(lev,q).setVal(0.0);
 
   U_w(lev,q).define(ba, dm, Np_s, _mesh->nghost);
   U_w(lev,q).setVal(0.0);
 
-  U(lev,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
+  U(lev,q).define(ba, dm, quadrule.qMp_st, _mesh->nghost);
   U(lev,q).setVal(0.0);
 
   U_center(lev,q).define(ba, dm, 1, _mesh->nghost);
   U_center(lev,q).setVal(0.0);
 
-  if(flag_source_term){S(lev,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
+  if(flag_source_term){S(lev,q).define(ba, dm, quadrule.qMp_st, _mesh->nghost);
   S(lev,q).setVal(0.0);}
 
-  H_p(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  H_m(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  Fm(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  Fp(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  DFm(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
-  DFp(lev,q).define(ba, dm, quadrule->qMp_st_bd, _mesh->nghost);
+  H_p(lev,q).define(ba, dm, quadrule.qMp_st_bd, _mesh->nghost);
+  H_m(lev,q).define(ba, dm, quadrule.qMp_st_bd, _mesh->nghost);
+  Fm(lev,q).define(ba, dm, quadrule.qMp_st_bd, _mesh->nghost);
+  Fp(lev,q).define(ba, dm, quadrule.qMp_st_bd, _mesh->nghost);
+  DFm(lev,q).define(ba, dm, quadrule.qMp_st_bd, _mesh->nghost);
+  DFp(lev,q).define(ba, dm, quadrule.qMp_st_bd, _mesh->nghost);
 
   for(int d=0; d<AMREX_SPACEDIM; ++d){
-    F(lev,d,q).define(ba, dm, quadrule->qMp_st, _mesh->nghost);
+    F(lev,d,q).define(ba, dm, quadrule.qMp_st, _mesh->nghost);
 
-    Fnum(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, quadrule->qMp_st_bd, 0);
+    Fnum(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, quadrule.qMp_st_bd, 0);
 
     Fnum_int_f(lev,d,q).define(convert(ba, IntVect::TheDimensionVector(d)), dm, Np_s, 0);
 
@@ -355,27 +333,8 @@ void AmrDG::set_init_data_component(int lev,const BoxArray& ba,
   }
 }
 
-void AmrDG::get_U_from_U_w(int M, int N, amrex::MultiFab* _U,
-                          amrex::MultiFab* _U_w,
-                          const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
-{
-  switch(p) {
-    case 1: _get_U_from_U_w<1>(M,_U,_U_w,xi); break;
-    case 2: _get_U_from_U_w<2>(M,_U,_U_w,xi); break;
-    case 3: _get_U_from_U_w<3>(M,_U,_U_w,xi); break;
-    case 4: _get_U_from_U_w<4>(M,_U,_U_w,xi); break;
-    case 5: _get_U_from_U_w<5>(M,_U,_U_w,xi); break;
-    case 6: _get_U_from_U_w<6>(M,_U,_U_w,xi); break;
-    case 7: _get_U_from_U_w<7>(M,_U,_U_w,xi); break;
-    case 8: _get_U_from_U_w<8>(M,_U,_U_w,xi); break;
-    case 9: _get_U_from_U_w<9>(M,_U,_U_w,xi); break;
-    case 10: _get_U_from_U_w<10>(M,_U,_U_w,xi); break;
-    default: amrex::Abort("Unsupported polynomial order p");
-  }
-}
-
 template<int P>
-void AmrDG::_get_U_from_U_w(int M, amrex::MultiFab* _U,
+void AmrDG<P>::get_U_from_U_w(int M, int N, amrex::MultiFab* _U,
                           amrex::MultiFab* _U_w,
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
@@ -425,27 +384,8 @@ void AmrDG::_get_U_from_U_w(int M, amrex::MultiFab* _U,
     }
 }
 
-void AmrDG::get_H_from_H_w(int M, int N, amrex::MultiFab* _H,
-                          amrex::MultiFab* _H_w,
-                          const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
-{
-  switch(p) {
-    case 1: _get_H_from_H_w<1>(M,_H,_H_w,xi); break;
-    case 2: _get_H_from_H_w<2>(M,_H,_H_w,xi); break;
-    case 3: _get_H_from_H_w<3>(M,_H,_H_w,xi); break;
-    case 4: _get_H_from_H_w<4>(M,_H,_H_w,xi); break;
-    case 5: _get_H_from_H_w<5>(M,_H,_H_w,xi); break;
-    case 6: _get_H_from_H_w<6>(M,_H,_H_w,xi); break;
-    case 7: _get_H_from_H_w<7>(M,_H,_H_w,xi); break;
-    case 8: _get_H_from_H_w<8>(M,_H,_H_w,xi); break;
-    case 9: _get_H_from_H_w<9>(M,_H,_H_w,xi); break;
-    case 10: _get_H_from_H_w<10>(M,_H,_H_w,xi); break;
-    default: amrex::Abort("Unsupported polynomial order p");
-  }
-}
-
 template<int P>
-void AmrDG::_get_H_from_H_w(int M, amrex::MultiFab* _H,
+void AmrDG<P>::get_H_from_H_w(int M, int N, amrex::MultiFab* _H,
                           amrex::MultiFab* _H_w,
                           const amrex::Vector<amrex::Vector<amrex::Real>>& xi)
 {
@@ -494,29 +434,10 @@ void AmrDG::_get_H_from_H_w(int M, amrex::MultiFab* _H,
     }
 }
 
-void AmrDG::get_H_from_H_w_bd(int M, int N, amrex::MultiFab* _H,
+template<int P>
+void AmrDG<P>::get_H_from_H_w_bd(int M, int N, amrex::MultiFab* _H,
                                amrex::MultiFab* _H_w,
                                int d_fixed, int side)
-{
-  switch(p) {
-    case 1: _get_H_from_H_w_bd<1>(M,_H,_H_w,d_fixed,side); break;
-    case 2: _get_H_from_H_w_bd<2>(M,_H,_H_w,d_fixed,side); break;
-    case 3: _get_H_from_H_w_bd<3>(M,_H,_H_w,d_fixed,side); break;
-    case 4: _get_H_from_H_w_bd<4>(M,_H,_H_w,d_fixed,side); break;
-    case 5: _get_H_from_H_w_bd<5>(M,_H,_H_w,d_fixed,side); break;
-    case 6: _get_H_from_H_w_bd<6>(M,_H,_H_w,d_fixed,side); break;
-    case 7: _get_H_from_H_w_bd<7>(M,_H,_H_w,d_fixed,side); break;
-    case 8: _get_H_from_H_w_bd<8>(M,_H,_H_w,d_fixed,side); break;
-    case 9: _get_H_from_H_w_bd<9>(M,_H,_H_w,d_fixed,side); break;
-    case 10: _get_H_from_H_w_bd<10>(M,_H,_H_w,d_fixed,side); break;
-    default: amrex::Abort("Unsupported polynomial order p");
-  }
-}
-
-template<int P>
-void AmrDG::_get_H_from_H_w_bd(int M, amrex::MultiFab* _H,
-                                amrex::MultiFab* _H_w,
-                                int d_fixed, int side)
 {
     // Evaluates space-time basis at boundary quad points.
     // Fixed dim d_fixed has xi=±1 (side 0→-1, side 1→+1).
@@ -571,7 +492,8 @@ void AmrDG::_get_H_from_H_w_bd(int M, amrex::MultiFab* _H,
     }
 }
 
-void AmrDG::set_predictor(const amrex::MultiFab* _U_w,
+template<int P>
+void AmrDG<P>::set_predictor(const amrex::MultiFab* _U_w,
                           amrex::MultiFab* _H_w)
 {
 
@@ -609,12 +531,13 @@ void AmrDG::set_predictor(const amrex::MultiFab* _U_w,
             (hw[q])(i,j,k,n)=0.0;
           }
         }
-      });      
-    }  
-  }  
+      });
+    }
+  }
 }
 
-void AmrDG::numflux(int lev,int d,int M, int N,
+template<int P>
+void AmrDG<P>::numflux(int lev,int d,int M, int N,
                     amrex::MultiFab* _U_m,
                     amrex::MultiFab* _U_p,
                     amrex::MultiFab* _F_m,
@@ -709,12 +632,12 @@ void AmrDG::numflux(int lev,int d,int M, int N,
               if (b != 0)
               {
                   int child_idx = ci_arr(i,j,k);
-                  const auto& P = amr_interpolator->get_flux_proj_mat(d, child_idx, b);
+                  const auto& P_mat = amr_interpolator->get_flux_proj_mat(d, child_idx, b);
 
                   for (int q = 0; q < Q; ++q) {
                       amrex::Real sum = 0.0;
                       for (int m = 0; m < M; ++m) {
-                          sum += P(n, m) * fnum[q](i,j,k,m);
+                          sum += P_mat(n, m) * fnum[q](i,j,k,m);
                       }
                       fnum_int_f[q](i,j,k,n) = sum * jacobian;
                   }
@@ -726,7 +649,8 @@ void AmrDG::numflux(int lev,int d,int M, int N,
   }
 }
 
-void AmrDG::update_U_w(int lev)
+template<int P>
+void AmrDG<P>::update_U_w(int lev)
 {
   auto _mesh = mesh.lock();
 
@@ -745,9 +669,9 @@ void AmrDG::update_U_w(int lev)
       state_f[d]=&(F(lev,d,q));
       state_fnum[d]=&(Fnum(lev,d,q));
     }
-    
+
 #ifdef AMREX_USE_OMP
-#pragma omp parallel 
+#pragma omp parallel
 #endif
     {
       amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);
@@ -779,7 +703,7 @@ void AmrDG::update_U_w(int lev)
           amrex::Real S_norm = (Dt/(amrex::Real)dx[d]);
           amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
           {
-            for  (int m = 0; m < quadrule->qMp_st; ++m){
+            for  (int m = 0; m < quadrule.qMp_st; ++m){
               rhs(i,j,k,n)+=S_norm*(Sk_corr[d](n,m)*((f)[d])(i,j,k,m));
             }
           });
@@ -788,7 +712,7 @@ void AmrDG::update_U_w(int lev)
           shift[d] = 1;
           amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
           {
-            for  (int m = 0; m < quadrule->qMp_st_bd; ++m){
+            for  (int m = 0; m < quadrule.qMp_st_bd; ++m){
               rhs(i,j,k,n)-=(Mbd_norm*(Mkbdp[d](n,m)*((fnum)[d])(i+shift[0],j+shift[1], k+shift[2],m)
                                       -Mkbdm[d](n,m)*((fnum)[d])(i,j,k,m)));
             }
@@ -801,7 +725,7 @@ void AmrDG::update_U_w(int lev)
           amrex::Array4<amrex::Real> const& source = S(lev,q).array(mfi);
           amrex::ParallelFor(bx,Np_s,[&] (int i, int j, int k, int n) noexcept
           {
-            for  (int m = 0; m < quadrule->qMp_st; ++m){
+            for  (int m = 0; m < quadrule.qMp_st; ++m){
               rhs(i,j,k,n)+=((Dt/2.0)*Mk_corr_src(n,m)*source(i,j,k,m));
             }
           });
@@ -817,7 +741,8 @@ void AmrDG::update_U_w(int lev)
   }
 }
 
-void AmrDG::update_H_w(int lev)
+template<int P>
+void AmrDG<P>::update_H_w(int lev)
 {
   auto _mesh = mesh.lock();
 
@@ -834,10 +759,10 @@ void AmrDG::update_H_w(int lev)
       state_f[d]=&(F(lev,d,q));
     }
 
-    rhs_pred[lev].setVal(0.0); 
-    
+    rhs_pred[lev].setVal(0.0);
+
 #ifdef AMREX_USE_OMP
-#pragma omp parallel 
+#pragma omp parallel
 #endif
     {
       amrex::Vector<amrex::Array4<const amrex::Real> > f(AMREX_SPACEDIM);
@@ -856,8 +781,8 @@ void AmrDG::update_H_w(int lev)
 
         for(int d = 0; d < AMREX_SPACEDIM; ++d){
           f[d] = state_f[d]->const_array(mfi);
-        } 
-        
+        }
+
         amrex::ParallelFor(bx, Np_st, [&] (int i, int j, int k, int n) noexcept
         {
           hw(i,j,k,n) = 0.0;
@@ -871,7 +796,7 @@ void AmrDG::update_H_w(int lev)
         {
           amrex::ParallelFor(bx, Np_st, [&] (int i, int j, int k, int n) noexcept
           {
-            for(int m =0; m<quadrule->qMp_st; ++m)
+            for(int m =0; m<quadrule.qMp_st; ++m)
             {
               rhs(i,j,k,n) -= ((Dt/(amrex::Real)dx[d])*Sk_predVinv[d](n,m)*f[d](i,j,k,m));
             }
@@ -883,7 +808,7 @@ void AmrDG::update_H_w(int lev)
 
           amrex::ParallelFor(bx, Np_st, [&] (int i, int j, int k, int n) noexcept
           {
-            for(int m =0; m<quadrule->qMp_st; ++m)
+            for(int m =0; m<quadrule.qMp_st; ++m)
             {
               rhs(i,j,k,n)+=(Dt/2.0)*Mk_pred_srcVinv(n,m)*source(i,j,k,m);
             }
@@ -901,13 +826,8 @@ void AmrDG::update_H_w(int lev)
   }
 }
 
-amrex::Real AmrDG::phi_s(int idx, const amrex::Vector<amrex::Real>& x) const
+template<int P>
+amrex::Real AmrDG<P>::phi_s(int idx, const amrex::Vector<amrex::Real>& x) const
 {
-    #define EVAL_CASE(PP) case PP: return BasisLegendre<PP>::phi_s(idx, x);
-    switch(p) {
-        EVAL_CASE(1) EVAL_CASE(2) EVAL_CASE(3) EVAL_CASE(4) EVAL_CASE(5)
-        EVAL_CASE(6) EVAL_CASE(7) EVAL_CASE(8) EVAL_CASE(9) EVAL_CASE(10)
-        default: amrex::Abort("Unsupported polynomial order p"); return 0.0;
-    }
-    #undef EVAL_CASE
+    return BasisLegendre<P>::phi_s(idx, x);
 }

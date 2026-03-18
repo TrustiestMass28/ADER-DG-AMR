@@ -83,10 +83,66 @@ public:
 
 } // namespace solver
 
+// Standalone Quadrature base class (moved out of Solver so that
+// QuadratureGaussLegendre<P> can inherit from it without needing
+// a fully-instantiated Solver<AmrDG<P>> in scope at definition time).
+class Quadrature {
+    public:
+        Quadrature() = default;
+
+        virtual ~Quadrature() = default;
+
+        //Set number of quadrature points (should be func of order p)
+        virtual void set_number_quadpoints() {};
+
+        //Generate the quadrature points
+        virtual void set_quadpoints() {};
+
+        //Interpolation nodes/quadrature points
+        //  for spatial basis functions
+        amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_s;
+
+        //  for spatial basis function at the boundaries
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdm;
+
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdp;
+
+        //  for single cell center evaluation , to be sued e.g for Dt computation
+        amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_s_center;
+
+        //  for temporal basis functions
+        amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_t;
+
+        //  for spatio-temporal basis functions
+        amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_st;
+        //  for spatio-temporal basis function at the boundaries
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_st_bdm;
+
+        amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_st_bdp;
+
+        //number of quadrature points in 1 dimensios, used to have
+        //same amount of points per dimension
+        int qMp_1d;
+
+        //number of quadrature points for quadrature of volume (spatio) integral
+        int qMp_s;
+
+        //number of quadrature points for quadrature of surface (spatio) integral
+        int qMp_s_bd;
+
+        //number of quadrature points for quadrature of volume (temporal) integral
+        int qMp_t;
+
+        //number of quadrature points for quadrature of volume (spatio-temporal) integral
+        int qMp_st;
+        //  at the boundary, surface (spatio-temporal) integral
+        int qMp_st_bd;
+};
+
 template <typename NumericalMethodType>
 class Solver
 {
-    public: 
+    public:
 
         Solver() = default;
 
@@ -253,70 +309,11 @@ class Solver
 
         amrex::Vector<amrex::BCRec> get_null_BC(int ncomp);
 
-        class Quadrature{
-            public:
-                Quadrature() = default;
-
-                ~Quadrature();
-
-                //Set number of quadrature points (should be func of order p)
-                virtual void set_number_quadpoints() {};
-
-                //Generate the quadrature points
-                virtual void set_quadpoints() {};
-
-                //Interpolation nodes/quadrature points
-                //  for spatial basis functions
-                amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_s;
-
-                //  for spatial basis function at the boundaries
-                amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdm;
-
-                amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_s_bdp;
-
-                //  for single cell center evaluation , to be sued e.g for Dt computation
-                amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_s_center;
-                   
-                //  for temporal basis functions
-                amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_t;
-
-                //  for spatio-temporal basis functions
-                amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_quad_st;
-                //  for spatio-temporal basis function at the boundaries
-                amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_st_bdm;
-
-                amrex::Vector<amrex::Vector<amrex::Vector<amrex::Real>>> xi_ref_quad_st_bdp;
-
-                //amrex::Vector<amrex::Vector<amrex::Real>> L2proj_quadmat;
-                //amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_GLquad_L2proj;
-                // amrex::Vector<amrex::Vector<amrex::Real>> xi_ref_equidistant; 
-
-                //number of quadrature points in 1 dimensios, used to have 
-                //same amount of points per dimension
-                int qMp_1d;    
-
-                //number of quadrature points for quadrature of volume (spatio) integral   
-                int qMp_s;    
-
-                //number of quadrature points for quadrature of surface (spatio) integral
-                int qMp_s_bd;
-
-                //number of quadrature points for quadrature of volume (temporal) integral   
-                int qMp_t;  
-
-                //number of quadrature points for quadrature of volume (spatio-temporal) integral   
-                int qMp_st;    
-                //  at the boundary, surface (spatio-temporal) integral
-                int qMp_st_bd;     
-
-                //  int qMp_L2proj; //number of quadrature points only in space, used for the BCs,ICs,
-
-                void setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme);
-                
-                protected:
-                    //Ptr used to access numerical method and solver data
-                    std::shared_ptr<NumericalMethodType> numme;
-            };
+        // Alias so that Solver<NM>::Quadrature resolves to the standalone
+        // ::Quadrature class defined above.  QuadratureGaussLegendre<P>
+        // inherits from ::Quadrature directly (before Solver is instantiated)
+        // so it does not depend on a concrete NumericalMethodType.
+        using Quadrature = ::Quadrature;
 
             template <typename InterpolationType>
             class AMR_Interpolation : public amrex::Interpolater
@@ -384,9 +381,6 @@ class Solver
         //Flag to indicate if analytical IC should be used at all levels (for validation/convergence tests)
         //If false, levels > 0 use projection from coarser level
         bool flag_analytical_ic = false;
-
-        //spatial (approxiamtion) order
-        int p;
 
         //Courant–Friedrichs–Lewy number
         amrex::Real CFL;
@@ -763,18 +757,6 @@ void Solver<NumericalMethodType>::AMR_remake_level(int lev, amrex::Real time, co
                                                     const amrex::DistributionMapping& dm) 
 {
    static_cast<NumericalMethodType*>(this)->AMR_remake_level(lev,time,ba,dm);
-}
-
-template <typename NumericalMethodType>
-void Solver<NumericalMethodType>::Quadrature::setNumericalMethod(std::shared_ptr<NumericalMethodType> _numme)
-{
-    numme = _numme;
-}
-
-template <typename NumericalMethodType>
-Solver<NumericalMethodType>::Quadrature::~Quadrature()
-{
-    //delete numme;
 }
 
 template <typename NumericalMethodType>

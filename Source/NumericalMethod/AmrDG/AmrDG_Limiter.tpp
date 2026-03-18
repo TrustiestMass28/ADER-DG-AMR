@@ -20,7 +20,8 @@
 
 #include <climits>
 
-void AmrDG::get_u_from_u_w(int c, int i, int j, int k,
+template<int P>
+void AmrDG<P>::get_u_from_u_w(int c, int i, int j, int k,
                           amrex::Vector<amrex::Array4<amrex::Real>>* uw,
                           amrex::Vector<amrex::Array4<amrex::Real>>* u,
                           const amrex::Vector<amrex::Real>& xi)
@@ -36,7 +37,8 @@ void AmrDG::get_u_from_u_w(int c, int i, int j, int k,
   }
 }
 
-amrex::Real AmrDG::minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3,
+template<int P>
+amrex::Real AmrDG<P>::minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3,
                           bool &troubled_flag, int l, amrex::Real M) const
 {
   auto _mesh = mesh.lock();
@@ -56,7 +58,8 @@ amrex::Real AmrDG::minmodB(amrex::Real a1,amrex::Real a2,amrex::Real a3,
   }
 }
 
-amrex::Real AmrDG::minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3,
+template<int P>
+amrex::Real AmrDG<P>::minmod(amrex::Real a1,amrex::Real a2,amrex::Real a3,
                           bool &troubled_flag) const
 {
   bool sameSign = (std::signbit(a1) == std::signbit(a2)) &&

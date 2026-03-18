@@ -1,8 +1,8 @@
-#include "AmrDG.h"
 
 using namespace amrex;
 
-void AmrDG::AMR_clear_level_data(int lev)
+template<int P>
+void AmrDG<P>::AMR_clear_level_data(int lev)
 {
   //Delete level data — flat vector layout
   for (int q = 0; q < Q; ++q) {
@@ -49,7 +49,8 @@ void AmrDG::AMR_clear_level_data(int lev)
   }
 }
 
-void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
+template<int P>
+void AmrDG<P>::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& ba,
                             const amrex::DistributionMapping& dm) 
 {
 
@@ -80,12 +81,14 @@ void AmrDG::AMR_remake_level(int lev, amrex::Real time, const amrex::BoxArray& b
   }
 }
 
-void AmrDG::AMR_interpolate_initial_condition(int lev)
+template<int P>
+void AmrDG<P>::AMR_interpolate_initial_condition(int lev)
 {
   AMR_FillFromCoarsePatch(lev, 0.0, &U_w(lev,0), 0, Np_s);
 }
 
-void AmrDG::AMR_sync_initial_condition()
+template<int P>
+void AmrDG<P>::AMR_sync_initial_condition()
 {
     auto _mesh = mesh.lock();
 
@@ -116,8 +119,9 @@ void AmrDG::AMR_sync_initial_condition()
 
 //Make a new level using provided BoxArray and DistributionMapping and fill with 
 //interpolated coarse level data.
-void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
-                                    const amrex::BoxArray& ba, 
+template<int P>
+void AmrDG<P>::AMR_make_new_fine_level(int lev, amrex::Real time,
+                                    const amrex::BoxArray& ba,
                                     const amrex::DistributionMapping& dm)
 { 
   //create new level MFabs defined on new ba,dm
@@ -130,7 +134,8 @@ void AmrDG::AMR_make_new_fine_level(int lev, amrex::Real time,
 // fill an entire multifab by interpolating from the coarser level
 // this comes into play when a new level of refinement appears
 //also fills ghost cells
-void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::MultiFab* fmf,
+template<int P>
+void AmrDG<P>::AMR_FillFromCoarsePatch (int lev, Real time, amrex::MultiFab* fmf,
                                 int icomp,int ncomp)
 {
   auto _mesh = mesh.lock();
@@ -164,7 +169,8 @@ void AmrDG::AMR_FillFromCoarsePatch (int lev, Real time, amrex::MultiFab* fmf,
 //neighboring grids at the same level, and domain boundary conditions 
 //(for examples that have non-periodic boundary conditions).
 //NB: this function is used for regrid and not for timestepping
-void AmrDG::AMR_FillPatch(int lev, Real time, amrex::MultiFab* mf, int icomp, int ncomp)
+template<int P>
+void AmrDG<P>::AMR_FillPatch(int lev, Real time, amrex::MultiFab* mf, int icomp, int ncomp)
 {
 
   auto _mesh = mesh.lock();
@@ -218,7 +224,8 @@ void AmrDG::AMR_FillPatch(int lev, Real time, amrex::MultiFab* mf, int icomp, in
 }
 
 //averages cell centered data from finer cells to the respective covered coarse cell
-void AmrDG::AMR_average_fine_coarse()
+template<int P>
+void AmrDG<P>::AMR_average_fine_coarse()
 {  
   auto _mesh = mesh.lock();
 
@@ -230,7 +237,8 @@ void AmrDG::AMR_average_fine_coarse()
   }
 }
 
-void AmrDG::AMR_set_flux_registers()
+template<int P>
+void AmrDG<P>::AMR_set_flux_registers()
 {
     auto _mesh = mesh.lock();
     const int finest = _mesh->get_finest_lev();
@@ -405,7 +413,8 @@ void AmrDG::AMR_set_flux_registers()
     }
 }
 
-void AmrDG::AMR_flux_correction()
+template<int P>
+void AmrDG<P>::AMR_flux_correction()
 {
     auto _mesh = mesh.lock();
 

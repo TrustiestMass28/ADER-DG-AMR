@@ -1,9 +1,8 @@
-#include "AmrDG.h"
 
 // --- Legendre<P> constructor ---
 
 template<int P>
-AmrDG::Legendre<P>::Legendre(amrex::Real x) {
+Legendre<P>::Legendre(amrex::Real x) {
     val[0] = 1.0; dval[0] = 0.0; ddval[0] = 0.0;
     if constexpr (P >= 1) {
         val[1] = x; dval[1] = 1.0; ddval[1] = 0.0;
@@ -18,7 +17,7 @@ AmrDG::Legendre<P>::Legendre(amrex::Real x) {
 // --- BasisLegendre<P> method definitions ---
 
 template<int P>
-amrex::Real AmrDG::BasisLegendre<P>::phi_s(int idx, const amrex::Vector<amrex::Real>& x) {
+amrex::Real BasisLegendre<P>::phi_s(int idx, const amrex::Vector<amrex::Real>& x) {
     const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[idx];
     amrex::Real result = 1.0;
     for (int d = 0; d < AMREX_SPACEDIM; ++d) {
@@ -29,7 +28,7 @@ amrex::Real AmrDG::BasisLegendre<P>::phi_s(int idx, const amrex::Vector<amrex::R
 }
 
 template<int P>
-amrex::Real AmrDG::BasisLegendre<P>::dphi_s(int idx, const amrex::Vector<amrex::Real>& x, int d) {
+amrex::Real BasisLegendre<P>::dphi_s(int idx, const amrex::Vector<amrex::Real>& x, int d) {
     const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[idx];
     amrex::Real result = 1.0;
     for (int a = 0; a < AMREX_SPACEDIM; ++a) {
@@ -44,7 +43,7 @@ amrex::Real AmrDG::BasisLegendre<P>::dphi_s(int idx, const amrex::Vector<amrex::
 }
 
 template<int P>
-amrex::Real AmrDG::BasisLegendre<P>::ddphi_s(int idx, const amrex::Vector<amrex::Real>& x, int d1, int d2) {
+amrex::Real BasisLegendre<P>::ddphi_s(int idx, const amrex::Vector<amrex::Real>& x, int d1, int d2) {
     const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[idx];
     amrex::Real result = 1.0;
     for (int a = 0; a < AMREX_SPACEDIM; ++a) {
@@ -63,21 +62,21 @@ amrex::Real AmrDG::BasisLegendre<P>::ddphi_s(int idx, const amrex::Vector<amrex:
 }
 
 template<int P>
-amrex::Real AmrDG::BasisLegendre<P>::phi_t(int idx, amrex::Real tau) {
+amrex::Real BasisLegendre<P>::phi_t(int idx, amrex::Real tau) {
     const auto& mi = MultiIndex<P, AMREX_SPACEDIM + 1>::table[idx];
     Legendre<P> leg(tau);
     return leg.val[mi.idx[AMREX_SPACEDIM]];
 }
 
 template<int P>
-amrex::Real AmrDG::BasisLegendre<P>::dtphi_t(int idx, amrex::Real tau) {
+amrex::Real BasisLegendre<P>::dtphi_t(int idx, amrex::Real tau) {
     const auto& mi = MultiIndex<P, AMREX_SPACEDIM + 1>::table[idx];
     Legendre<P> leg(tau);
     return leg.dval[mi.idx[AMREX_SPACEDIM]];
 }
 
 template<int P>
-amrex::Real AmrDG::BasisLegendre<P>::phi_st(int idx, const amrex::Vector<amrex::Real>& x) {
+amrex::Real BasisLegendre<P>::phi_st(int idx, const amrex::Vector<amrex::Real>& x) {
     const auto& mi = MultiIndex<P, AMREX_SPACEDIM + 1>::table[idx];
     amrex::Real result = 1.0;
     for (int d = 0; d < AMREX_SPACEDIM; ++d) {
@@ -90,7 +89,7 @@ amrex::Real AmrDG::BasisLegendre<P>::phi_st(int idx, const amrex::Vector<amrex::
 }
 
 template<int P>
-auto AmrDG::BasisLegendre<P>::phi_s_all(const amrex::Vector<amrex::Real>& x)
+auto BasisLegendre<P>::phi_s_all(const amrex::Vector<amrex::Real>& x)
     -> std::array<amrex::Real, Np_s>
 {
     std::array<std::array<amrex::Real, P+1>, AMREX_SPACEDIM> leg_val;
@@ -111,7 +110,7 @@ auto AmrDG::BasisLegendre<P>::phi_s_all(const amrex::Vector<amrex::Real>& x)
 }
 
 template<int P>
-auto AmrDG::BasisLegendre<P>::phi_st_all(const amrex::Vector<amrex::Real>& x)
+auto BasisLegendre<P>::phi_st_all(const amrex::Vector<amrex::Real>& x)
     -> std::array<amrex::Real, Np_st>
 {
     std::array<std::array<amrex::Real, P+1>, AMREX_SPACEDIM + 1> leg_val;
@@ -132,7 +131,7 @@ auto AmrDG::BasisLegendre<P>::phi_st_all(const amrex::Vector<amrex::Real>& x)
 }
 
 template<int P>
-amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_s() {
+amrex::Vector<amrex::Vector<int>> BasisLegendre<P>::get_basis_idx_s() {
     constexpr auto& tab = MultiIndex<P, AMREX_SPACEDIM>::table;
     amrex::Vector<amrex::Vector<int>> result(Np_s, amrex::Vector<int>(AMREX_SPACEDIM));
     for (int n = 0; n < Np_s; ++n) {
@@ -144,7 +143,7 @@ amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_s() {
 }
 
 template<int P>
-amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_st() {
+amrex::Vector<amrex::Vector<int>> BasisLegendre<P>::get_basis_idx_st() {
     constexpr auto& tab = MultiIndex<P, AMREX_SPACEDIM + 1>::table;
     amrex::Vector<amrex::Vector<int>> result(Np_st, amrex::Vector<int>(AMREX_SPACEDIM + 1));
     for (int n = 0; n < Np_st; ++n) {
@@ -156,7 +155,7 @@ amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_st() {
 }
 
 template<int P>
-amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_t() {
+amrex::Vector<amrex::Vector<int>> BasisLegendre<P>::get_basis_idx_t() {
     constexpr auto& tab = MultiIndex<P, AMREX_SPACEDIM + 1>::table;
     amrex::Vector<amrex::Vector<int>> result(Np_st, amrex::Vector<int>(1));
     for (int n = 0; n < Np_st; ++n) {
@@ -164,27 +163,3 @@ amrex::Vector<amrex::Vector<int>> AmrDG::BasisLegendre<P>::get_basis_idx_t() {
     }
     return result;
 }
-
-// --- Explicit instantiations ---
-
-template struct AmrDG::Legendre<1>;
-template struct AmrDG::Legendre<2>;
-template struct AmrDG::Legendre<3>;
-template struct AmrDG::Legendre<4>;
-template struct AmrDG::Legendre<5>;
-template struct AmrDG::Legendre<6>;
-template struct AmrDG::Legendre<7>;
-template struct AmrDG::Legendre<8>;
-template struct AmrDG::Legendre<9>;
-template struct AmrDG::Legendre<10>;
-
-template struct AmrDG::BasisLegendre<1>;
-template struct AmrDG::BasisLegendre<2>;
-template struct AmrDG::BasisLegendre<3>;
-template struct AmrDG::BasisLegendre<4>;
-template struct AmrDG::BasisLegendre<5>;
-template struct AmrDG::BasisLegendre<6>;
-template struct AmrDG::BasisLegendre<7>;
-template struct AmrDG::BasisLegendre<8>;
-template struct AmrDG::BasisLegendre<9>;
-template struct AmrDG::BasisLegendre<10>;

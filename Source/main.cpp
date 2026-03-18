@@ -8,246 +8,161 @@
 using namespace amrex;
 
 int main(int argc, char* argv[])
-{    
+{
     amrex::Initialize(argc,argv);
-    { 
+    {
 
       /*-------------------------------------------*/
       /*------------------SETTINGS-----------------*/
-      //INIT SIMULATION
-      Simulation<AmrDG,Compressible_Euler> sim;
 
-      //EQUATION
-      std::string simulation_case = "isentropic_vortex";
+      // NUMERICAL
+      constexpr int p = 2;           // polynomial degree
+      std::string simulation_case    = "isentropic_vortex";
 
-      sim.setModelSettings(simulation_case);
+      amrex::Real T                  = 10.0;
+      amrex::Real c_dt               = 0.5;  // CFL safety factor
 
-      //NUMERICAL
-      int p  = 2; //polynomial degree
-      amrex::Real T = 10.0;
-      amrex::Real c_dt = 0.5; //safety factor for CFL condition
+      // LIMITER (set type="" or t_limit<=0 to disable)
+      std::string limiter_type       = "";
+      amrex::Real TVB_M              = 0.0;
+      int t_limit                    = -1;
 
-      //LIMITER (set type="" or interval<=0 to disable)
-      std::string limiter_type = "";  // "TVB" to enable
-      amrex::Real TVB_M = 0.0;        // TVB constant M for limiting
-      int t_limit = -1;               // apply every t_limit timesteps
+      // AMR  (max_level=0: single level, max_level>0: multi-level)
+      int max_level                  = 0;
 
-      //AMR
-      int max_level =0;             // number of levels = max_level + 1
-                                    // max_level=0 single level simulation
-                                    // max_level>0 multi  level simulation
-                                    // max_level==idx of maximum fine lvl
+      // VALIDATION MODE
+      // true:  use analytical IC at all levels (convergence tests)
+      // false: levels > 0 use projection from coarser level (normal AMR)
+      bool validation_mode           = true;
 
-      //VALIDATION MODE
-      //Set to true for convergence tests: uses analytical IC at all levels
-      //Set to false for normal AMR: levels > 0 use projection from coarser level
-      bool validation_mode = true ;
+      // I/O
+      int restart_tstep              = 0;   // set >0 to restart from plotfile
+      int dtn_outplt                 = -1;  // output every n timesteps  (<0 = off)
+      amrex::Real dt_outplt          = -1;  // output every dt time      (<0 = off)
+      std::string sim_run            = "";  // optional subfolder, e.g. "run_1"
+      int dtn_regrid                 = -1;  // regrid every n timesteps  (<0 = off)
+      amrex::Real dt_regrid          = 10;  // regrid every dt time      (<0 = off)
+      int nghost                     = 1;   // ghost cells — do not change
 
-      //IO
-      int restart_tstep = 0;    //set >0 to restart from plotfile at that timestep
-      int dtn_outplt = -1;
-      amrex::Real dt_outplt = -1;
-      int dtn_regrid  = -1;          // try regrid every n timesteps
-      int nghost = 1;                //number of ghost cells, dont change
-      amrex::Real dt_regrid = 10;  //regrid every dt time, negative wont use it
+      // GEOMETRY
+      int n_cell_x, n_cell_y, n_cell_z;
+      amrex::Real L_x_lo, L_x_hi;
+      amrex::Real L_y_lo, L_y_hi;
+      amrex::Real L_z_lo, L_z_hi;
+      int coord                      = 0;
 
-      //CASE-SPECIFIC OVERRIDES
+      // BOUNDARY CONDITIONS (per dimension — applied uniformly to all solution components)
+      amrex::Array<int,AMREX_SPACEDIM> is_periodic;
+      amrex::Array<int,AMREX_SPACEDIM> bc_lo_dim, bc_hi_dim;         // AMReX BC type
+      amrex::Array<int,AMREX_SPACEDIM> bc_lo_type_dim, bc_hi_type_dim; // 0=Dirichlet, 1=Neumann, 2=periodic
+
+      /*-------------------------------------------*/
+      /*----------CASE-SPECIFIC OVERRIDES----------*/
+
       if(simulation_case == "isentropic_vortex")
       {
-            T = 10.0;
-            max_level = 1;
-            limiter_type = "";
-            dtn_regrid = 1;
-            dt_regrid = -1;
-            c_dt = 0.9;
+            T             = 10.0;
+            c_dt          = 0.9;
+            max_level     = 1;
+            limiter_type  = "";
+            dtn_regrid    = 1;
+            dt_regrid     = -1;
+
+            L_x_lo = 0.0;  L_x_hi = 10.0;  n_cell_x = 16;
+            L_y_lo = 0.0;  L_y_hi = 10.0;  n_cell_y = 16;
+            L_z_lo = 0.0;  L_z_hi = 0.0;   n_cell_z = 1;
+
+            is_periodic[0]     = 1;
+            is_periodic[1]     = 1;
+            for(int d=0; d<AMREX_SPACEDIM; ++d){
+                  bc_lo_dim[d]      = BCType::int_dir;
+                  bc_hi_dim[d]      = BCType::int_dir;
+                  bc_lo_type_dim[d] = 2;
+                  bc_hi_type_dim[d] = 2;
+            }
       }
       else if(simulation_case == "kelvin_helmolz_instability")
       {
-            //tn=0->tn=11506
-            T = 7.0;
-            max_level = 2;
-            dt_outplt = 0.05;
-            dtn_regrid = -1;
-            dt_regrid = 0.05;
-            TVB_M = 5000.0;
-            limiter_type = "TVB";
-            t_limit = 1;
-            c_dt = 0.5;
-            
+            T             = 7.0;
+            c_dt          = 0.5;
+            max_level     = 2;
+            limiter_type  = "TVB";
+            TVB_M         = 5000.0;
+            t_limit       = 1;
+            dt_outplt     = 0.05;
+            dtn_regrid    = -1;
+            dt_regrid     = 0.05;
             restart_tstep = 110708;
-            
-            //NB
-            //- Large M * h² , the limiter tolerates large jumps,  more features survive (good for
-            //vortices) but oscillations near shocks can slip through (bad)
-            //- Small M * h² , the limiter is strict, clean shocks but smooth features get clipped too
+            //NB: large M*h² tolerates large jumps (good for vortices, bad near shocks)
+            //    small M*h² is strict (clean shocks, smooth features clipped)
+
+            L_x_lo = 0.0;  L_x_hi = 1.0;  n_cell_x = 64;
+            L_y_lo = 0.0;  L_y_hi = 1.0;  n_cell_y = 64;
+            L_z_lo = 0.0;  L_z_hi = 0.0;  n_cell_z = 1;
+
+            is_periodic[0]     = 1;
+            is_periodic[1]     = 1;
+            for(int d=0; d<AMREX_SPACEDIM; ++d){
+                  bc_lo_dim[d]      = BCType::int_dir;
+                  bc_hi_dim[d]      = BCType::int_dir;
+                  bc_lo_type_dim[d] = 2;
+                  bc_hi_type_dim[d] = 2;
+            }
       }
 
-      //Allocate after max_level is finalized
-      amrex::Vector<amrex::Real> amr_c(max_level, 1.0);     //per-level AMR tagging threshold
+      // AMR tagging thresholds (allocated after max_level is set)
+      amrex::Vector<amrex::Real> amr_c(max_level, 1.0);
       amrex::Vector<amrex::Real> amr_tvb_c(max_level + 1, 1.0);
 
-      //Per-level tagging criteria
       if(simulation_case == "isentropic_vortex")
       {
             if(max_level > 0) amr_c[0] = 1.4;
       }
       else if(simulation_case == "kelvin_helmolz_instability")
       {
-            //amr_c[l] = TVB M value for tagging at level l
-            //t=0->86906
-            //amr_c[0] = 1500.0;
-            //amr_c[1] = 2500.0;
-
-            //t=86906->106168
-            //amr_c[0] = 1100.0;
-            //amr_c[1] = 2100.0;
-
-            //t=106168
+            //t=0->86906:    amr_c = {1500, 2500}
+            //t=86906->106168: amr_c = {1100, 2100}
+            //t=106168+:
             amr_c[0] = 1300.0;
             amr_c[1] = 2100.0;
       }
 
-      
-
-      sim.setNumericalSettings(p,T,c_dt,limiter_type,TVB_M,amr_tvb_c,t_limit);
-      sim.setValidationMode(validation_mode);
-      std::string sim_run = "";  // set to e.g. "run_1" to store in a further subfolder
-      sim.setIO(dtn_outplt, dt_outplt, sim_run, restart_tstep);
-
-
-      //BOUNDARY CONDITION
-      int Q = sim.getQ();
-      
-      amrex::Array<int,AMREX_SPACEDIM> is_periodic;
-      amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_lo;
-      amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> bc_hi;
-      amrex::Vector<amrex::Vector<int>> bc_lo_type;
-      amrex::Vector<amrex::Vector<int>> bc_hi_type;
-
-      bc_lo.resize(Q);
-      bc_hi.resize(Q);
-      bc_lo_type.resize(Q);
-      bc_hi_type.resize(Q);
-
-      if(AMREX_SPACEDIM == 2)
-      {     
-            if(simulation_case ==  "isentropic_vortex")
-            {
-                  //need periodic in x to ensure waves interaction
-                  is_periodic[0]  = 1;
-                  is_periodic[1]  = 1;
-                  for(int q=0; q<Q; ++q){//rho,rhou1,rhou2,rhoe
-                        bc_lo_type[q].resize(AMREX_SPACEDIM);
-                        bc_hi_type[q].resize(AMREX_SPACEDIM);
-
-                        bc_lo[q][1]=BCType::int_dir;
-                        bc_hi[q][1]=BCType::int_dir;
-
-                        bc_lo[q][0]=BCType::int_dir;
-                        bc_hi[q][0]=BCType::int_dir;
-
-                        bc_lo_type[q][0]=2;
-                        bc_lo_type[q][1]=2;
-
-                        bc_hi_type[q][0]=2;
-                        bc_hi_type[q][1]=2;
-                  }
-            }
-            else if(simulation_case == "kelvin_helmolz_instability")
-            {
-                  //periodic in both x and y
-                  is_periodic[0]  = 1;
-                  is_periodic[1]  = 1;
-                  for(int q=0; q<Q; ++q){
-                        bc_lo_type[q].resize(AMREX_SPACEDIM);
-                        bc_hi_type[q].resize(AMREX_SPACEDIM);
-
-                        bc_lo[q][0]=BCType::int_dir;
-                        bc_hi[q][0]=BCType::int_dir;
-
-                        bc_lo[q][1]=BCType::int_dir;
-                        bc_hi[q][1]=BCType::int_dir;
-
-                        bc_lo_type[q][0]=2;
-                        bc_lo_type[q][1]=2;
-
-                        bc_hi_type[q][0]=2;
-                        bc_hi_type[q][1]=2;
-                  }
-            }
-      }
-
-      sim.setBoundaryConditions(bc_lo_type,bc_hi_type,bc_lo, bc_hi);
-      
-      //GEOMETRY/DOMAIN
-      int n_cell_x; int n_cell_y; int n_cell_z;
-      amrex::Real L_x_lo; amrex::Real L_y_lo; amrex::Real L_z_lo;
-      amrex::Real L_x_hi; amrex::Real L_y_hi; amrex::Real L_z_hi;
-      int coord = 0;
-     
-      if(simulation_case == "isentropic_vortex"){
-            L_x_lo   = 0.0;
-            L_x_hi   = 10.0;
-            n_cell_x = 32;
-
-            L_y_lo   = 0.0;
-            L_y_hi   = 10.0;
-            n_cell_y = 32;
-
-            L_z_lo   = 0.0;
-            L_z_hi   = 0.0;
-            n_cell_z = 1;
-
-            coord = 0;
-      }
-      else if(simulation_case == "kelvin_helmolz_instability"){
-            L_x_lo   = 0.0;
-            L_x_hi   = 1.0;
-            n_cell_x = 64;
-
-            L_y_lo   = 0.0;
-            L_y_hi   = 1.0;
-            n_cell_y = 64;
-
-            L_z_lo   = 0.0;
-            L_z_hi   = 0.0;
-            n_cell_z = 1;
-
-            coord = 0;
-      }
-
+      // Build geometry objects
       amrex::Vector<int> n_cell{AMREX_D_DECL(n_cell_x, n_cell_y, n_cell_z)};
+      amrex::RealBox domain{{AMREX_D_DECL(L_x_lo, L_y_lo, L_z_lo)},
+                            {AMREX_D_DECL(L_x_hi, L_y_hi, L_z_hi)}};
 
-      amrex::RealBox domain {{AMREX_D_DECL(L_x_lo,L_y_lo,L_z_lo)}, 
-                              {AMREX_D_DECL(L_x_hi, L_y_hi, L_z_hi)}}; 
-
-      //don't change ref criteria, some functions expect refinement 2
+      // Refinement ratio — keep at 2; some internals assume it
       amrex::Vector<amrex::IntVect> amr_ratio;
-      for (int l = 0; l < max_level; ++l) {
+      for(int l = 0; l < max_level; ++l)
             amr_ratio.push_back(amrex::IntVect(AMREX_D_DECL(2, 2, 2)));
-        
-      }
 
-      sim.setGeometrySettings(domain,max_level,n_cell,coord,amr_ratio, is_periodic,amr_c,
-                              dtn_regrid,dt_regrid,nghost); 
+      /*-------------------------------------------*/
+      /*-----------SIMULATION CONSTRUCTION---------*/
 
+      Simulation<AmrDG<p>,Compressible_Euler> sim;
 
-      
-      // wallclock time
+      sim.setModelSettings(simulation_case);
+
+      sim.setNumericalSettings(T, c_dt, limiter_type, TVB_M, amr_tvb_c, t_limit);
+      sim.setValidationMode(validation_mode);
+      sim.setIO(dtn_outplt, dt_outplt, sim_run, restart_tstep);
+      sim.setBoundaryConditions(bc_lo_type_dim, bc_hi_type_dim, bc_lo_dim, bc_hi_dim);
+      sim.setGeometrySettings(domain, max_level, n_cell, coord, amr_ratio,
+                              is_periodic, amr_c, dtn_regrid, dt_regrid, nghost);
+
+      /*-------------------------------------------*/
+      /*--------------------RUN--------------------*/
+
       const auto strt_total = amrex::second();
-                          
       sim.run();
-                    
-      // wallclock time
       auto end_total = amrex::second() - strt_total;
-      
-      // print wallclock time
-      ParallelDescriptor::ReduceRealMax(end_total ,ParallelDescriptor::IOProcessorNumber());
+      ParallelDescriptor::ReduceRealMax(end_total, ParallelDescriptor::IOProcessorNumber());
       //amrex::Print() << "\nTotal Time: " << end_total << '\n';
-      
+
     }
     amrex::Finalize();
-    
+
     return 0;
 }
 

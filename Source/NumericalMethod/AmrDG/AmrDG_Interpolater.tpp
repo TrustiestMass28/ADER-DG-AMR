@@ -1,11 +1,11 @@
-#include "AmrDG.h"
 #include <Eigen/Core>
 #include <Eigen/SVD>
 #include <Eigen/Eigenvalues>
 
 using namespace amrex;
 
-void AmrDG::L2ProjInterp::reflux(amrex::MultiFab& U_crse,
+template<int P>
+void AmrDG<P>::L2ProjInterp::reflux(amrex::MultiFab& U_crse,
                                const amrex::MultiFab& correction_mf,
                                int lev,
                                const amrex::Geometry& crse_geom) noexcept
@@ -71,7 +71,8 @@ void AmrDG::L2ProjInterp::reflux(amrex::MultiFab& U_crse,
     }
 }
 
-const Eigen::MatrixXd& AmrDG::L2ProjInterp::get_flux_proj_mat(int d, int child_idx, int b) const {
+template<int P>
+const Eigen::MatrixXd& AmrDG<P>::L2ProjInterp::get_flux_proj_mat(int d, int child_idx, int b) const {
     if (b == 1) {
         // Coarse cell is to the left, we need the High-side projection
         return P_flux_fc_high[d][child_idx];
@@ -81,23 +82,12 @@ const Eigen::MatrixXd& AmrDG::L2ProjInterp::get_flux_proj_mat(int d, int child_i
     }
 }
 
-void AmrDG::L2ProjInterp::flux_proj_mat()
-{
-    #define FLUX_PROJ_CASE(PP) case PP: _flux_proj_mat<PP>(); break;
-    switch(numme->p) {
-        FLUX_PROJ_CASE(1) FLUX_PROJ_CASE(2) FLUX_PROJ_CASE(3) FLUX_PROJ_CASE(4) FLUX_PROJ_CASE(5)
-        FLUX_PROJ_CASE(6) FLUX_PROJ_CASE(7) FLUX_PROJ_CASE(8) FLUX_PROJ_CASE(9) FLUX_PROJ_CASE(10)
-        default: amrex::Abort("Unsupported polynomial order p");
-    }
-    #undef FLUX_PROJ_CASE
-}
-
 template<int P>
-void AmrDG::L2ProjInterp::_flux_proj_mat()
+void AmrDG<P>::L2ProjInterp::flux_proj_mat()
 {
     // Setup dimensions
     int num_face_children = (int)std::pow(2, AMREX_SPACEDIM - 1);
-    int num_q_pts = numme->quadrule->qMp_st_bd;
+    int num_q_pts = numme->quadrule.qMp_st_bd;
 
     // Resize Outer Vectors [Direction]
     P_flux_fc_low.resize(AMREX_SPACEDIM);
@@ -112,10 +102,10 @@ void AmrDG::L2ProjInterp::_flux_proj_mat()
         for (int k = 0; k < num_face_children; ++k) {
 
             // Resize the Eigen Matrices (Rows: Coarse Modes, Cols: Fine Quad Pts)
-            P_flux_fc_low[d][k].resize(AmrDG::BasisLegendre<P>::Np_s, num_q_pts);
+            P_flux_fc_low[d][k].resize(BasisLegendre<P>::Np_s, num_q_pts);
             P_flux_fc_low[d][k].setZero();
 
-            P_flux_fc_high[d][k].resize(AmrDG::BasisLegendre<P>::Np_s, num_q_pts);
+            P_flux_fc_high[d][k].resize(BasisLegendre<P>::Np_s, num_q_pts);
             P_flux_fc_high[d][k].setZero();
 
             // Determine Tangential Shifts for this child 'k'
@@ -130,8 +120,8 @@ void AmrDG::L2ProjInterp::_flux_proj_mat()
             }
 
             // Fill Matrix Elements using QuadratureGaussLegendre lookups
-            for (int r = 0; r < AmrDG::BasisLegendre<P>::Np_s; ++r) {
-                const auto& mi = AmrDG::MultiIndex<P, AMREX_SPACEDIM>::table[r];
+            for (int r = 0; r < BasisLegendre<P>::Np_s; ++r) {
+                const auto& mi = MultiIndex<P, AMREX_SPACEDIM>::table[r];
                 for (int m = 0; m < num_q_pts; ++m) {
                     // phi_s at coarse boundary: normal dim d has xi=±1,
                     // tangential dims use shifted GL nodes (0.5*node + shift)
@@ -139,15 +129,15 @@ void AmrDG::L2ProjInterp::_flux_proj_mat()
                     double phi_high = 1.0;
                     for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
                         if (dim == d) {
-                            phi_low  *= AmrDG::QuadratureGaussLegendre<P>::bd_val[mi.idx[dim]][0]; // xi=-1
-                            phi_high *= AmrDG::QuadratureGaussLegendre<P>::bd_val[mi.idx[dim]][1]; // xi=+1
+                            phi_low  *= QuadratureGaussLegendre<P>::bd_val[mi.idx[dim]][0]; // xi=-1
+                            phi_high *= QuadratureGaussLegendre<P>::bd_val[mi.idx[dim]][1]; // xi=+1
                         } else {
                             // Tangential dim: 0.5*nodes[q_a] + t_shifts[dim]
-                            int pos = AmrDG::QuadratureGaussLegendre<P>::bd_free_pos(dim, d);
-                            int q_a = AmrDG::QuadratureGaussLegendre<P>::node_idx(m, pos, AMREX_SPACEDIM);
+                            int pos = QuadratureGaussLegendre<P>::bd_free_pos(dim, d);
+                            int q_a = QuadratureGaussLegendre<P>::node_idx(m, pos, AMREX_SPACEDIM);
                             const auto& tbl = (t_shifts[dim] < 0.0)
-                                ? AmrDG::QuadratureGaussLegendre<P>::shifted_lo_val
-                                : AmrDG::QuadratureGaussLegendre<P>::shifted_hi_val;
+                                ? QuadratureGaussLegendre<P>::shifted_lo_val
+                                : QuadratureGaussLegendre<P>::shifted_hi_val;
                             phi_low  *= tbl[mi.idx[dim]][q_a];
                             phi_high *= tbl[mi.idx[dim]][q_a];
                         }
@@ -164,43 +154,32 @@ void AmrDG::L2ProjInterp::_flux_proj_mat()
     }
 }
 
-void AmrDG::L2ProjInterp::interp_proj_mat()
-{
-    #define INTERP_PROJ_CASE(PP) case PP: _interp_proj_mat<PP>(); break;
-    switch(numme->p) {
-        INTERP_PROJ_CASE(1) INTERP_PROJ_CASE(2) INTERP_PROJ_CASE(3) INTERP_PROJ_CASE(4) INTERP_PROJ_CASE(5)
-        INTERP_PROJ_CASE(6) INTERP_PROJ_CASE(7) INTERP_PROJ_CASE(8) INTERP_PROJ_CASE(9) INTERP_PROJ_CASE(10)
-        default: amrex::Abort("Unsupported polynomial order p");
-    }
-    #undef INTERP_PROJ_CASE
-}
-
 template<int P>
-void AmrDG::L2ProjInterp::_interp_proj_mat()
+void AmrDG<P>::L2ProjInterp::interp_proj_mat()
 {
   constexpr int num_overlap_cells = 1 << AMREX_SPACEDIM;
 
   //coarse->fine projection matrix
   P_cf.resize(num_overlap_cells);
   for (int i = 0; i < num_overlap_cells; ++i) {
-      P_cf[i].resize(AmrDG::BasisLegendre<P>::Np_s, AmrDG::BasisLegendre<P>::Np_s);
+      P_cf[i].resize(BasisLegendre<P>::Np_s, BasisLegendre<P>::Np_s);
       P_cf[i].setZero();
   }
 
   //fine->coarse projection matrix
   P_fc.resize(num_overlap_cells);
   for (int i = 0; i < num_overlap_cells; ++i) {
-      P_fc[i].resize(AmrDG::BasisLegendre<P>::Np_s, AmrDG::BasisLegendre<P>::Np_s);
+      P_fc[i].resize(BasisLegendre<P>::Np_s, BasisLegendre<P>::Np_s);
       P_fc[i].setZero();
   }
 
   //mass matrix
-  M.resize(AmrDG::BasisLegendre<P>::Np_s, AmrDG::BasisLegendre<P>::Np_s);
+  M.resize(BasisLegendre<P>::Np_s, BasisLegendre<P>::Np_s);
   M.setZero();
 
   //Compute mass matrices
-  for(int j=0; j<AmrDG::BasisLegendre<P>::Np_s;++j){
-    for(int n=0; n<AmrDG::BasisLegendre<P>::Np_s;++n){
+  for(int j=0; j<BasisLegendre<P>::Np_s;++j){
+    for(int n=0; n<BasisLegendre<P>::Np_s;++n){
       M(j,n)= numme->refMat_phiphi(j,numme->basis_idx_s,n,numme->basis_idx_s);
     }
   }
@@ -219,23 +198,23 @@ void AmrDG::L2ProjInterp::_interp_proj_mat()
         shift[d] = bit ? 0.5 : -0.5;
     }
 
-    for(int j=0; j<AmrDG::BasisLegendre<P>::Np_s;++j){
-      for(int m=0; m<AmrDG::BasisLegendre<P>::Np_s;++m){
+    for(int j=0; j<BasisLegendre<P>::Np_s;++j){
+      for(int m=0; m<BasisLegendre<P>::Np_s;++m){
 
         amrex::Real sum_cf = 0.0;
         amrex::Real sum_fc = 0.0;
-        const auto& mi_m = AmrDG::MultiIndex<P, AMREX_SPACEDIM>::table[m];
-        const auto& mi_j = AmrDG::MultiIndex<P, AMREX_SPACEDIM>::table[j];
-        for(int q=0; q<numme->quadrule->qMp_s; ++q)
+        const auto& mi_m = MultiIndex<P, AMREX_SPACEDIM>::table[m];
+        const auto& mi_j = MultiIndex<P, AMREX_SPACEDIM>::table[j];
+        for(int q=0; q<numme->quadrule.qMp_s; ++q)
         {
           // phi_s(idx, 0.5*nodes[q_d] + shift[d]) = prod_d P_{mi[d]}(0.5*nodes[q_d] + shift[d])
           // shift[d] = -0.5 → shifted_lo_val, shift[d] = +0.5 → shifted_hi_val
           double phi_m = 1.0;
           double phi_j = 1.0;
           for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-            int q_d = AmrDG::QuadratureGaussLegendre<P>::node_idx(q, d, AMREX_SPACEDIM);
-            const auto& tbl = (shift[d] < 0.0) ? AmrDG::QuadratureGaussLegendre<P>::shifted_lo_val
-                                                : AmrDG::QuadratureGaussLegendre<P>::shifted_hi_val;
+            int q_d = QuadratureGaussLegendre<P>::node_idx(q, d, AMREX_SPACEDIM);
+            const auto& tbl = (shift[d] < 0.0) ? QuadratureGaussLegendre<P>::shifted_lo_val
+                                                : QuadratureGaussLegendre<P>::shifted_hi_val;
             phi_m *= tbl[mi_m.idx[d]][q_d];
             phi_j *= tbl[mi_j.idx[d]][q_d];
           }
@@ -251,23 +230,26 @@ void AmrDG::L2ProjInterp::_interp_proj_mat()
   }
 }
 
-Box AmrDG::L2ProjInterp::CoarseBox (const Box& fine,
+template<int P>
+Box AmrDG<P>::L2ProjInterp::CoarseBox (const Box& fine,
                                     int        ratio)
 {
     Box crse(amrex::coarsen(fine,ratio));
     //crse.grow(1);
-    return crse; 
+    return crse;
 }
 
-Box AmrDG::L2ProjInterp::CoarseBox (const Box&     fine,
+template<int P>
+Box AmrDG<P>::L2ProjInterp::CoarseBox (const Box&     fine,
                                     const IntVect& ratio)
 {
     Box crse(amrex::coarsen(fine,ratio));
     //crse.grow(1);
-    return crse; 
+    return crse;
 }
 
-void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
+template<int P>
+void AmrDG<P>::L2ProjInterp::interp (const FArrayBox& crse,
             int              crse_comp,
             FArrayBox&       fine,
             int              fine_comp,
@@ -280,26 +262,27 @@ void AmrDG::L2ProjInterp::interp (const FArrayBox& crse,
             int              actual_comp,
             int              actual_state,
             RunOn            runon)
-{ 
+{
   Array4<Real const> const& crsearr = crse.const_array();
   Array4<Real> const& finearr = fine.array();
 
   Box fb = fine.box()& fine_region;
-  //fine.box(): returns the Box that represents the entire memory allocated for the FArrayBox named fine. 
+  //fine.box(): returns the Box that represents the entire memory allocated for the FArrayBox named fine.
   //This Box will include the valid region of fine and any ghost cells it might have.
-  //creates the intersection of the FArrayBox's memory region (fine.box()) 
-  //and the requested region to fill (fine_region). 
+  //creates the intersection of the FArrayBox's memory region (fine.box())
+  //and the requested region to fill (fine_region).
   //This ensures you only write to the target fine_region within the allocated fine array.
 
   //AMREX_PARALLEL_FOR_3D(runon,fb, i, j, k,
   amrex::ParallelFor(fb,[&] (int i, int j, int k) noexcept
-  {  
+  {
     amr_scatter(i,j,k,finearr,fine_comp,crsearr,crse_comp,ncomp,ratio);
-  });  
+  });
 }
 
-void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, int fine_comp, MultiFab& S_crse, 
-                                      int crse_comp, int ncomp, const IntVect& ratio, 
+template<int P>
+void AmrDG<P>::L2ProjInterp::average_down(const MultiFab& S_fine, int fine_comp, MultiFab& S_crse,
+                                      int crse_comp, int ncomp, const IntVect& ratio,
                                       const int lev_fine, const int lev_coarse) noexcept
 {
   //average down not! applied to ghost cells. Only to valid cells
@@ -308,9 +291,9 @@ void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, int fine_comp, Mu
   const DistributionMapping& fine_dm = S_fine.DistributionMap();
   BoxArray crse_S_fine_BA = fine_BA;
   crse_S_fine_BA.coarsen(ratio);
-  
+
   if (crse_S_fine_BA == S_crse.boxArray() && S_fine.DistributionMap() == S_crse.DistributionMap())
-  {     
+  {
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
@@ -321,18 +304,18 @@ void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, int fine_comp, Mu
         const Box& bx = mfi.tilebox();
         Array4<amrex::Real> const& crsearr = S_crse.array(mfi);
         Array4<amrex::Real const> const& finearr = S_fine.const_array(mfi);
-        
+
         amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
-        {  
+        {
           amr_gather(i,j,k,finearr,fine_comp,crsearr,crse_comp,ncomp,ratio);
-        });  
+        });
       }
     }
-  }    
+  }
   else
   {
     MultiFab crse_S_fine(crse_S_fine_BA,fine_dm,ncomp,0,MFInfo(),FArrayBoxFactory());
-      
+
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
@@ -349,20 +332,20 @@ void AmrDG::L2ProjInterp::average_down(const MultiFab& S_fine, int fine_comp, Mu
         //        not part of the actual crse multifab which came in.
 
         amrex::ParallelFor(bx,[&] (int i, int j, int k) noexcept
-        {  
+        {
           amr_gather(i,j,k,finearr,fine_comp,crsearr,crse_comp,ncomp,ratio);
-        });  
+        });
       }
     }
     S_crse.ParallelCopy(crse_S_fine,0,fine_comp,ncomp);
   }
 }
 
-void AmrDG::L2ProjInterp::amr_scatter(int i, int j, int k, Array4<Real> const& fine, 
-                                    int fcomp, Array4<Real const> const& crse, int ccomp, 
+template<int P>
+void AmrDG<P>::L2ProjInterp::amr_scatter(int i, int j, int k, Array4<Real> const& fine,
+                                    int fcomp, Array4<Real const> const& crse, int ccomp,
                                     int ncomp, IntVect const& ratio) noexcept
-{   
-    
+{
     Eigen::VectorXd u_fine(ncomp);
     Eigen::VectorXd u_coarse(ncomp);
 
@@ -380,10 +363,11 @@ void AmrDG::L2ProjInterp::amr_scatter(int i, int j, int k, Array4<Real> const& f
     }
 }
 
-void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
-                                     Array4<Real> const& crse, int ccomp, int ncomp, 
+template<int P>
+void AmrDG<P>::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> const& fine,int fcomp,
+                                     Array4<Real> const& crse, int ccomp, int ncomp,
                                      IntVect const& ratio ) noexcept
-             
+
 {
 
   int num_overlap_cells = (int)std::pow(2,AMREX_SPACEDIM);
@@ -402,10 +386,10 @@ void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> co
   {
     for(int n=0; n<ncomp;++n){
       u_fine[l][n] = fine(map[l].i,map[l].j,map[l].k,fcomp+n);
-    }    
+    }
     sum+=P_fc[map[l].fidx]*u_fine[l];
   }
-  
+
   u_coarse = (1.0/num_overlap_cells)*Minv*sum;
 
   for(int n=0; n<ncomp;++n){
@@ -413,7 +397,8 @@ void AmrDG::L2ProjInterp::amr_gather(int i, int j, int k,  Array4<Real const> co
   }
 }
 
-AmrDG::L2ProjInterp::IndexMap AmrDG::L2ProjInterp::set_fine_coarse_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
+template<int P>
+typename AmrDG<P>::L2ProjInterp::IndexMap AmrDG<P>::L2ProjInterp::set_fine_coarse_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
 {
     //pass fine cell index and return overlapping coarse cell index
     //and sub-cell index locating fine cell w.r.t coarse cell
@@ -437,7 +422,8 @@ AmrDG::L2ProjInterp::IndexMap AmrDG::L2ProjInterp::set_fine_coarse_idx_map(int i
     return _map;
 }
 
-amrex::Vector<AmrDG::L2ProjInterp::IndexMap> AmrDG::L2ProjInterp::set_coarse_fine_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
+template<int P>
+amrex::Vector<typename AmrDG<P>::L2ProjInterp::IndexMap> AmrDG<P>::L2ProjInterp::set_coarse_fine_idx_map(int i, int j, int k, const amrex::IntVect& ratio)
 {
   //pass coarse cell index and return all fine cells indices and their
   //respective sub-cell indices to locate them w.r.t coarse cell
@@ -460,4 +446,3 @@ amrex::Vector<AmrDG::L2ProjInterp::IndexMap> AmrDG::L2ProjInterp::set_coarse_fin
 
   return _map;
 }
-

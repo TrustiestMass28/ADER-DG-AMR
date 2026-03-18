@@ -111,10 +111,16 @@ class BoundaryCondition
     int n_comp;
 
   private:
-      void _settings(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
-                    amrex::Vector<amrex::Vector<int>> _bc_hi_type,
-                    amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
-                    amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi);
+      // Per-dimension BC inputs (expanded to per-q in init() once Q is known)
+      amrex::Array<int,AMREX_SPACEDIM> bc_lo_type_dim;
+      amrex::Array<int,AMREX_SPACEDIM> bc_hi_type_dim;
+      amrex::Array<int,AMREX_SPACEDIM> bc_lo_dim;
+      amrex::Array<int,AMREX_SPACEDIM> bc_hi_dim;
+
+      void _settings(amrex::Array<int,AMREX_SPACEDIM> _bc_lo_type,
+                    amrex::Array<int,AMREX_SPACEDIM> _bc_hi_type,
+                    amrex::Array<int,AMREX_SPACEDIM> _bc_lo,
+                    amrex::Array<int,AMREX_SPACEDIM> _bc_hi);
 
       int Q_model;
 
@@ -163,14 +169,16 @@ void BoundaryCondition<EquationType,NumericalMethodType>::set_system_curr_compon
   curr_lev = _lev;
 }
 
-template <typename EquationType, typename NumericalMethodType>      
-void BoundaryCondition<EquationType,NumericalMethodType>::_settings(amrex::Vector<amrex::Vector<int>> _bc_lo_type,
-                                                amrex::Vector<amrex::Vector<int>> _bc_hi_type,
-                                                amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_lo,
-                                                amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>> _bc_hi)
+template <typename EquationType, typename NumericalMethodType>
+void BoundaryCondition<EquationType,NumericalMethodType>::_settings(amrex::Array<int,AMREX_SPACEDIM> _bc_lo_type,
+                                                amrex::Array<int,AMREX_SPACEDIM> _bc_hi_type,
+                                                amrex::Array<int,AMREX_SPACEDIM> _bc_lo,
+                                                amrex::Array<int,AMREX_SPACEDIM> _bc_hi)
 {
-  setBCtype(_bc_lo_type,_bc_hi_type);
-  setBCAMREXtype(_bc_lo,_bc_hi);                                               
+  bc_lo_type_dim = _bc_lo_type;
+  bc_hi_type_dim = _bc_hi_type;
+  bc_lo_dim      = _bc_lo;
+  bc_hi_dim      = _bc_hi;
 }
 
 template <typename EquationType, typename NumericalMethodType>
@@ -188,7 +196,17 @@ void BoundaryCondition<EquationType,NumericalMethodType>::init(std::shared_ptr<M
   _solver->init_bc(bc,n_comp);
 
   Q_model = _model_pde->Q_model;
-  
+
+  // Expand per-dimension BC to per-q (same BC applied to all solution components)
+  setBCtype(
+    amrex::Vector<amrex::Vector<int>>(Q_model, amrex::Vector<int>(bc_lo_type_dim.begin(), bc_lo_type_dim.end())),
+    amrex::Vector<amrex::Vector<int>>(Q_model, amrex::Vector<int>(bc_hi_type_dim.begin(), bc_hi_type_dim.end()))
+  );
+  setBCAMREXtype(
+    amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>>(Q_model, bc_lo_dim),
+    amrex::Vector<amrex::Array<int,AMREX_SPACEDIM>>(Q_model, bc_hi_dim)
+  );
+
   //gbc_lo,gbc_lo accessed inside ModelEquation
   //since we have static BCs, no need to call
   //implemented pde_BC_gDirichlet,pde_BC_gNeumann

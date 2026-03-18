@@ -1,11 +1,10 @@
-#include "AmrDG.h"
 
 
 using namespace amrex;
 
 
 template<int P>
-void AmrDG::QuadratureGaussLegendre<P>::set_number_quadpoints()
+void QuadratureGaussLegendre<P>::set_number_quadpoints()
 {
   qMp_1d = N;
 
@@ -21,7 +20,7 @@ void AmrDG::QuadratureGaussLegendre<P>::set_number_quadpoints()
 }
 
 template<int P>
-void AmrDG::QuadratureGaussLegendre<P>::set_quadpoints()
+void QuadratureGaussLegendre<P>::set_quadpoints()
 {
   //Resize data structures holding quadrature data
   xi_ref_quad_s.resize(qMp_s,amrex::Vector<amrex::Real> (AMREX_SPACEDIM));
@@ -246,7 +245,8 @@ void AmrDG::QuadratureGaussLegendre<P>::set_quadpoints()
 
 }
 
-void AmrDG::NewtonRhapson(amrex::Real& x, int n)
+template<int P>
+void AmrDG<P>::NewtonRhapson(amrex::Real& x, int n)
 {
   int niter = 1000;
 
@@ -266,15 +266,3 @@ void AmrDG::NewtonRhapson(amrex::Real& x, int n)
     if(error<=TOL){break;}
   }
 }
-
-// Explicit instantiations
-template struct AmrDG::QuadratureGaussLegendre<1>;
-template struct AmrDG::QuadratureGaussLegendre<2>;
-template struct AmrDG::QuadratureGaussLegendre<3>;
-template struct AmrDG::QuadratureGaussLegendre<4>;
-template struct AmrDG::QuadratureGaussLegendre<5>;
-template struct AmrDG::QuadratureGaussLegendre<6>;
-template struct AmrDG::QuadratureGaussLegendre<7>;
-template struct AmrDG::QuadratureGaussLegendre<8>;
-template struct AmrDG::QuadratureGaussLegendre<9>;
-template struct AmrDG::QuadratureGaussLegendre<10>;

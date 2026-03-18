@@ -1,12 +1,12 @@
-#include "AmrDG.h"
 
 using namespace amrex;
 
-amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k, 
-                            amrex::Array4<const amrex::Real> up, 
-                            amrex::Array4<const amrex::Real> um, 
+template<int P>
+amrex::Real AmrDG<P>::LLF_numflux(int d, int m,int i, int j, int k,
+                            amrex::Array4<const amrex::Real> up,
+                            amrex::Array4<const amrex::Real> um,
                             amrex::Array4<const amrex::Real> fp,
-                            amrex::Array4<const amrex::Real> fm,  
+                            amrex::Array4<const amrex::Real> fm,
                             amrex::Array4<const amrex::Real> dfp,
                             amrex::Array4<const amrex::Real> dfm)
 {
@@ -37,5 +37,6 @@ amrex::Real AmrDG::LLF_numflux(int d, int m,int i, int j, int k,
   DfR = dfm(i,j,k,m);     
   C = (amrex::Real)std::max((amrex::Real)std::abs(DfL),(amrex::Real)std::abs(DfR));
 
-  return 0.5*((fL+fR)-C*(uR-uL));  
+  return 0.5*((fL+fR)-C*(uR-uL));
 }
+template class AmrDG<10>;

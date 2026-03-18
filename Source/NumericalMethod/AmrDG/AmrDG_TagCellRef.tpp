@@ -1,8 +1,8 @@
-#include "AmrDG.h"
 
 using namespace amrex;
 
-void AmrDG::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow)
+template<int P>
+void AmrDG<P>::AMR_tag_cell_refinement(int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow)
 {
   if(!m_tag_impl) return;
 
